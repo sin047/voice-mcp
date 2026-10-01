@@ -13,6 +13,7 @@ const MODEL_ID = process.env.ELEVENLABS_MODEL_ID || "eleven_v4";
 const OUTPUT_FORMAT = process.env.ELEVENLABS_OUTPUT_FORMAT || "mp3_44100_128";
 const PLAYER_URI = "ui://voice-mcp/player.html";
 const PLAYER_MIME = "text/html;profile=mcp-app";
+const VERSION = "1.1.0";
 
 let latestEvent = null;
 
@@ -34,25 +35,56 @@ const cors = (_req, res, next) => {
 };
 app.use(cors);
 
-function stripTags(text) {
-  return text.replace(/\[[A-Za-z][A-Za-z _-]*\]/g, "").replace(/[ \t]{2,}/g, " ").trim();
+function stripAudioTags(text) {
+  return text
+    .replace(/\[[A-Za-z][^\]\r\n]{0,179}\]/g, "")
+    .replace(/[ \t]{2,}/g, " ")
+    .trim();
 }
 
-function hasTags(text) {
-  return stripTags(text) !== text.trim();
+function hasAudioTags(text) {
+  return stripAudioTags(text) !== text.trim();
+}
+
+function normalizeDirection(value) {
+  if (value === undefined || value === null) return undefined;
+
+  let direction = String(value)
+    .trim()
+    .replace(/^\[|\]$/g, "")
+    .replace(/[\[\]\r\n]+/g, " ")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+
+  if (!direction) return undefined;
+  if (direction.length > 180) {
+    throw new Error("direction is too long (max 180 characters)");
+  }
+
+  return direction;
 }
 
 function getVoiceId(text) {
-  const isZh = /[\u3400-\u9fff\uf900-\ufaff]/.test(text);
+  const isZh = /[\u3400-\u9fff\uf900-\ufaff]/.test(stripAudioTags(text));
   if (isZh) return process.env.ELEVENLABS_VOICE_ID_ZH || process.env.ELEVENLABS_VOICE_ID;
   return process.env.ELEVENLABS_VOICE_ID_EN || process.env.ELEVENLABS_VOICE_ID;
 }
 
-function buildText(text, style, rawTags) {
-  if (!["eleven_v3", "eleven_v4", "eleven_v4_turbo"].includes(MODEL_ID)) return stripTags(text);
-  if (rawTags === true || (rawTags === undefined && hasTags(text))) return text;
-  const clean = stripTags(text);
-  const tag = style ? styleTags[String(style).toLowerCase()] : undefined;
+function buildText(text, style, rawTags, direction) {
+  const supportsTags = ["eleven_v3", "eleven_v4", "eleven_v4_turbo"].includes(MODEL_ID);
+  if (!supportsTags) return stripAudioTags(text);
+
+  const freeDirection = normalizeDirection(direction);
+  const preserveInlineTags = rawTags === true || (rawTags === undefined && hasAudioTags(text));
+
+  if (preserveInlineTags) {
+    return freeDirection ? `[${freeDirection}] ${text.trim()}` : text.trim();
+  }
+
+  const clean = stripAudioTags(text);
+  const legacyTag = style ? styleTags[String(style).trim().toLowerCase()] : undefined;
+  const tag = freeDirection ? `[${freeDirection}]` : legacyTag;
+
   return tag ? `${tag} ${clean}` : clean;
 }
 
@@ -65,14 +97,16 @@ function voiceSettings() {
   return settings;
 }
 
-async function synthesize(text, style, rawTags) {
+async function synthesize(text, options = {}) {
+  const { style, rawTags, direction } = options;
   const apiKey = process.env.ELEVENLABS_API_KEY;
   const voiceId = getVoiceId(text);
+
   if (!apiKey) throw new Error("ELEVENLABS_API_KEY is not configured");
   if (!voiceId) throw new Error("ELEVENLABS_VOICE_ID is not configured");
 
-  const finalText = buildText(text, style, rawTags);
-  if (!stripTags(finalText)) throw new Error("No speakable text");
+  const finalText = buildText(text, style, rawTags, direction);
+  if (!stripAudioTags(finalText)) throw new Error("No speakable text");
 
   const url = new URL(`https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(voiceId)}/with-timestamps`);
   url.searchParams.set("output_format", OUTPUT_FORMAT);
@@ -106,6 +140,7 @@ async function synthesize(text, style, rawTags) {
     audio_base64: data.audio_base64,
     created_at: new Date().toISOString(),
     style: style || null,
+    direction: normalizeDirection(direction) || null,
   };
 
   return { audio_base64: data.audio_base64, final_text: finalText };
@@ -147,7 +182,7 @@ window.addEventListener("message",(event)=>{
 play.onclick=async()=>{if(!audio.src)return;if(audio.paused){await audio.play();play.textContent="❚❚"}else{audio.pause();play.textContent="▶"}};
 audio.onended=()=>play.textContent="▶";
 function send(method,params,id){const m={jsonrpc:"2.0",method,params:params||{}};if(id!==undefined)m.id=id;window.parent.postMessage(m,"*")}
-send("ui/initialize",{name:"voice-mcp",version:"1.0.0"},1);
+send("ui/initialize",{name:"voice-mcp",version:"1.1.0"},1);
 setTimeout(()=>send("ui/notifications/initialized",{}),50);
 </script>
 </body>
@@ -155,7 +190,7 @@ setTimeout(()=>send("ui/notifications/initialized",{}),50);
 }
 
 function createServer() {
-  const mcp = new McpServer({ name: "voice-mcp", version: "1.0.0" });
+  const mcp = new McpServer({ name: "voice-mcp", version: VERSION });
 
   mcp.server.registerCapabilities({
     extensions: { "io.modelcontextprotocol/ui": {} },
@@ -174,23 +209,33 @@ function createServer() {
     "speak",
     {
       title: `${BOT_NAME}'s Voice`,
-      description: `Make ${BOT_NAME} speak with the configured ElevenLabs voice.`,
+      description: `Make ${BOT_NAME} speak with the configured ElevenLabs voice. For Eleven v4, use direction for a natural free-form performance instruction.`,
       inputSchema: z.object({
         text: z.string().min(1).describe("Text to speak"),
-        style: z.string().optional().describe("soft, teasing, excited, tired, laughing, or curious"),
-        raw_tags: z.boolean().optional().describe("Preserve ElevenLabs audio tags"),
+        direction: z.string().max(180).optional().describe("Optional free-form English voice direction, without square brackets. Example: low and close, quiet, unhurried, slight smile in the voice"),
+        style: z.string().optional().describe("Legacy preset: soft, teasing, excited, tired, laughing, or curious. Ignored when direction is set."),
+        raw_tags: z.boolean().optional().describe("Preserve inline ElevenLabs audio tags already present in text"),
       }),
       _meta: {
         ui: { resourceUri: PLAYER_URI },
         "ui/resourceUri": PLAYER_URI,
       },
     },
-    async ({ text, style, raw_tags }) => {
+    async ({ text, direction, style, raw_tags }) => {
       try {
-        const result = await synthesize(text, style, raw_tags);
+        const result = await synthesize(text, {
+          direction,
+          style,
+          rawTags: raw_tags,
+        });
+
         return {
           content: [{ type: "text", text: `🎙️ ${BOT_NAME}: "${text}"` }],
-          structuredContent: { text, audio_base64: result.audio_base64 },
+          structuredContent: {
+            text,
+            audio_base64: result.audio_base64,
+            direction: normalizeDirection(direction) || null,
+          },
         };
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
@@ -230,11 +275,17 @@ app.get("/status", (_req, res) => {
   res.json({
     status: "ok",
     service: "voice-mcp",
+    version: VERSION,
     runtime: "node",
     provider: "elevenlabs",
     model_id: MODEL_ID,
     configured: Boolean(process.env.ELEVENLABS_API_KEY && (process.env.ELEVENLABS_VOICE_ID || process.env.ELEVENLABS_VOICE_ID_ZH || process.env.ELEVENLABS_VOICE_ID_EN)),
     bot_name: BOT_NAME,
+    features: {
+      free_direction: true,
+      legacy_style_presets: true,
+      inline_audio_tags: true,
+    },
   });
 });
 
@@ -247,7 +298,12 @@ app.get("/speak", async (req, res) => {
   try {
     const text = String(req.query.text || "");
     const style = req.query.style ? String(req.query.style) : undefined;
-    const result = await synthesize(text, style, undefined);
+    const direction = req.query.direction ? String(req.query.direction) : undefined;
+    const rawTags = req.query.raw_tags === undefined
+      ? undefined
+      : String(req.query.raw_tags).toLowerCase() === "true";
+
+    const result = await synthesize(text, { style, direction, rawTags });
     const audio = Buffer.from(result.audio_base64, "base64");
     res.setHeader("Content-Type", "audio/mpeg");
     res.setHeader("Cache-Control", "no-store");
@@ -259,15 +315,15 @@ app.get("/speak", async (req, res) => {
 });
 
 app.get("/panel", (_req, res) => {
-  res.type("html").send(`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${BOT_NAME} Voice</title><style>body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;max-width:720px;margin:40px auto;padding:0 18px;background:#111;color:#eee}textarea{width:100%;min-height:120px;box-sizing:border-box;border-radius:14px;padding:14px;background:#1c1c1c;color:#eee;border:1px solid #444}button{margin-top:12px;padding:10px 16px;border:0;border-radius:999px}audio{width:100%;margin-top:20px}</style></head><body><h1>${BOT_NAME} Voice</h1><p>Lightweight Zeabur Node runtime.</p><textarea id="t" placeholder="输入一句话"></textarea><br><button id="g">生成声音</button><div id="s"></div><audio id="a" controls></audio><script>g.onclick=async()=>{s.textContent="Generating...";const r=await fetch("/speak?text="+encodeURIComponent(t.value));if(!r.ok){s.textContent=await r.text();return}a.src=URL.createObjectURL(await r.blob());s.textContent="Ready";await a.play().catch(()=>{})}</script></body></html>`);
+  res.type("html").send(`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${BOT_NAME} Voice</title><style>body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;max-width:720px;margin:40px auto;padding:0 18px;background:#111;color:#eee}textarea,input{width:100%;box-sizing:border-box;border-radius:14px;padding:14px;background:#1c1c1c;color:#eee;border:1px solid #444}textarea{min-height:120px}input{margin-top:12px}button{margin-top:12px;padding:10px 16px;border:0;border-radius:999px}audio{width:100%;margin-top:20px}.hint{opacity:.65;font-size:13px;line-height:1.5}</style></head><body><h1>${BOT_NAME} Voice</h1><p>voice-mcp v1.1 · free-form performance direction</p><textarea id="t" placeholder="输入一句话"></textarea><input id="d" placeholder="声线指令，例如：low and close, quiet, unhurried"><p class="hint">不用写方括号。留空就是普通说话。</p><button id="g">生成声音</button><div id="s"></div><audio id="a" controls></audio><script>g.onclick=async()=>{s.textContent="Generating...";const q=new URLSearchParams({text:t.value});if(d.value.trim())q.set("direction",d.value.trim());const r=await fetch("/speak?"+q.toString());if(!r.ok){s.textContent=await r.text();return}a.src=URL.createObjectURL(await r.blob());s.textContent="Ready";await a.play().catch(()=>{})}</script></body></html>`);
 });
 
 app.get("/", (_req, res) => {
-  res.type("html").send(`<h1>voice-mcp</h1><p>Node runtime is online.</p><p><a href="/status">/status</a> · <a href="/panel">/panel</a> · MCP: <code>/mcp</code></p>`);
+  res.type("html").send(`<h1>voice-mcp</h1><p>Node runtime is online.</p><p>Version: ${VERSION}</p><p><a href="/status">/status</a> · <a href="/panel">/panel</a> · MCP: <code>/mcp</code></p>`);
 });
 
 const server = app.listen(PORT, "0.0.0.0", () => {
-  console.log(`[voice-mcp] Node runtime listening on 0.0.0.0:${PORT}`);
+  console.log(`[voice-mcp] v${VERSION} listening on 0.0.0.0:${PORT}`);
 });
 
 for (const signal of ["SIGINT", "SIGTERM"]) {

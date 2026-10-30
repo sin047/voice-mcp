@@ -20,7 +20,7 @@ jobs:
           node-version: 22
       - name: Syntax check
         run: |
-          node --check src/zeabur-server.mjs
+          node --check src/server.mjs
           node --check src/performance.mjs
           node --check src/drama-timeline.mjs
           node --check src/drama-preview.mjs
@@ -34,7 +34,7 @@ jobs:
         shell: bash
         run: |
           TEST_ACCESS_TOKEN="ci-only-private-drama-token-0123456789abcdef"
-          PRIVATE_DRAMA_ACCESS_TOKEN="$TEST_ACCESS_TOKEN" MCP_MAX_REQUESTS_PER_MINUTE=1 PORT=8765 node src/zeabur-server.mjs > /tmp/voice-mcp.log 2>&1 &
+          PRIVATE_DRAMA_ACCESS_TOKEN="$TEST_ACCESS_TOKEN" MCP_MAX_REQUESTS_PER_MINUTE=1 PORT=8765 node src/server.mjs > /tmp/voice-mcp.log 2>&1 &
           SERVER_PID=$!
           trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
           for attempt in {1..20}; do
@@ -48,7 +48,7 @@ jobs:
             import assert from "node:assert/strict";
             const status = JSON.parse(fs.readFileSync("/tmp/voice-status.json", "utf8"));
             assert.equal(status.status, "ok");
-            assert.equal(status.version, "1.4.0-beta.4");
+            assert.equal(status.version, "1.4.0-beta.5");
             assert.equal(status.features.request_id_continuity, true);
             assert.equal(status.features.language_auto_detection, true);
             assert.equal(status.features.local_drama_preview, true);

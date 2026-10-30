@@ -1,6 +1,7 @@
 const MAX_CUES = 12;
 const MAX_SECONDS = 180;
 const EFFECT_KINDS = new Set(["ambience", "foley"]);
+const SPATIAL_MODES = new Set(["stereo", "hrtf"]);
 
 function boundedNumber(value, name, min, max) {
   if (typeof value !== "number" || !Number.isFinite(value) || value < min || value > max) {
@@ -10,7 +11,7 @@ function boundedNumber(value, name, min, max) {
 }
 
 /**
- * Normalize a purely declarative cue sheet. Never loads or transmits assets.
+ * Normalize a declarative cue sheet. It never loads or transmits assets.
  * fileId is a caller-local reference, not a URL or filesystem path.
  */
 export function createDramaTimeline(input) {
@@ -20,8 +21,17 @@ export function createDramaTimeline(input) {
 
   const duration = boundedNumber(input.voiceDurationSec, "voiceDurationSec", 0.1, MAX_SECONDS);
   const voiceGain = boundedNumber(input.voiceGain ?? 0.9, "voiceGain", 0, 1);
-  const cues = input.cues ?? [];
+  const ambienceBusGain = boundedNumber(input.ambienceBusGain ?? 0.82, "ambienceBusGain", 0, 1);
+  const foleyBusGain = boundedNumber(input.foleyBusGain ?? 0.9, "foleyBusGain", 0, 1);
+  const masterGain = boundedNumber(input.masterGain ?? 0.85, "masterGain", 0, 1);
+  const duckingAmount = boundedNumber(input.duckingAmount ?? 0.75, "duckingAmount", 0, 1);
+  const duckingEnabled = input.duckingEnabled !== false;
+  const spatialMode = String(input.spatialMode ?? "stereo");
+  if (!SPATIAL_MODES.has(spatialMode)) {
+    throw new Error("spatialMode must be stereo or hrtf");
+  }
 
+  const cues = input.cues ?? [];
   if (!Array.isArray(cues) || cues.length > MAX_CUES) {
     throw new Error("cues must be an array of at most " + MAX_CUES + " items");
   }
@@ -69,9 +79,24 @@ export function createDramaTimeline(input) {
   });
 
   return Object.freeze({
-    version: 1,
+    version: 2,
     mode: "private_drama",
     voice: Object.freeze({ durationSec: duration, gain: voiceGain, pan: 0 }),
+    mix: Object.freeze({
+      ambienceBusGain,
+      foleyBusGain,
+      masterGain,
+      duckingEnabled,
+      duckingAmount,
+      spatialMode,
+      ducking: Object.freeze({
+        thresholdDb: -42,
+        attackSec: 0.045,
+        releaseSec: 0.26,
+        ambienceDepth: 0.65,
+        foleyDepth: 0.35,
+      }),
+    }),
     cues: Object.freeze(normalized),
     output: Object.freeze({ maxDurationSec: MAX_SECONDS, channels: 2, sampleRate: 44100 }),
   });
@@ -81,4 +106,5 @@ export const DRAMA_TIMELINE_LIMITS = Object.freeze({
   maxCues: MAX_CUES,
   maxSeconds: MAX_SECONDS,
   effectKinds: Object.freeze([...EFFECT_KINDS]),
+  spatialModes: Object.freeze([...SPATIAL_MODES]),
 });

@@ -20,6 +20,7 @@ jobs:
           node --check src/performance.mjs
           node --check src/drama-timeline.mjs
           node --check src/drama-preview.mjs
+          node --check src/http-auth.mjs
       - name: Regression tests
         run: npm test
       - name: Install runtime dependencies
@@ -27,7 +28,8 @@ jobs:
       - name: Runtime smoke test
         shell: bash
         run: |
-          PORT=8765 node src/zeabur-server.mjs > /tmp/voice-mcp.log 2>&1 &
+          TEST_ACCESS_TOKEN="ci-only-private-drama-token-0123456789abcdef"
+          PRIVATE_DRAMA_ACCESS_TOKEN="$TEST_ACCESS_TOKEN" PORT=8765 node src/zeabur-server.mjs > /tmp/voice-mcp.log 2>&1 &
           SERVER_PID=$!
           trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
           for attempt in {1..20}; do
@@ -51,14 +53,22 @@ jobs:
             -H "Accept: application/json, text/event-stream" \
             -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"voice-mcp-ci","version":"1.0.0"}}}' \
             > /tmp/mcp-initialize.json
-          curl -fsS http://127.0.0.1:8765/drama-preview -o /tmp/drama-preview.html
+          PREVIEW_UNAUTH=$(curl -s -o /tmp/drama-unauthorized.json -w '%{http_code}' http://127.0.0.1:8765/drama-preview)
+          test "$PREVIEW_UNAUTH" = "401"
+          curl -fsS -u "voice-mcp:$TEST_ACCESS_TOKEN" http://127.0.0.1:8765/drama-preview -o /tmp/drama-preview.html
           grep -q 'Shin · Private Drama' /tmp/drama-preview.html
-          curl -fsS http://127.0.0.1:8765/drama/timeline.mjs -o /tmp/drama-timeline.mjs
+          TIMELINE_UNAUTH=$(curl -s -o /tmp/timeline-unauthorized.json -w '%{http_code}' http://127.0.0.1:8765/drama/timeline.mjs)
+          test "$TIMELINE_UNAUTH" = "401"
+          curl -fsS -u "voice-mcp:$TEST_ACCESS_TOKEN" http://127.0.0.1:8765/drama/timeline.mjs -o /tmp/drama-timeline.mjs
           grep -q 'createDramaTimeline' /tmp/drama-timeline.mjs
-          STATUS=$(curl -s -o /tmp/drama-bad-request.json -w '%{http_code}' \
-            -X POST http://127.0.0.1:8765/speak \
-            -H 'Content-Type: application/json' -d '{"text":""}')
-          test "$STATUS" = "400"
+          PANEL_UNAUTH=$(curl -s -o /tmp/panel-unauthorized.json -w '%{http_code}' http://127.0.0.1:8765/panel)
+          test "$PANEL_UNAUTH" = "401"
+          EVENTS_UNAUTH=$(curl -s -o /tmp/events-unauthorized.json -w '%{http_code}' http://127.0.0.1:8765/events/latest)
+          test "$EVENTS_UNAUTH" = "401"
+          SPEAK_UNAUTH=$(curl -s -o /tmp/speak-unauthorized.json -w '%{http_code}' -X POST http://127.0.0.1:8765/speak -H 'Content-Type: application/json' -d '{"text":"test"}')
+          test "$SPEAK_UNAUTH" = "401"
+          SPEAK_AUTH=$(curl -s -o /tmp/speak-bad-request.json -w '%{http_code}' -u "voice-mcp:$TEST_ACCESS_TOKEN" -X POST http://127.0.0.1:8765/speak -H 'Content-Type: application/json' -d '{"text":""}')
+          test "$SPEAK_AUTH" = "400"
           node --input-type=module -e '
             import fs from "node:fs";
             import assert from "node:assert/strict";

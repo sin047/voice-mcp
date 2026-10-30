@@ -24,7 +24,7 @@ const MODEL_ID = process.env.ELEVENLABS_MODEL_ID || "eleven_v4";
 const OUTPUT_FORMAT = process.env.ELEVENLABS_OUTPUT_FORMAT || "mp3_44100_128";
 const PLAYER_URI = "ui://voice-mcp/player.html";
 const PLAYER_MIME = "text/html;profile=mcp-app";
-const VERSION = "1.4.0-beta.1";
+const VERSION = "1.4.0-beta.2";
 const MAX_CONTEXT_CHARS = 4000;
 
 let latestEvent = null;

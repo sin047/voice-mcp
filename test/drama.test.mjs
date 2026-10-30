@@ -80,7 +80,7 @@ test("validates mix buses, ducking and spatial modes", () => {
 });
 test("local preview has a player, multitrack cue editing, optional TTS and WAV export", () => {
   const html = dramaPreviewHtml();
-  for (const marker of ['id="voice"', 'id="fx"', 'id="preview"', 'id="export"', 'id="generateVoice"', 'id="ambienceBusGain"', 'id="foleyBusGain"', 'id="spatialMode"', 'id="duckingEnabled"', "scheduleVoiceDucking", 'panner.panningModel = "HRTF"', "OfflineAudioContext", "encodeWav", "createDramaTimeline", 'type="module"']) {
+  for (const marker of ['id="voice"', 'id="fx"', 'id="preview"', 'id="export"', 'id="generateVoice"', 'id="ambienceBusGain"', 'id="foleyBusGain"', 'id="spatialMode"', 'id="duckingEnabled"', '淡入 / 秒', '淡出 / 秒', "scheduleVoiceDucking", 'panner.panningModel = "HRTF"', "OfflineAudioContext", "encodeWav", "createDramaTimeline", 'type="module"']) {
     assert.ok(html.includes(marker), "Missing preview feature: " + marker);
   }
   assert.ok(html.includes("本机"));

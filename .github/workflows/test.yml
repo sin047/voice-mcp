@@ -2,7 +2,7 @@ name: voice-mcp checks
 
 on:
   push:
-    branches: [zeabur, voice-v1.3-quality, voice-v1.4-private-drama]
+    branches: [zeabur, voice-v1.3-quality]
   pull_request:
     branches: [zeabur]
 

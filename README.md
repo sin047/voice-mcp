@@ -37,6 +37,8 @@ Mount persistent storage at the configured `AUDIO_ASSET_DIR` (default `/app/data
 
 ## MCP tools
 
+The existing `speak` tool remains available. The private asset tools `list_sound_assets` and `speak_with_soundscape` are **disabled by default**. Set `MCP_SOUNDSCAPE_TOOLS_ENABLED=true` only after restricting `/mcp` through private ingress, a firewall/IP allowlist or another verified access layer. The direct-URL connector does not authenticate callers; do not expose private asset IDs through an unrestricted public endpoint.
+
 ### `speak`
 
 Generate a voice clip with the configured ElevenLabs voice. Supports performance modes (`natural`, `soft`, `close`, `breathy`, `expressive`), language selection and request stitching.
@@ -66,7 +68,7 @@ The generated playback URL expires after 10 minutes and is held in process memor
 3. Open `/drama-preview` and complete the browser Basic Auth prompt. Username: `voice-mcp`; password: the access token.
 4. Select local sound files. They remain in the browser until you explicitly click **保存到音效库**.
 5. The preview converts supported browser audio files to PCM WAV before uploading. The server accepts mono/stereo 16-bit PCM or 32-bit float WAV assets.
-6. Call `list_sound_assets` in ChatGPT to discover asset IDs, then call `speak_with_soundscape`.
+6. After restricting `/mcp` access and explicitly enabling `MCP_SOUNDSCAPE_TOOLS_ENABLED=true`, call `list_sound_assets` in ChatGPT to discover asset IDs, then call `speak_with_soundscape`.
 
 The private HTTP token protects `/drama-preview`, `/drama/timeline.mjs`, `/speak`, `/panel`, `/events/latest` and `/assets`. It does **not** authenticate the MCP `/mcp` endpoint.
 

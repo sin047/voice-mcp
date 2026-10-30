@@ -1,5 +1,7 @@
 import express from "express";
 import process from "node:process";
+import { readFile } from "node:fs/promises";
+import { dramaPreviewHtml } from "./drama-preview.mjs";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { z } from "zod";
@@ -22,7 +24,7 @@ const MODEL_ID = process.env.ELEVENLABS_MODEL_ID || "eleven_v4";
 const OUTPUT_FORMAT = process.env.ELEVENLABS_OUTPUT_FORMAT || "mp3_44100_128";
 const PLAYER_URI = "ui://voice-mcp/player.html";
 const PLAYER_MIME = "text/html;profile=mcp-app";
-const VERSION = "1.3.1";
+const VERSION = "1.4.0-beta.1";
 const MAX_CONTEXT_CHARS = 4000;
 
 let latestEvent = null;
@@ -355,6 +357,7 @@ app.get("/status", (_req, res) => {
       request_id_continuity: true,
       language_auto_detection: true,
       japanese_text_normalization_opt_in: true,
+      local_drama_preview: true,
       character_alignment: true,
       legacy_style_presets: true,
       inline_audio_tags: true,
@@ -404,12 +407,29 @@ app.get("/speak", async (req, res) => {
   }
 });
 
+// Experimental, local-only multitrack sound lab. Does not accept file uploads.
+app.get("/drama-preview", (_req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  res.type("html").send(dramaPreviewHtml());
+});
+
+app.get("/drama/timeline.mjs", async (_req, res) => {
+  try {
+    const code = await readFile(new URL("./drama-timeline.mjs", import.meta.url), "utf8");
+    res.setHeader("Cache-Control", "no-store");
+    res.type("text/javascript").send(code);
+  } catch (error) {
+    console.error("[drama-timeline]", error);
+    res.status(500).type("text/plain").send("Timeline module unavailable");
+  }
+});
+
 app.get("/panel", (_req, res) => {
   res.type("html").send(`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${BOT_NAME} Voice</title><style>body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;max-width:720px;margin:40px auto;padding:0 18px;background:#111;color:#eee}textarea,input{width:100%;box-sizing:border-box;border-radius:14px;padding:14px;background:#1c1c1c;color:#eee;border:1px solid #444}textarea{min-height:110px;margin-top:12px}input{margin-top:12px}button{margin-top:12px;padding:10px 16px;border:0;border-radius:999px}audio{width:100%;margin-top:20px}.hint{opacity:.65;font-size:13px;line-height:1.5}.context{min-height:70px}</style></head><body><h1>${BOT_NAME} Voice</h1><p>voice-mcp ${VERSION} · performance engine + continuity context</p><textarea id="t" placeholder="这一段真正要说的话"></textarea><select id="pm" style="width:100%;box-sizing:border-box;border-radius:14px;padding:14px;background:#1c1c1c;color:#eee;border:1px solid #444;margin-top:12px"><option value="auto">auto / natural</option><option value="soft">soft</option><option value="close">close</option><option value="breathy">breathy</option><option value="expressive">expressive</option></select><select id="lg" style="width:100%;box-sizing:border-box;border-radius:14px;padding:14px;background:#1c1c1c;color:#eee;border:1px solid #444;margin-top:12px"><option value="auto">language / auto</option><option value="zh">中文</option><option value="ja">日本語</option><option value="en">English</option><option value="ko">한국어</option></select><input id="d" placeholder="高级声线覆盖（可选），例如：low and close, quiet, unhurried"><textarea class="context" id="p" placeholder="上一段文字（可选，只用于语气衔接，不会重复念）"></textarea><textarea class="context" id="n" placeholder="下一段文字（可选，只用于语气衔接，不会提前念）"></textarea><p class="hint">previous / next 只作为 ElevenLabs 的韵律上下文。它们不会出现在这一段音频里。</p><button id="g">生成声音</button><div id="s"></div><audio id="a" controls></audio><script>g.onclick=async()=>{s.textContent="Generating...";const q=new URLSearchParams({text:t.value,performance:pm.value,language:lg.value});if(d.value.trim())q.set("direction",d.value.trim());if(p.value.trim())q.set("previous_text",p.value.trim());if(n.value.trim())q.set("next_text",n.value.trim());const r=await fetch("/speak?"+q.toString());if(!r.ok){s.textContent=await r.text();return}a.src=URL.createObjectURL(await r.blob());s.textContent="Ready";await a.play().catch(()=>{})}</script></body></html>`);
 });
 
 app.get("/", (_req, res) => {
-  res.type("html").send(`<h1>voice-mcp</h1><p>Node runtime is online.</p><p>Version: ${VERSION}</p><p><a href="/status">/status</a> · <a href="/panel">/panel</a> · MCP: <code>/mcp</code></p>`);
+  res.type("html").send(`<h1>voice-mcp</h1><p>Node runtime is online.</p><p>Version: ${VERSION}</p><p><a href="/status">/status</a> · <a href="/panel">/panel</a> · <a href="/drama-preview">/drama-preview</a> · MCP: <code>/mcp</code></p>`);
 });
 
 const server = app.listen(PORT, "0.0.0.0", () => {

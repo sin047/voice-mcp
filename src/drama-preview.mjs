@@ -164,13 +164,17 @@ $("generateVoice").onclick = async() => {
   $("generateVoice").disabled = true;
   status("正在用已配置的 ElevenLabs 日语音色生成……");
   try {
-    const query = new URLSearchParams({
-      text,
-      language: "ja",
-      performance: "close",
-      direction: "low, close-mic, gently warm, emotionally restrained, unhurried"
+    const response = await fetch("/speak", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      cache: "no-store",
+      body: JSON.stringify({
+        text,
+        language: "ja",
+        performance: "close",
+        direction: "low, close-mic, gently warm, emotionally restrained, unhurried"
+      })
     });
-    const response = await fetch("/speak?" + query.toString(), { cache:"no-store" });
     if (!response.ok) {
       const message = await response.text();
       throw new Error(message.slice(0,240));

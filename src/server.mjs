@@ -185,6 +185,7 @@ async function synthesize(text, options = {}) {
     previousRequestIds,
     includeAlignment,
     outputFormat = OUTPUT_FORMAT,
+    recordEvent = true,
   } = options;
 
   const apiKey = process.env.ELEVENLABS_API_KEY;
@@ -256,7 +257,7 @@ async function synthesize(text, options = {}) {
     releaseUsage();
   }
 
-  if (outputFormat === OUTPUT_FORMAT) latestEvent = {
+  if (recordEvent) latestEvent = {
     id: crypto.randomUUID(),
     text,
     audio_base64: data.audio_base64,
@@ -500,6 +501,7 @@ function createServer() {
           language,
           direction,
           outputFormat: "pcm_24000",
+          recordEvent: false,
         });
         const voicePcm = decodeRawPcm16(Buffer.from(result.audio_base64, "base64"), {
           sampleRate: 24000,

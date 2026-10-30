@@ -32,7 +32,10 @@ The selected target is **immersive foreground voice + headphone spatial depth + 
   track and up to 12 independent local effects.
 - `/drama/timeline.mjs`: a declarative cue-sheet planner with validated start
   times, effect kind (ambience / foley), gain, pan, fades and ambient looping.
-- Local preview with stereo panning and restrained dynamics compression.
+- Separate ambience and Foley mix buses with independent bus gain controls.
+- Voice-priority ducking: a short-window RMS envelope from the voice track gently lowers the effects buses while speech energy is present, then releases gradually during pauses.
+- Optional browser HRTF positioning for mono effects; stereo source files retain their original stereo image and use basic stereo panning.
+- Local preview with conservative master compression and offline WAV peak protection.
 - In-browser offline WAV rendering, peak protection and export.
 - Opt-in Japanese voice generation via `POST /speak`, using the existing
   ElevenLabs voice ID and restrained/close direction.
@@ -45,10 +48,12 @@ The normal `speak` MCP tool is **unchanged** in this branch.
 1. Open `https://<your-test-host>/drama-preview` in Chrome, Edge or Safari.
 2. Choose an existing spoken-audio file, **or** enter a Japanese script and
    explicitly click `生成日语人声` (this calls ElevenLabs and uses credits).
-3. Choose local FX audio files, enter start times, adjust volume (initially
-   0.1 for ambience / 0.22 for foley), pan and optional ambient looping.
-4. Preview over headphones and export a stereo WAV.
-5. Make small adjustments to one track at a time and compare A/B.
+3. Choose local FX audio files, enter start times, adjust per-cue volume
+   (initially 0.1 for ambience / 0.22 for Foley), pan and optional ambient looping.
+4. Set ambience/Foley bus levels, master level, voice-priority ducking and
+   spatial mode. HRTF mode is intended for headphones and mono FX sources.
+5. Preview over headphones and export a stereo WAV.
+6. Make small adjustments to one track at a time and compare A/B.
 
 The `audio/*` file picker accepts common MP3, WAV and M4A inputs *when your
 browser's decodeAudioData supports the codec*. This is a browser limitation,
@@ -75,9 +80,12 @@ usage, or an unauthorized caller could consume ElevenLabs credits.
 
 - No autonomous emotionally expressive multi-turn performance yet.
 - No real Foley sample library included; no asset downloads.
-- No KU100 recording or true binaural microphone simulation.
-- No HRTF spatial renderer yet; current positioning is basic stereo pan.
-- No voice-aware sidechain ducking yet.
+- No KU100 recording or true binaural microphone simulation; browser HRTF
+  positioning is a playback spatializer, not a binaural microphone recording.
+- HRTF positioning currently applies only to mono effects. Stereo files are
+  deliberately preserved and use basic stereo pan.
+- Voice ducking is based on a precomputed RMS loudness envelope, not semantic
+  dialogue understanding or a live hardware-style compressor sidechain.
 - No time-aligned dialogue-to-Foley cue inference; timestamps are manually set.
 - No automatic equalization, mastering or intelligibility scoring.
 - No completed single-click export inside the official ChatGPT MCP player.
@@ -91,10 +99,11 @@ commit those files or redistribute them. Check:
 
 (a) speech stays clearly in front, (b) ambience remains subtle,
 (c) short Foley cues do not mask consonants or line endings,
-(d) left/right placement is audible but not distracting,
-(e) stereo source material is preserved sensibly,
-(f) mobile Safari playback/export works, and
-(g) no source file is uploaded by the preview workflow.
+(d) voice-priority ducking is gentle and does not audibly pump,
+(e) HRTF placement on mono effects is audible but not distracting,
+(f) stereo source material is preserved sensibly,
+(g) mobile Safari playback/export works, and
+(h) no source file is uploaded by the preview workflow.
 
 Only after this passes should HRTF and voice-aware ducking be implemented and
 compared against the simpler stereo mix.

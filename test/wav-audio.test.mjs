@@ -194,6 +194,25 @@ test("quiet close Foley uses an audible excerpt, with left-right positioning", (
   );
 });
 
+test("trims close cues to short synthesized speech without failing", () => {
+  const voice = rawPcm(tone(44100 * 4, 0.1));
+  const quietEffect = encodePcm16Wav([tone(44100 * 2, 0.02)], 44100);
+  const mixed = mixSoundscape({
+    voicePcm: voice,
+    assets: new Map([["one", quietEffect]]),
+    cues: [
+      { fileId: "one", kind: "foley", atSec: 3.2, durationSec: 2.4,
+        fadeInSec: 0.1, fadeOutSec: 0.35, gain: 0.46 },
+      { fileId: "one", kind: "foley", atSec: 5, durationSec: 1.0,
+        fadeInSec: 0.1, fadeOutSec: 0.1 },
+    ],
+    duckingEnabled: false,
+  });
+  assert.equal(mixed.timeline.cues.length, 1);
+  assert.ok(Math.abs(mixed.timeline.cues[0].durationSec - 0.8) < 0.00001);
+  assert.equal(decodePcmWav(mixed.buffer).frameCount, 44100 * 4);
+});
+
 test("rejects a soundscape longer than the supported duration", () => {
   const voice = rawPcm(tone(44100 * 181, 0.01));
   assert.throws(() => mixSoundscape({ voicePcm: voice, assets: new Map() }), /180 second/);

@@ -3,6 +3,15 @@ import process from "node:process";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { z } from "zod";
+import {
+  buildVoiceSettings,
+  createPerformancePlan,
+  getVoiceIdForLanguage,
+  normalizeDirection,
+  normalizePerformance,
+  shouldApplyJapaneseNormalization,
+  stripAudioTags,
+} from "./performance.mjs";
 
 const app = express();
 app.use(express.json({ limit: "20mb" }));
@@ -16,41 +25,12 @@ const PLAYER_MIME = "text/html;profile=mcp-app";
 const VERSION = "1.3.0";
 const MAX_CONTEXT_CHARS = 4000;
 
-const PERFORMANCE_MODES = new Set(["auto", "natural", "soft", "close", "breathy", "expressive"]);
-const PERFORMANCE_PRESETS = {
-  natural: "warm, natural, conversational, unhurried",
-  soft: "soft, warm, quiet, unhurried",
-  close: "low, close, quiet, unhurried",
-  breathy: "low, close, restrained, unhurried",
-  expressive: "close, warm, expressive, unhurried",
-};
-
-const BREATH_PATTERNS = {
-  breathy: [
-    { id: "exhale", tag: "[exhales]" },
-    { id: "pause", tag: "[short pause]" },
-    { id: "none", tag: "" },
-  ],
-  expressive: [
-    { id: "exhale", tag: "[exhales]" },
-    { id: "sigh", tag: "[sighs]" },
-    { id: "pause", tag: "[short pause]" },
-  ],
-};
-
 const RECENT_PATTERN_LIMIT = 6;
-const recentPerformancePatterns = [];
 
 let latestEvent = null;
+const recentPerformancePatterns = [];
 
-const styleTags = {
-  soft: "[whispers]",
-  teasing: "[mischievously]",
-  excited: "[excited]",
-  tired: "[sighs]",
-  laughing: "[laughs]",
-  curious: "[curious]",
-};
+
 
 const cors = (_req, res, next) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -60,35 +40,6 @@ const cors = (_req, res, next) => {
   next();
 };
 app.use(cors);
-
-function stripAudioTags(text) {
-  return String(text ?? "")
-    .replace(/\[[A-Za-z][^\]\r\n]{0,179}\]/g, "")
-    .replace(/[ \t]{2,}/g, " ")
-    .trim();
-}
-
-function hasAudioTags(text) {
-  return stripAudioTags(text) !== String(text ?? "").trim();
-}
-
-function normalizeDirection(value) {
-  if (value === undefined || value === null) return undefined;
-
-  const direction = String(value)
-    .trim()
-    .replace(/^\[|\]$/g, "")
-    .replace(/[\[\]\r\n]+/g, " ")
-    .replace(/\s{2,}/g, " ")
-    .trim();
-
-  if (!direction) return undefined;
-  if (direction.length > 180) {
-    throw new Error("direction is too long (max 180 characters)");
-  }
-
-  return direction;
-}
 
 function normalizeContext(value, fieldName) {
   if (value === undefined || value === null) return undefined;
@@ -105,125 +56,6 @@ function normalizeContext(value, fieldName) {
   return context;
 }
 
-function normalizePerformance(value) {
-  const mode = String(value ?? "auto").trim().toLowerCase() || "auto";
-  if (!PERFORMANCE_MODES.has(mode)) {
-    throw new Error(`Unknown performance mode: ${mode}`);
-  }
-  return mode;
-}
-
-function speakableCharCount(text) {
-  return stripAudioTags(String(text ?? ""))
-    .replace(/[\s\p{P}\p{S}]/gu, "")
-    .length;
-}
-
-function directionWordCount(value) {
-  return (String(value ?? "").match(/[A-Za-z0-9'-]+/g) || []).length;
-}
-
-function trimDirectionForText(direction, text) {
-  const normalized = normalizeDirection(direction);
-  if (!normalized) return undefined;
-
-  const chars = Math.max(1, speakableCharCount(text));
-  const allow = Math.max(4, Math.min(12, Math.floor(chars * 0.55)));
-  const parts = normalized.split(",").map((part) => part.trim()).filter(Boolean);
-  const totalWords = () => parts.reduce((sum, part) => sum + directionWordCount(part), 0);
-
-  while (parts.length > 1 && totalWords() > allow) {
-    parts.pop();
-  }
-
-  if (totalWords() > allow && parts.length === 1) {
-    parts[0] = parts[0].split(/\s+/).slice(0, allow).join(" ");
-  }
-
-  return parts.join(", ") || undefined;
-}
-
-function pickBreathPattern(mode, text) {
-  const options = BREATH_PATTERNS[mode];
-  if (!options || speakableCharCount(text) < 8) return null;
-
-  const recentlyUsed = new Set(recentPerformancePatterns.slice(-3));
-  const fresh = options.filter((item) => !recentlyUsed.has(item.id));
-  const pool = fresh.length ? fresh : options;
-
-  let hash = 0;
-  for (const ch of stripAudioTags(text)) hash = (hash * 31 + ch.codePointAt(0)) >>> 0;
-  const picked = pool[hash % pool.length];
-
-  recentPerformancePatterns.push(picked.id);
-  if (recentPerformancePatterns.length > RECENT_PATTERN_LIMIT) recentPerformancePatterns.shift();
-  return picked;
-}
-
-function insertPerformanceEvent(text, tag) {
-  if (!tag) return text;
-  const source = String(text ?? "").trim();
-  if (!source) return source;
-
-  const candidates = [];
-  const boundary = /(……|[，,。！？!?；;])/g;
-  let match;
-  while ((match = boundary.exec(source)) !== null) {
-    const ratio = (match.index + match[0].length) / Math.max(1, source.length);
-    if (ratio >= 0.25 && ratio <= 0.72) {
-      candidates.push(match.index + match[0].length);
-    }
-  }
-
-  if (candidates.length) {
-    const at = candidates[0];
-    return `${source.slice(0, at)} ${tag} ${source.slice(at).trimStart()}`;
-  }
-
-  if (speakableCharCount(source) >= 18) {
-    return `${tag} ${source}`;
-  }
-
-  return source;
-}
-
-function createPerformancePlan(text, { performance, direction, style, rawTags } = {}) {
-  const requestedMode = normalizePerformance(performance);
-  const mode = requestedMode === "auto" ? "natural" : requestedMode;
-  const preserveInlineTags = rawTags === true;
-  const baseText = preserveInlineTags ? String(text ?? "").trim() : stripAudioTags(text);
-
-  const explicitDirection = normalizeDirection(direction);
-  const legacyTag = !explicitDirection && (!performance || requestedMode === "auto") && style
-    ? styleTags[String(style).trim().toLowerCase()]
-    : undefined;
-
-  let selectedDirection = explicitDirection;
-  if (!selectedDirection && !legacyTag) {
-    selectedDirection = PERFORMANCE_PRESETS[mode] || PERFORMANCE_PRESETS.natural;
-  }
-
-  const safeDirection = trimDirectionForText(selectedDirection, baseText);
-  const breathPattern = !preserveInlineTags && (mode === "breathy" || mode === "expressive")
-    ? pickBreathPattern(mode, baseText)
-    : null;
-
-  return {
-    requested_mode: requestedMode,
-    mode,
-    direction: safeDirection,
-    legacy_tag: legacyTag,
-    breath_event: breathPattern?.id || null,
-    rendered_text: breathPattern ? insertPerformanceEvent(baseText, breathPattern.tag) : baseText,
-    raw_tags_preserved: preserveInlineTags,
-  };
-}
-
-function getVoiceId(text) {
-  const isZh = /[\u3400-\u9fff\uf900-\ufaff]/.test(stripAudioTags(text));
-  if (isZh) return process.env.ELEVENLABS_VOICE_ID_ZH || process.env.ELEVENLABS_VOICE_ID;
-  return process.env.ELEVENLABS_VOICE_ID_EN || process.env.ELEVENLABS_VOICE_ID;
-}
 
 function buildText(text, style, rawTags, direction, performance) {
   const supportsTags = ["eleven_v3", "eleven_v4", "eleven_v4_turbo"].includes(MODEL_ID);
@@ -242,20 +74,11 @@ function buildText(text, style, rawTags, direction, performance) {
     };
   }
 
-  const plan = createPerformancePlan(text, { performance, direction, style, rawTags });
+  const plan = createPerformancePlan(text, { performance, direction, style, rawTags, recentPatterns: recentPerformancePatterns });
   const tag = plan.direction ? `[${plan.direction}]` : plan.legacy_tag;
   const finalText = tag ? `${tag} ${plan.rendered_text}` : plan.rendered_text;
 
   return { finalText, plan };
-}
-
-function voiceSettings() {
-  const settings = {};
-  const stability = Number(process.env.ELEVENLABS_STABILITY);
-  const similarity = Number(process.env.ELEVENLABS_SIMILARITY_BOOST);
-  if (Number.isFinite(stability)) settings.stability = stability;
-  if (Number.isFinite(similarity)) settings.similarity_boost = similarity;
-  return settings;
 }
 
 async function synthesize(text, options = {}) {
@@ -264,12 +87,17 @@ async function synthesize(text, options = {}) {
     rawTags,
     direction,
     performance,
+    language,
     previousText,
     nextText,
+    previousRequestIds,
+    includeAlignment,
   } = options;
 
   const apiKey = process.env.ELEVENLABS_API_KEY;
-  const voiceId = getVoiceId(text);
+  const voiceSelection = getVoiceIdForLanguage(text, language);
+  const voiceId = voiceSelection.voiceId;
+  const detectedLanguage = voiceSelection.language;
 
   if (!apiKey) throw new Error("ELEVENLABS_API_KEY is not configured");
   if (!voiceId) throw new Error("ELEVENLABS_VOICE_ID is not configured");
@@ -285,13 +113,26 @@ async function synthesize(text, options = {}) {
   const url = new URL(`https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(voiceId)}/with-timestamps`);
   url.searchParams.set("output_format", OUTPUT_FORMAT);
 
+  const voiceSettings = buildVoiceSettings(performancePlan.mode, MODEL_ID);
   const body = {
     text: finalText,
     model_id: MODEL_ID,
-    voice_settings: voiceSettings(),
+    ...(Object.keys(voiceSettings).length ? { voice_settings: voiceSettings } : {}),
   };
 
-  if (previousContext) body.previous_text = previousContext;
+  if (detectedLanguage && MODEL_ID !== "eleven_multilingual_v2") {
+    body.language_code = detectedLanguage;
+  }
+  if (shouldApplyJapaneseNormalization(detectedLanguage)) {
+    body.apply_language_text_normalization = true;
+  }
+
+  const requestIds = Array.isArray(previousRequestIds)
+    ? [...new Set(previousRequestIds.map((id) => String(id).trim()).filter(Boolean))].slice(-3)
+    : [];
+  if (requestIds.length) body.previous_request_ids = requestIds;
+  else if (previousContext) body.previous_text = previousContext;
+
   if (nextContext) body.next_text = nextContext;
 
   const response = await fetch(url, {
@@ -308,6 +149,7 @@ async function synthesize(text, options = {}) {
     throw new Error(`ElevenLabs API ${response.status}: ${detail}`);
   }
 
+  const requestId = response.headers.get("request-id") || response.headers.get("Request-Id") || null;
   const data = await response.json();
   if (!data.audio_base64) throw new Error("ElevenLabs returned no audio");
 
@@ -319,7 +161,10 @@ async function synthesize(text, options = {}) {
     style: style || null,
     direction: performancePlan.direction || normalizeDirection(direction) || null,
     performance: performancePlan,
-    previous_text: previousContext || null,
+    language: detectedLanguage || null,
+    request_id: requestId,
+    previous_request_ids: requestIds,
+    previous_text: requestIds.length ? null : previousContext || null,
     next_text: nextContext || null,
   };
 
@@ -329,6 +174,13 @@ async function synthesize(text, options = {}) {
     previous_text: previousContext,
     next_text: nextContext,
     performance: performancePlan,
+    language: detectedLanguage || null,
+    request_id: requestId,
+    voice_settings: voiceSettings,
+    ...(includeAlignment ? {
+      alignment: data.alignment || null,
+      normalized_alignment: data.normalized_alignment || null,
+    } : {}),
   };
 }
 

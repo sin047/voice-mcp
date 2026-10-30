@@ -398,6 +398,9 @@ app.get("/events/latest", (req, res) => {
 app.get("/speak", async (req, res) => {
   try {
     const text = String(req.query.text || "");
+    if (!text.trim() || text.length > 4000) {
+      return res.status(400).json({ error: "text must be 1–4000 characters" });
+    }
     const style = req.query.style ? String(req.query.style) : undefined;
     const performance = req.query.performance ? String(req.query.performance) : undefined;
     const language = req.query.language ? String(req.query.language) : undefined;

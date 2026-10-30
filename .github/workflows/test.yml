@@ -28,6 +28,7 @@ jobs:
           node --check src/usage-guard.mjs
           node --check src/audio-assets.mjs
           node --check src/wav-audio.mjs
+          node --check src/soundscape-presets.mjs
       - name: Regression tests
         run: npm test
       - name: Install runtime dependencies

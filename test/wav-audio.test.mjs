@@ -87,7 +87,7 @@ test("mixes a centered voice with a timed mono effect and preserves stereo pan",
 
 test("loops ambience, applies ducking and protects the output peak", () => {
   const voiceSamples = new Float32Array(44100);
-  voiceSamples.fill(0.8, 0, 22050);
+  voiceSamples.fill(0.99, 0, 22050);
   const voice = rawPcm(voiceSamples);
   const ambience = encodePcm16Wav([tone(4410, 0.5)], 44100);
 

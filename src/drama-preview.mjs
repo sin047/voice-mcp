@@ -16,8 +16,8 @@ section{background:var(--paper);border:1px solid var(--hair);border-radius:21px;
 h2{font-size:13px;font-weight:600;letter-spacing:.03em;margin:0 0 15px}
 small,.hint{color:var(--muted);font-size:12px;line-height:1.8}
 label{display:block;color:var(--muted);font-size:12px;margin:9px 0 6px}
-input[type=file],input[type=number],select{width:100%;font:inherit;color:var(--ink);border:1px solid var(--hair);border-radius:12px;padding:11px;background:rgba(255,255,255,.7)}
-input[type=checkbox]{accent-color:#65717e}
+input[type=file],input[type=number],textarea,select{width:100%;font:inherit;color:var(--ink);border:1px solid var(--hair);border-radius:12px;padding:11px;background:rgba(255,255,255,.7)}
+textarea{min-height:76px;resize:vertical;line-height:1.6}input[type=checkbox]{accent-color:#65717e}
 .row{display:flex;gap:12px;align-items:end;flex-wrap:wrap}
 .row>*{flex:1;min-width:115px}
 button{cursor:pointer;border:1px solid var(--hair);border-radius:999px;padding:11px 20px;color:var(--ink);background:white;font:inherit}
@@ -42,6 +42,11 @@ button.remove{padding:7px 14px;font-size:12px}
 <h2>01 / 人声轨道</h2>
 <label for="voice">选择你已有的日语语音文件（MP3 / WAV / M4A）</label>
 <input id="voice" type="file" accept="audio/*">
+<div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--hair)">
+<label for="script">或者直接输入日语台词，由当前 Voice MCP 生成（主动点击才会请求 ElevenLabs）</label>
+<textarea id="script" maxlength="700" placeholder="ねえ、すみか。今日は少し、ゆっくり話そう。"></textarea>
+<button id="generateVoice" style="margin-top:8px">生成日语人声 · close restrained</button>
+</div>
 <div class="row"><div><label for="voiceLevel">人声音量（0–1）</label><input id="voiceLevel" type="number" min="0" max="1" step="0.05" value="0.9"></div>
 <div><label>建议</label><div class="hint">保留原始人声，不强制添加喘息或情绪标签。</div></div></div>
 </section>
@@ -62,7 +67,7 @@ button.remove{padding:7px 14px;font-size:12px}
 <p id="status" role="status" aria-live="polite">尚未选择音频。</p>
 <small>目前限制：总人声最长 180 秒，最多 12 个音效。音量与声像是基础后期，不代表专业 KU100 双耳录音。若导出声音太满，可降低音效增益。</small>
 </section>
-<p class="hint privacy">隐私：音频通过浏览器 File API 加载，在本机混音。此页面不上传、不保存、不共享文件，也不自动调用 ElevenLabs。仅使用你有权使用的音效素材；不要把私人素材提交到公开 GitHub 仓库。</p>
+<p class="hint privacy">隐私：你从本机选择的语音与音效文件只在浏览器中解码和混音，不会上传到服务器。仅当主动点击「生成日语人声」时，输入的台词才会发送至当前 Voice MCP 和 ElevenLabs，且会消耗 ElevenLabs 额度。仅使用你有权使用的音效素材；不要把私人素材提交到公开 GitHub 仓库。</p>
 </main>
 <script type="module">
 import { createDramaTimeline } from "/drama/timeline.mjs";
@@ -71,6 +76,7 @@ const $ = (id) => document.getElementById(id);
 let items = [];
 let nextId = 1;
 let active = null;
+let generatedVoiceFile = null;
 const status = (message) => { $("status").textContent = message; };
 
 function makeNumber(label, value, min, max, step, change) {
@@ -147,10 +153,38 @@ $("fx").addEventListener("change",(event) => {
   renderCues();
   status("已添加 " + items.length + " 条音效轨道。");
 });
-$("voice").addEventListener("change",() => status($("voice").files[0] ? "已选择人声：" + $("voice").files[0].name : "尚未选择人声。"));
+$("voice").addEventListener("change",() => {
+  generatedVoiceFile = null;
+  status($("voice").files[0] ? "已选择人声：" + $("voice").files[0].name : "尚未选择人声。");
+});
+
+$("generateVoice").onclick = async() => {
+  const text = $("script").value.trim();
+  if (!text) { status("请先输入一段要说的日语台词。"); return; }
+  $("generateVoice").disabled = true;
+  status("正在用已配置的 ElevenLabs 日语音色生成……");
+  try {
+    const query = new URLSearchParams({
+      text,
+      language: "ja",
+      performance: "close",
+      direction: "low, close-mic, gently warm, emotionally restrained, unhurried"
+    });
+    const response = await fetch("/speak?" + query.toString(), { cache:"no-store" });
+    if (!response.ok) {
+      const message = await response.text();
+      throw new Error(message.slice(0,240));
+    }
+    const blob = await response.blob();
+    if (!blob.size) throw new Error("ElevenLabs 返回了空音频。");
+    generatedVoiceFile = new File([blob], "shin-generated-voice.mp3", { type: "audio/mpeg" });
+    status("人声生成成功。可以添加音效并点击「试听混音」。");
+  } catch(error) { status("生成失败：" + error.message); }
+  finally { $("generateVoice").disabled = false; }
+};
 
 async function getBuffers(ctx) {
-  const file = $("voice").files[0];
+  const file = generatedVoiceFile || $("voice").files[0];
   if (!file) throw new Error("请先选择一段日语人声音频。");
   const voice = await ctx.decodeAudioData(await file.arrayBuffer());
   if (voice.duration > 180) throw new Error("人声轨道不能超过 180 秒。");

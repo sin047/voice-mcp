@@ -5,7 +5,7 @@ WORKDIR /app
 COPY package.json ./
 RUN npm install --omit=dev --no-package-lock
 
-COPY src/zeabur-server.mjs ./src/zeabur-server.mjs
+COPY src ./src
 
 ENV NODE_ENV=production
 ENV PORT=8080

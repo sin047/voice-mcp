@@ -9,39 +9,62 @@ An MCP (Model Context Protocol) server for AI voice synthesis with an inline aud
 </a>
 
 
-## sin047 Zeabur Runtime — v1.3
+## sin047 Zeabur Runtime — v1.3.1
 
 The `zeabur` branch is the lightweight Node/Express runtime used by the ChatGPT MCP connection.
 
 ### GPT-first performance engine
 
-The MCP tool remains backward compatible with existing calls, while adding a high-level `performance` mode intended for direct use from ChatGPT:
+Normal ChatGPT use should only need `text` and, when useful, `performance`:
 
 ```text
 speak(
   text,
-  performance?,   # auto | natural | soft | close | breathy | expressive
-  direction?,     # advanced override
+  performance?,          # auto | natural | soft | close | breathy | expressive
+  language?,             # auto | zh | ja | en | ko
+  previous_request_ids?, # up to 3 IDs from contiguous chunks of the same voice/model
   previous_text?,
   next_text?,
-  style?,         # legacy
-  raw_tags?       # advanced/debug opt-in
+  direction?,            # advanced override
+  include_alignment?     # opt-in character timestamps
 )
 ```
 
-Normal ChatGPT use should prefer `text + performance`. The tool description tells the model to use `natural` for everyday speech and reserve `breathy` / `expressive` for contexts that explicitly call for stronger breath or performance.
+v1.3.1 improvements:
 
-v1.3 adds:
-
-- restrained breath-event planning for `breathy` and `expressive`
-- recent-pattern avoidance so the same opener/breath event is not repeated mechanically
-- tag-length guarding for short utterances to reduce duplicated speech
-- explicit-only raw inline tags; unrequested inline tags are stripped before synthesis
-- v1.2 continuity context via `previous_text` / `next_text`
-- structured performance metadata in MCP results
-- `/panel` performance-mode testing
+- **Natural is truly neutral:** it adds no performance tag to everyday speech.
+- **Short-line protection:** very short utterances do not receive long direction tags or forced breath events.
+- **Pause-aware breath planning:** breath events are only inserted at an existing natural punctuation pause; the planner never prepends a breath to a sentence just to satisfy a preset.
+- **Mode-aware stability:** `soft`, `close`, `breathy` and `expressive` use conservative stability defaults on Eleven v4. Explicit per-mode settings and the existing global setting can override them.
+- **Language-aware routing:** Japanese kana, Korean Hangul, Chinese Han characters and English are detected; optional per-language voice IDs can be configured. Set `language` explicitly for kanji-only Japanese or ambiguous mixed text.
+- **Native request stitching:** the server reads ElevenLabs' `request-id` response header and returns it to ChatGPT. For adjacent chunks with the same voice and model, pass that ID in `previous_request_ids` to improve continuity. Otherwise, use `previous_text` / `next_text`.
+- **Optional Japanese normalization:** enable it only if Japanese pronunciation needs it; it can increase latency.
+- **Optional alignment:** character timestamps can be returned for future captions and audio-effect synchronization.
+- **Regression tests:** the pure performance and language-selection logic is covered by Node's built-in test runner.
 
 The performance layer intentionally handles **voice performance**, not physical sound effects. Kiss/wet/environment effects belong in a later independent audio/effects layer rather than being forced through TTS.
+
+### Zeabur environment variables
+
+| Variable | Purpose |
+|---|---|
+| `ELEVENLABS_API_KEY` | Required ElevenLabs API key |
+| `ELEVENLABS_VOICE_ID` | Default/fallback voice ID |
+| `ELEVENLABS_VOICE_ID_ZH` | Optional Chinese voice |
+| `ELEVENLABS_VOICE_ID_JA` | Optional Japanese voice |
+| `ELEVENLABS_VOICE_ID_EN` | Optional English voice |
+| `ELEVENLABS_VOICE_ID_KO` | Optional Korean voice |
+| `ELEVENLABS_MODEL_ID` | Defaults to quality-first `eleven_v4` |
+| `ELEVENLABS_OUTPUT_FORMAT` | Defaults to `mp3_44100_128` |
+| `ELEVENLABS_STABILITY` | Global stability override (0–1) |
+| `ELEVENLABS_STABILITY_SOFT` / `_CLOSE` / `_BREATHY` / `_EXPRESSIVE` | Optional per-mode stability overrides (0–1); these take priority over the global value |
+| `ELEVENLABS_SIMILARITY_BOOST` | Optional similarity override (0–1) |
+| `ELEVENLABS_CLONE_STRENGTH` | Optional v4 Professional Voice Clone setting (0–1) |
+| `ELEVENLABS_JA_TEXT_NORMALIZATION` | Set to `true` to enable Japanese text normalization; may increase latency |
+| `BOT_NAME` | Optional player/tool display name |
+
+For Eleven v4, only stability and similarity are standard voice controls; style, speed and speaker-boost settings are not sent to v4. The legacy variables for other model families remain supported where applicable.
+
 
 ## Fork Notice
 

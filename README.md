@@ -42,7 +42,24 @@ v1.3.1 improvements:
 - **Optional alignment:** character timestamps can be returned for future captions and audio-effect synchronization.
 - **Regression tests:** the pure performance and language-selection logic is covered by Node's built-in test runner.
 
-The performance layer intentionally handles **voice performance**, not physical sound effects. Kiss/wet/environment effects belong in a later independent audio/effects layer rather than being forced through TTS.
+The stable performance layer handles **voice performance**, not physical sound effects. The experimental v1.4 Private Drama branch adds a separate browser-based effects and mixing lab; it does not change the stable MCP `speak` tool.
+
+### Experimental v1.4 Private Drama Lab
+
+The `voice-v1.4-private-drama` branch contains a separate, local-first audio
+preview. It is experimental and is **not** the stable ChatGPT MCP deployment.
+
+- One centered Japanese voice track plus up to 12 local sound-effect tracks.
+- Independent ambience and Foley buses, per-cue timing, gain, pan and fades.
+- Optional voice-priority ducking based on the voice track's RMS envelope.
+- Optional browser HRTF positioning for mono effects; stereo source files retain
+  their stereo image.
+- Headphone preview and local stereo WAV export.
+
+See [PRIVATE_DRAMA.md](PRIVATE_DRAMA.md) for setup, limitations, privacy and
+acceptance tests. Do not deploy this branch publicly until the speech endpoints
+have authentication, rate limits and quotas. The audio preview does not yet
+return a mixed audio file through the embedded ChatGPT MCP player.
 
 ### Zeabur environment variables
 

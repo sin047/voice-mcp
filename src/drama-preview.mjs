@@ -29,6 +29,7 @@ button.remove{padding:7px 14px;font-size:12px}
 .cueheader strong{font-weight:500;font-size:12px;overflow-wrap:anywhere}
 .cue .row{margin-top:4px}.cue label{font-size:11px}
 .actions{display:flex;gap:8px;flex-wrap:wrap}
+.assetrow{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--hair)}.assetrow span{min-width:0;overflow-wrap:anywhere}.assetrow button{flex:none}
 #status{min-height:24px;font-size:12px;color:#53606b;line-height:1.6}
 .privacy{border-top:1px solid var(--hair);padding-top:20px;margin-top:30px}
 @media(max-width:480px){main{padding:34px 14px 55px}section{padding:18px}.row>*{min-width:92px}h1{font-size:29px}}
@@ -179,9 +180,46 @@ async function loadAssetLibrary() {
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(payload.error || ("HTTP " + response.status));
     const assets = payload.assets || [];
-    panel.textContent = assets.length
-      ? assets.map((asset) => asset.name + " · " + asset.kind + " · " + asset.durationSec + "s · " + asset.id).join(" | ")
-      : "音效库为空。保存本地音效后，就能在 GPT 官端调用。";
+    const usage = payload.usage || {};
+    panel.replaceChildren();
+    const summary = document.createElement("div");
+    const usedMb = ((usage.totalBytes || 0) / (1024 * 1024)).toFixed(1);
+    const maxMb = ((usage.maxTotalBytes || 0) / (1024 * 1024)).toFixed(0);
+    summary.textContent = "已保存 " + assets.length + " / " + (usage.maxAssetCount || 100) + " 条 · " + usedMb + " / " + maxMb + " MB";
+    panel.append(summary);
+    if (!assets.length) {
+      const empty = document.createElement("p");
+      empty.textContent = "音效库为空。保存本地音效后，就能在 GPT 官端调用。";
+      panel.append(empty);
+      return;
+    }
+    assets.forEach((asset) => {
+      const row = document.createElement("div");
+      row.className = "assetrow";
+      const label = document.createElement("span");
+      label.textContent = asset.name + " · " + asset.kind + " · " + asset.durationSec + "s · " + asset.id;
+      const remove = document.createElement("button");
+      remove.className = "remove";
+      remove.textContent = "删除";
+      remove.onclick = async () => {
+        remove.disabled = true;
+        try {
+          const deleted = await fetch("/assets/" + encodeURIComponent(asset.id), { method: "DELETE" });
+          if (!deleted.ok) throw new Error("HTTP " + deleted.status);
+          items.forEach((item) => {
+            if (item.assetId === asset.id) item.assetId = null;
+          });
+          renderCues();
+          status("已从服务器音效库删除：" + asset.name);
+          await loadAssetLibrary();
+        } catch (error) {
+          remove.disabled = false;
+          status("删除失败：" + error.message);
+        }
+      };
+      row.append(label, remove);
+      panel.append(row);
+    });
   } catch (error) {
     panel.textContent = "无法读取音效库：" + error.message;
   }

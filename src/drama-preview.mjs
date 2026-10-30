@@ -180,7 +180,7 @@ async function loadAssetLibrary() {
     if (!response.ok) throw new Error(payload.error || ("HTTP " + response.status));
     const assets = payload.assets || [];
     panel.textContent = assets.length
-      ? assets.map((asset) => asset.name + " · " + asset.kind + " · " + asset.durationSec + "s · " + asset.id).join("\\n")
+      ? assets.map((asset) => asset.name + " · " + asset.kind + " · " + asset.durationSec + "s · " + asset.id).join(" | ")
       : "音效库为空。保存本地音效后，就能在 GPT 官端调用。";
   } catch (error) {
     panel.textContent = "无法读取音效库：" + error.message;

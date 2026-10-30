@@ -102,6 +102,62 @@ export function createDramaTimeline(input) {
   });
 }
 
+
+/**
+ * Build a deterministic effects-bus gain envelope from decoded voice samples.
+ * The envelope is deliberately simple: RMS energy, not semantic speech detection.
+ */
+export function createVoiceDuckingEnvelope(channelData, sampleRate, options = {}) {
+  if (!Array.isArray(channelData) || channelData.length < 1 ||
+      !channelData.every((channel) => channel && typeof channel.length === "number")) {
+    throw new Error("channelData must be a non-empty array of audio channels");
+  }
+  if (!Number.isFinite(sampleRate) || sampleRate <= 0) {
+    throw new Error("sampleRate must be a positive finite number");
+  }
+  const sampleCount = channelData[0].length;
+  if (!Number.isInteger(sampleCount) || sampleCount < 1 ||
+      !channelData.every((channel) => channel.length === sampleCount)) {
+    throw new Error("audio channels must have the same non-zero length");
+  }
+
+  const amount = boundedNumber(options.amount ?? 0.5, "amount", 0, 1);
+  const thresholdDb = boundedNumber(options.thresholdDb ?? -42, "thresholdDb", -100, -1);
+  const attackSec = boundedNumber(options.attackSec ?? 0.045, "attackSec", 0.001, 5);
+  const releaseSec = boundedNumber(options.releaseSec ?? 0.26, "releaseSec", 0.001, 5);
+  const frameMs = boundedNumber(options.frameMs ?? 40, "frameMs", 10, 100);
+  const frameSize = Math.max(1, Math.floor(sampleRate * frameMs / 1000));
+  const frames = [];
+  let smoothed = 1;
+
+  for (let offset = 0; offset < sampleCount; offset += frameSize) {
+    const end = Math.min(sampleCount, offset + frameSize);
+    let sumSquares = 0;
+    let count = 0;
+    for (const channel of channelData) {
+      for (let i = offset; i < end; i++) {
+        const sample = Number(channel[i]) || 0;
+        sumSquares += sample * sample;
+        count += 1;
+      }
+    }
+    const rms = count ? Math.sqrt(sumSquares / count) : 0;
+    const levelDb = rms > 0.000001 ? 20 * Math.log10(rms) : -120;
+    const activity = Math.max(0, Math.min(1, (levelDb - thresholdDb) / (0 - thresholdDb)));
+    const target = 1 - amount * activity;
+    const frameSeconds = (end - offset) / sampleRate;
+    const timeConstant = target < smoothed ? attackSec : releaseSec;
+    const smoothing = 1 - Math.exp(-frameSeconds / timeConstant);
+    smoothed += (target - smoothed) * smoothing;
+    frames.push(Object.freeze({
+      atSec: end / sampleRate,
+      gain: Math.max(0, Math.min(1, smoothed)),
+    }));
+  }
+
+  return Object.freeze(frames);
+}
+
 export const DRAMA_TIMELINE_LIMITS = Object.freeze({
   maxCues: MAX_CUES,
   maxSeconds: MAX_SECONDS,

@@ -58,6 +58,21 @@ test("rejects non-finite duration and invalid fades", () => {
   }), /fades exceed/);
 });
 
+test("validates optional source offsets for cue excerpts", () => {
+  const timeline = createDramaTimeline({
+    voiceDurationSec: 8,
+    cues: [{ fileId: "cloth", kind: "foley", sourceOffsetSec: 12 }],
+  });
+  assert.equal(timeline.cues[0].sourceOffsetSec, 12);
+  assert.throws(
+    () => createDramaTimeline({
+      voiceDurationSec: 8,
+      cues: [{ fileId: "cloth", kind: "foley", sourceOffsetSec: 181 }],
+    }),
+    /sourceOffsetSec/,
+  );
+});
+
 test("validates mix buses, ducking and spatial modes", () => {
   const timeline = createDramaTimeline({
     voiceDurationSec: 12,

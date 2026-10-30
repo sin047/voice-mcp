@@ -25,6 +25,7 @@ jobs:
           node --check src/drama-timeline.mjs
           node --check src/drama-preview.mjs
           node --check src/http-auth.mjs
+          node --check src/usage-guard.mjs
       - name: Regression tests
         run: npm test
       - name: Install runtime dependencies
@@ -33,7 +34,7 @@ jobs:
         shell: bash
         run: |
           TEST_ACCESS_TOKEN="ci-only-private-drama-token-0123456789abcdef"
-          PRIVATE_DRAMA_ACCESS_TOKEN="$TEST_ACCESS_TOKEN" PORT=8765 node src/zeabur-server.mjs > /tmp/voice-mcp.log 2>&1 &
+          PRIVATE_DRAMA_ACCESS_TOKEN="$TEST_ACCESS_TOKEN" MCP_MAX_REQUESTS_PER_MINUTE=1 PORT=8765 node src/zeabur-server.mjs > /tmp/voice-mcp.log 2>&1 &
           SERVER_PID=$!
           trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
           for attempt in {1..20}; do
@@ -47,7 +48,7 @@ jobs:
             import assert from "node:assert/strict";
             const status = JSON.parse(fs.readFileSync("/tmp/voice-status.json", "utf8"));
             assert.equal(status.status, "ok");
-            assert.equal(status.version, "1.4.0-beta.3");
+            assert.equal(status.version, "1.4.0-beta.4");
             assert.equal(status.features.request_id_continuity, true);
             assert.equal(status.features.language_auto_detection, true);
             assert.equal(status.features.local_drama_preview, true);
@@ -57,6 +58,11 @@ jobs:
             -H "Accept: application/json, text/event-stream" \
             -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"voice-mcp-ci","version":"1.0.0"}}}' \
             > /tmp/mcp-initialize.json
+          MCP_THROTTLED=$(curl -s -o /tmp/mcp-throttled.json -w '%{http_code}' -X POST http://127.0.0.1:8765/mcp \
+            -H "Content-Type: application/json" \
+            -H "Accept: application/json, text/event-stream" \
+            -d '{"jsonrpc":"2.0","id":2,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"voice-mcp-ci","version":"1.0.0"}}}')
+          test "$MCP_THROTTLED" = "429"
           PREVIEW_UNAUTH=$(curl -s -o /tmp/drama-unauthorized.json -w '%{http_code}' http://127.0.0.1:8765/drama-preview)
           test "$PREVIEW_UNAUTH" = "401"
           curl -fsS -u "voice-mcp:$TEST_ACCESS_TOKEN" http://127.0.0.1:8765/drama-preview -o /tmp/drama-preview.html

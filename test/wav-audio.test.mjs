@@ -151,6 +151,49 @@ test("quiet stereo rain ambience is clearly present while the voice stays in fro
   assert.equal(audio.channelCount, 2);
 });
 
+test("quiet close Foley uses an audible excerpt, with left-right positioning", () => {
+  const voice = rawPcm(tone(44100 * 2, 0.1));
+  const left = new Float32Array(44100 * 2);
+  const right = new Float32Array(44100 * 2);
+  left.fill(0.018, 44100);
+  right.fill(0.009, 44100);
+  const effect = encodePcm16Wav([left, right], 44100);
+
+  const mix = mixSoundscape({
+    voicePcm: voice,
+    assets: new Map([["quiet-cloth", effect]]),
+    cues: [{
+      fileId: "quiet-cloth",
+      kind: "foley",
+      atSec: 0,
+      sourceOffsetSec: 1,
+      durationSec: 0.7,
+      gain: 0.46,
+      pan: -0.38,
+      fadeInSec: 0,
+      fadeOutSec: 0,
+    }],
+    voiceGain: 1,
+    foleyBusGain: 0.9,
+    masterGain: 1,
+    duckingEnabled: false,
+  });
+
+  const output = decodePcmWav(mix.buffer);
+  const frame = Math.round(0.35 * 44100);
+  assert.equal(mix.timeline.cues[0].sourceOffsetSec, 1);
+  assert.ok(output.channels[0][frame] > 0.11, "Foley must rise clearly above the voice");
+  assert.ok(output.channels[0][frame] > output.channels[1][frame], "left-panned Foley stays stronger on the left");
+  assert.throws(
+    () => mixSoundscape({
+      voicePcm: voice,
+      assets: new Map([["quiet-cloth", effect]]),
+      cues: [{ fileId: "quiet-cloth", kind: "foley", sourceOffsetSec: 3 }],
+    }),
+    /source offset exceeds/,
+  );
+});
+
 test("rejects a soundscape longer than the supported duration", () => {
   const voice = rawPcm(tone(44100 * 181, 0.01));
   assert.throws(() => mixSoundscape({ voicePcm: voice, assets: new Map() }), /180 second/);

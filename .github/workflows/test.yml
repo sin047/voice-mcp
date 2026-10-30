@@ -36,7 +36,7 @@ jobs:
         shell: bash
         run: |
           TEST_ACCESS_TOKEN="ci-only-private-drama-token-0123456789abcdef"
-          PRIVATE_DRAMA_ACCESS_TOKEN="$TEST_ACCESS_TOKEN" MCP_PUBLIC_BASE_URL="https://voice.example.test" AUDIO_ASSET_DIR="/tmp/voice-mcp-assets" MCP_MAX_REQUESTS_PER_MINUTE=2 PORT=8765 node src/server.mjs > /tmp/voice-mcp.log 2>&1 &
+          PRIVATE_DRAMA_ACCESS_TOKEN="$TEST_ACCESS_TOKEN" MCP_PUBLIC_BASE_URL="https://voice.example.test" AUDIO_ASSET_DIR="/tmp/voice-mcp-assets" MCP_SOUNDSCAPE_TOOLS_ENABLED=true MCP_MAX_REQUESTS_PER_MINUTE=2 PORT=8765 node src/server.mjs > /tmp/voice-mcp.log 2>&1 &
           SERVER_PID=$!
           trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
           for attempt in {1..20}; do
@@ -56,6 +56,7 @@ jobs:
             assert.equal(status.features.local_drama_preview, true);
             assert.equal(status.features.private_audio_asset_library, true);
             assert.equal(status.features.speak_with_soundscape, true);
+            assert.equal(status.features.soundscape_mcp_enabled, true);
           '
           curl -fsS -X POST http://127.0.0.1:8765/mcp \
             -H "Content-Type: application/json" \

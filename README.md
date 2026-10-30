@@ -130,7 +130,7 @@ The soundscape path requests `pcm_24000` internally, then resamples and mixes to
 | `AUDIO_ASSET_MAX_BYTES` | 20 MiB | Maximum bytes per uploaded WAV |
 | `AUDIO_ASSET_MAX_COUNT` | 100 | Maximum number of stored assets |
 | `AUDIO_ASSET_MAX_TOTAL_BYTES` | 200 MiB | Total audio library storage ceiling |
-| `MCP_PUBLIC_BASE_URL` | — | Required public HTTPS origin used to create playable soundscape URLs |
+| `MCP_PUBLIC_BASE_URL` | — | Public HTTPS origin for playable soundscape URLs; falls back to Zeabur `ZEABUR_WEB_URL` when available |
 | `MCP_SOUNDSCAPE_TOOLS_ENABLED` | `false` | Explicit opt-in for `list_sound_assets` and `speak_with_soundscape`; enable only after `/mcp` access is restricted |
 
 ### Request and ElevenLabs usage limits

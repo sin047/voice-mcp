@@ -1,0 +1,297 @@
+export function dramaPreviewHtml() {
+  return String.raw\`<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Shin · Private Drama Lab</title>
+<style>
+:root{color-scheme:light;--bg:#f5f6f7;--paper:rgba(255,255,255,.76);--ink:#31373f;--muted:#7f858d;--hair:rgba(92,107,125,.18)}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 5% 4%,#e8ecef 0,transparent 38%),var(--bg);font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Segoe UI",sans-serif;color:var(--ink);font-size:14px;min-height:100vh}
+main{max-width:790px;margin:0 auto;padding:55px 20px 70px}
+.kicker{font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:var(--muted)}
+h1{font-family:Georgia,"Times New Roman",serif;font-weight:400;font-size:34px;margin:10px 0}
+.sub{line-height:1.8;color:var(--muted);max-width:640px}
+section{background:var(--paper);border:1px solid var(--hair);border-radius:21px;padding:24px;margin:20px 0;box-shadow:0 11px 45px rgba(48,60,73,.035);backdrop-filter:blur(15px)}
+h2{font-size:13px;font-weight:600;letter-spacing:.03em;margin:0 0 15px}
+small,.hint{color:var(--muted);font-size:12px;line-height:1.8}
+label{display:block;color:var(--muted);font-size:12px;margin:9px 0 6px}
+input[type=file],input[type=number],select{width:100%;font:inherit;color:var(--ink);border:1px solid var(--hair);border-radius:12px;padding:11px;background:rgba(255,255,255,.7)}
+input[type=checkbox]{accent-color:#65717e}
+.row{display:flex;gap:12px;align-items:end;flex-wrap:wrap}
+.row>*{flex:1;min-width:115px}
+button{cursor:pointer;border:1px solid var(--hair);border-radius:999px;padding:11px 20px;color:var(--ink);background:white;font:inherit}
+button.primary{background:#3e4854;border-color:#3e4854;color:white}
+button:disabled{opacity:.45;cursor:default}
+button.remove{padding:7px 14px;font-size:12px}
+.cue{padding:15px 0;border-top:1px solid var(--hair)}
+.cueheader{display:flex;justify-content:space-between;align-items:center;gap:12px;min-width:0}
+.cueheader strong{font-weight:500;font-size:12px;overflow-wrap:anywhere}
+.cue .row{margin-top:4px}.cue label{font-size:11px}
+.actions{display:flex;gap:8px;flex-wrap:wrap}
+#status{min-height:24px;font-size:12px;color:#53606b;line-height:1.6}
+.privacy{border-top:1px solid var(--hair);padding-top:20px;margin-top:30px}
+@media(max-width:480px){main{padding:34px 14px 55px}section{padding:18px}.row>*{min-width:92px}h1{font-size:29px}}
+</style>
+</head>
+<body><main>
+<div class="kicker">VOICE MCP / EXPERIMENTAL AUDIO LAB</div>
+<h1>Shin · Private Drama</h1>
+<p class="sub">本地试听原型 · 一条日语人声轨道 + 独立音效轨道。先验证节奏、距离和音量，再决定哪些效果进入正式 MCP。请戴耳机试听。</p>
+<section>
+<h2>01 / 人声轨道</h2>
+<label for="voice">选择你已有的日语语音文件（MP3 / WAV / M4A）</label>
+<input id="voice" type="file" accept="audio/*">
+<div class="row"><div><label for="voiceLevel">人声音量（0–1）</label><input id="voiceLevel" type="number" min="0" max="1" step="0.05" value="0.9"></div>
+<div><label>建议</label><div class="hint">保留原始人声，不强制添加喘息或情绪标签。</div></div></div>
+</section>
+<section>
+<h2>02 / 音效轨道</h2>
+<label for="fx">选择本机音效（最多 12 个，可以多选；文件只留在你的浏览器里）</label>
+<input id="fx" type="file" accept="audio/*" multiple>
+<div id="cues"></div>
+<p class="hint">环境声建议音量 0.10，动作声建议 0.22。左右声像 -1 为左耳，+1 为右耳。循环只适用于环境声。</p>
+</section>
+<section>
+<h2>03 / 试听与导出</h2>
+<div class="actions">
+<button id="preview" class="primary">▶ 试听混音</button>
+<button id="stop">■ 停止</button>
+<button id="export">导出 WAV</button>
+</div>
+<p id="status" role="status" aria-live="polite">尚未选择音频。</p>
+<small>目前限制：总人声最长 180 秒，最多 12 个音效。音量与声像是基础后期，不代表专业 KU100 双耳录音。若导出声音太满，可降低音效增益。</small>
+</section>
+<p class="hint privacy">隐私：音频通过浏览器 File API 加载，在本机混音。此页面不上传、不保存、不共享文件，也不自动调用 ElevenLabs。仅使用你有权使用的音效素材；不要把私人素材提交到公开 GitHub 仓库。</p>
+</main>
+<script type="module">
+import { createDramaTimeline } from "/drama/timeline.mjs";
+
+const $ = (id) => document.getElementById(id);
+let items = [];
+let nextId = 1;
+let active = null;
+const status = (message) => { $("status").textContent = message; };
+
+function makeNumber(label, value, min, max, step, change) {
+  const wrap = document.createElement("div");
+  const caption = document.createElement("label");
+  caption.textContent = label;
+  const input = document.createElement("input");
+  input.type = "number";
+  input.min = String(min); input.max = String(max); input.step = String(step);
+  input.value = String(value);
+  input.addEventListener("input", () => change(Number(input.value)));
+  wrap.append(caption, input);
+  return wrap;
+}
+
+function renderCues() {
+  const list = $("cues");
+  list.replaceChildren();
+  items.forEach((item) => {
+    const line = document.createElement("div");
+    line.className = "cue";
+    const header = document.createElement("div"); header.className = "cueheader";
+    const name = document.createElement("strong"); name.textContent = item.file.name;
+    const remove = document.createElement("button"); remove.className = "remove";
+    remove.textContent = "移除";
+    remove.onclick = () => { items = items.filter((i) => i !== item); renderCues(); };
+    header.append(name,remove);
+
+    const row = document.createElement("div"); row.className = "row";
+    const typeWrap = document.createElement("div");
+    const typeLabel = document.createElement("label"); typeLabel.textContent = "类型";
+    const type = document.createElement("select");
+    [["foley","动作 / foley"],["ambience","环境 / ambience"]].forEach(([value,title]) => {
+      const option = document.createElement("option"); option.value=value; option.textContent=title; type.append(option);
+    });
+    type.value = item.kind;
+    type.onchange = () => {
+      item.kind = type.value;
+      item.gain = item.kind === "ambience" ? 0.1 : 0.22;
+      item.loop = item.kind === "ambience";
+      renderCues();
+    };
+    typeWrap.append(typeLabel,type);
+    row.append(typeWrap);
+    row.append(makeNumber("开始时间 / 秒", item.atSec,0,180,0.1,(v) => {item.atSec=v;}));
+    row.append(makeNumber("音量 / 0–0.7", item.gain,0,0.7,0.01,(v) => {item.gain=v;}));
+    row.append(makeNumber("左右声像 / -1…1", item.pan,-1,1,0.1,(v) => {item.pan=v;}));
+    const loopWrap = document.createElement("div");
+    const loopLabel = document.createElement("label"); loopLabel.textContent = "循环";
+    const loop = document.createElement("input"); loop.type = "checkbox";
+    loop.checked = item.loop;
+    loop.disabled = item.kind !== "ambience";
+    loop.onchange = () => { item.loop=loop.checked; };
+    loopWrap.append(loopLabel,loop);
+    row.append(loopWrap);
+    line.append(header,row);list.append(line);
+  });
+}
+
+$("fx").addEventListener("change",(event) => {
+  for (const file of event.target.files) {
+    if (items.length >= 12) break;
+    items.push({
+      file,
+      fileId: "local_" + nextId++,
+      kind: "foley",
+      atSec: 0,
+      gain: 0.22,
+      pan: 0,
+      loop: false,
+    });
+  }
+  event.target.value = "";
+  renderCues();
+  status("已添加 " + items.length + " 条音效轨道。");
+});
+$("voice").addEventListener("change",() => status($("voice").files[0] ? "已选择人声：" + $("voice").files[0].name : "尚未选择人声。"));
+
+async function getBuffers(ctx) {
+  const file = $("voice").files[0];
+  if (!file) throw new Error("请先选择一段日语人声音频。");
+  const voice = await ctx.decodeAudioData(await file.arrayBuffer());
+  if (voice.duration > 180) throw new Error("人声轨道不能超过 180 秒。");
+  const timeline = createDramaTimeline({
+    voiceDurationSec: voice.duration,
+    voiceGain: Number($("voiceLevel").value),
+    cues: items.map((item) => ({
+      fileId: item.fileId,
+      kind: item.kind,
+      atSec: item.atSec,
+      gain: item.gain,
+      pan: item.pan,
+      loop: item.loop,
+      fadeInSec: item.kind === "ambience" ? 0.7 : 0.03,
+      fadeOutSec: item.kind === "ambience" ? 0.7 : 0.07,
+    })),
+  });
+
+  const tracks=[];
+  for (const cue of timeline.cues) {
+    const item = items.find((i) => i.fileId === cue.fileId);
+    const buffer = await ctx.decodeAudioData(await item.file.arrayBuffer());
+    tracks.push({cue, buffer});
+  }
+  return {voice, timeline, tracks};
+}
+
+function attachNode(ctx, buffer, at, length, gain, pan, fadeIn, fadeOut, loop, destination) {
+  if (length <= 0) return;
+  const source = ctx.createBufferSource(); source.buffer = buffer; source.loop=loop;
+  const volume = ctx.createGain();
+  const stereopan = ctx.createStereoPanner ? ctx.createStereoPanner() : null;
+  if (stereopan) {
+    stereopan.pan.value = pan;
+    source.connect(volume);volume.connect(stereopan);stereopan.connect(destination);
+  } else {
+    source.connect(volume);volume.connect(destination);
+  }
+  const attack = Math.min(length/2,fadeIn), release = Math.min(length/2,fadeOut);
+  volume.gain.setValueAtTime(attack ? 0 : gain,at);
+  if (attack) volume.gain.linearRampToValueAtTime(gain,at+attack);
+  const releaseAt = Math.max(at+attack,at+length-release);
+  volume.gain.setValueAtTime(gain,releaseAt);
+  if (release) volume.gain.linearRampToValueAtTime(0,at+length);
+  source.start(at);
+  source.stop(at+length);
+}
+
+function schedule(ctx, bundle, start) {
+  const duration = bundle.timeline.voice.durationSec;
+  const mix = ctx.createDynamicsCompressor();
+  mix.threshold.value=-8;mix.knee.value=8;mix.ratio.value=2;
+  mix.attack.value=.006;mix.release.value=.22;
+  mix.connect(ctx.destination);
+
+  attachNode(ctx,bundle.voice,start,duration,bundle.timeline.voice.gain,0,.015,.12,false,mix);
+  bundle.tracks.forEach(({cue,buffer}) => {
+    const remaining = duration-cue.atSec;
+    const length = Math.min(remaining,cue.loop ? remaining : buffer.duration);
+    attachNode(ctx,buffer,start+cue.atSec,length,cue.gain,cue.pan,cue.fadeInSec,cue.fadeOutSec,cue.loop,mix);
+  });
+}
+
+async function stop() {
+  if (active) {
+    const old=active;active=null;
+    await old.close().catch(() => {});
+  }
+}
+
+$("stop").onclick = async() => { await stop();status("已停止试听。"); };
+
+$("preview").onclick = async () => {
+  $("preview").disabled = true;
+  status("正在准备本地混音……");
+  try {
+    await stop();
+    const ctx=new AudioContext();
+    active=ctx;
+    const bundle=await getBuffers(ctx);
+    await ctx.resume();
+    schedule(ctx,bundle,ctx.currentTime+.1);
+    status("正在播放 · " + bundle.timeline.cues.length + " 条音效轨道");
+    const current=ctx;
+    setTimeout(() => {
+      if (active === current) status("试听完成。");
+    },(bundle.voice.duration+.3)*1000);
+  } catch(error) {
+    await stop();
+    status("试听失败：" + error.message);
+  } finally { $("preview").disabled=false; }
+};
+
+function encodeWav(buffer) {
+  const length=buffer.length;
+  const left=buffer.getChannelData(0);
+  const right=buffer.numberOfChannels>1 ? buffer.getChannelData(1) : left;
+  let peak=0;
+  for(let i=0;i<length;i++){peak=Math.max(peak,Math.abs(left[i]),Math.abs(right[i]));}
+  const scale=peak>0.98 ? 0.98/peak : 1;
+  const wav=new ArrayBuffer(44+length*4);
+  const view=new DataView(wav);
+  const write=(offset,value) => {
+    for(let i=0;i<value.length;i++) view.setUint8(offset+i,value.charCodeAt(i));
+  };
+  write(0,"RIFF"); view.setUint32(4,36+length*4,true);write(8,"WAVE");
+  write(12,"fmt ");view.setUint32(16,16,true);
+  view.setUint16(20,1,true);view.setUint16(22,2,true);
+  view.setUint32(24,buffer.sampleRate,true);view.setUint32(28,buffer.sampleRate*4,true);
+  view.setUint16(32,4,true);view.setUint16(34,16,true);
+  write(36,"data");view.setUint32(40,length*4,true);
+  let off=44;
+  for(let i=0;i<length;i++){
+    const l=Math.max(-1,Math.min(1,left[i]*scale));
+    const r=Math.max(-1,Math.min(1,right[i]*scale));
+    view.setInt16(off,l<0?l*32768:l*32767,true);off+=2;
+    view.setInt16(off,r<0?r*32768:r*32767,true);off+=2;
+  }
+  return new Blob([wav],{type:"audio/wav"});
+}
+
+$("export").onclick=async()=>{
+  $("export").disabled=true;
+  status("正在离线混音并导出 WAV……");
+  try{
+    const tmp=new OfflineAudioContext(2,44100,44100);
+    const bundle=await getBuffers(tmp);
+    const seconds=bundle.voice.duration+.25;
+    const offline=new OfflineAudioContext(2,Math.ceil(seconds*44100),44100);
+    schedule(offline,bundle,0);
+    const rendered=await offline.startRendering();
+    const blob=encodeWav(rendered);
+    const url=URL.createObjectURL(blob);
+    const anchor=document.createElement("a");
+    anchor.href=url;anchor.download="shin-private-drama-preview.wav";
+    document.body.append(anchor);anchor.click();anchor.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),60000);
+    status("导出完成：所有音频都只在本地处理。");
+  }catch(error){status("导出失败：" + error.message);}
+  finally{$("export").disabled=false;}
+};
+</script>
+</body></html>\`;
+}

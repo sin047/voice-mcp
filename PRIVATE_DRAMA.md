@@ -18,7 +18,7 @@ The selected target is **immersive foreground voice + headphone spatial depth + 
 - **Ambience bus:** independent level, optional loop and long fades; voice RMS ducking is applied more deeply to this bus.
 - **Foley bus:** independent level, discrete event cues with manual start time, gain, pan/position and short fades; ducking is gentler than on ambience.
 - **Master path:** conservative dynamics compression and offline WAV peak protection.
-- **Spatial path:** mono effects can use the browser's HRTF PannerNode mode; stereo source files retain their stereo image and use basic stereo panning.
+- **Spatial path:** mono effects can use the browser's HRTF PannerNode mode with independent left/right position and a 0.5–8 m distance control using inverse distance attenuation; stereo source files retain their stereo image and use basic stereo panning.
 - **Ducking:** a precomputed short-window voice RMS envelope gently lowers effects while voice energy is present, then releases during pauses. It is not semantic speech detection or a hardware sidechain compressor.
 
 ### Delivery phases
@@ -35,7 +35,7 @@ The selected target is **immersive foreground voice + headphone spatial depth + 
   times, effect kind (ambience / foley), gain, pan, fades and ambient looping.
 - Separate ambience and Foley mix buses with independent bus gain controls.
 - Voice-priority ducking: a short-window RMS envelope from the voice track gently lowers the effects buses while speech energy is present, then releases gradually during pauses.
-- Optional browser HRTF positioning for mono effects; stereo source files retain their original stereo image and use basic stereo panning.
+- Optional browser HRTF positioning for mono effects, with per-cue 0.5–8 m distance and left/right position; stereo source files retain their original stereo image and use basic stereo panning.
 - Local preview with conservative master compression and offline WAV peak protection.
 - Opt-in Japanese voice generation via `POST /speak`, using the existing
   ElevenLabs voice ID and restrained/close direction.
@@ -81,7 +81,8 @@ complete server-wide protection.
 3. Choose local FX audio files, enter start times, adjust per-cue volume
    (initially 0.1 for ambience / 0.22 for Foley), pan and optional ambient looping.
 4. Set ambience/Foley bus levels, master level, voice-priority ducking and
-   spatial mode. HRTF mode is intended for headphones and mono FX sources.
+   spatial mode. In HRTF mode, each mono FX cue can be positioned left/right
+   and at 0.5–8 m; stereo FX keep their recorded stereo image.
 5. Preview over headphones and export a stereo WAV.
 6. Make small adjustments to one track at a time and compare A/B.
 
@@ -130,7 +131,7 @@ commit those files or redistribute them. Check:
 (a) speech stays clearly in front, (b) ambience remains subtle,
 (c) short Foley cues do not mask consonants or line endings,
 (d) voice-priority ducking is gentle and does not audibly pump,
-(e) HRTF placement on mono effects is audible but not distracting,
+(e) HRTF near/mid/far placement on mono effects is clearly differentiated but not distracting,
 (f) stereo source material is preserved sensibly,
 (g) mobile Safari playback/export works, and
 (h) no source file is uploaded by the preview workflow.

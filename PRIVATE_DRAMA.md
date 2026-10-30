@@ -9,21 +9,22 @@ It lives on the `voice-v1.4-private-drama` branch. **Do not replace the stable
 The selected target is **immersive foreground voice + headphone spatial depth + independent sound effects**.
 
 1. **Voice stays in front.** Keep the established ElevenLabs Japanese voice as the emotional and intelligibility anchor. Do not force breath tags or dramatic intensity into ordinary lines.
-2. **Spatial depth supports the voice.** Headphone-first listening, with subtle left/right placement and distance cues where appropriate. Basic stereo panning is available in this beta; true HRTF binaural positioning is a later phase and must be labelled as such until implemented and tested.
+2. **Spatial depth supports the voice.** The beta offers an explicit spatial mode: basic stereo panning, or browser HRTF positioning for mono effects. HRTF is headphone-oriented playback spatialization, not a binaural microphone recording.
 3. **Effects are real, separate tracks.** Ambience and Foley/action cues remain independently adjustable. Effects should enrich a scene without masking speech.
 
-### Planned mix architecture
+### Current mix architecture
 
-- **Voice bus:** centered by default, foreground level, no automatic widening.
-- **Ambience bus:** optional low-level bed, loop and long fades allowed.
-- **Foley bus:** discrete event cues with manual start time, gain, pan/position and short fades.
-- **Master bus:** conservative peak protection; future voice-aware ducking should lower effects gently while speech is active, not pump or crush the mix.
-- Preserve source stereo when appropriate. Use simple pan for basic placement; use HRTF only for compatible mono sources and after headphone A/B validation.
+- **Voice path:** centered by default, foreground level, no automatic widening.
+- **Ambience bus:** independent level, optional loop and long fades; voice RMS ducking is applied more deeply to this bus.
+- **Foley bus:** independent level, discrete event cues with manual start time, gain, pan/position and short fades; ducking is gentler than on ambience.
+- **Master path:** conservative dynamics compression and offline WAV peak protection.
+- **Spatial path:** mono effects can use the browser's HRTF PannerNode mode; stereo source files retain their stereo image and use basic stereo panning.
+- **Ducking:** a precomputed short-window voice RMS envelope gently lowers effects while voice energy is present, then releases during pauses. It is not semantic speech detection or a hardware sidechain compressor.
 
 ### Delivery phases
 
-- **Beta / current:** local voice + local effects, manual cue timing, ambience/Foley types, gain, pan, fades, ambience looping, stereo preview and local WAV export.
-- **Next audio pass:** separate bus controls, safer master headroom, optional voice-aware effects ducking, and an explicit spatial mode selector. Add HRTF positioning only after mono/stereo handling is validated.
+- **Beta / current:** local voice + local effects, manual cue timing, ambience/Foley types, independent bus levels, per-cue gain/pan/fades, ambient looping, optional HRTF for mono effects, voice-priority ducking, stereo preview and local WAV export.
+- **Next audio pass:** validate real-world behavior on iPhone Safari and desktop browsers; refine HRTF positioning and ducking thresholds using A/B tests; add clearer per-track previews and safer failure handling if needed.
 - **Later integration:** evaluate how a finished mixed audio result can be returned through the ChatGPT MCP tool/player. The separate browser preview is not the embedded ChatGPT player.
 
 ## What exists today
@@ -105,5 +106,4 @@ commit those files or redistribute them. Check:
 (g) mobile Safari playback/export works, and
 (h) no source file is uploaded by the preview workflow.
 
-Only after this passes should HRTF and voice-aware ducking be implemented and
-compared against the simpler stereo mix.
+Use the results to tune the existing HRTF and ducking implementation. Do not describe the feature as production-ready until headphone A/B testing passes on both mobile Safari and desktop browsers.

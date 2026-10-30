@@ -74,4 +74,6 @@ test("authorization parser compares token values and rejects weak configured sec
   assert.equal(isAccessAuthorized(`Bearer ${TOKEN}x`, TOKEN), false);
   assert.equal(isAccessAuthorized(`Bearer ${TOKEN}`, "too-short"), false);
   assert.equal(isAccessAuthorized("Basic not-base64", TOKEN), false);
+  assert.equal(isAccessAuthorized(`Bearer ${TOKEN}`, " ".repeat(32)), false);
+  assert.equal(runGuard(" ".repeat(32), `Bearer ${" ".repeat(32)}`).statusCode, 503);
 });

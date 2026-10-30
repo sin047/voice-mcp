@@ -43,9 +43,39 @@ The selected target is **immersive foreground voice + headphone spatial depth + 
 
 The normal `speak` MCP tool is **unchanged** in this branch.
 
+## Private HTTP access
+
+The experimental browser and direct HTTP routes are protected by
+`PRIVATE_DRAMA_ACCESS_TOKEN`:
+
+- `/drama-preview` and `/drama/timeline.mjs`
+- `/speak` (GET and POST), including preview TTS generation
+- `/panel` and `/events/latest`
+
+The server fails closed: if the token is missing or shorter than 32 characters,
+these routes return HTTP 503. Missing or incorrect credentials return HTTP 401.
+Authentication runs before JSON body parsing on protected routes.
+
+1. Generate a random secret with `openssl rand -hex 32`.
+2. Add it as the `PRIVATE_DRAMA_ACCESS_TOKEN` environment secret on the TEST
+   deployment. Never commit the token to GitHub or put it in browser code.
+3. Open the preview URL. The browser's Basic Auth prompt accepts username
+   `voice-mcp` and the generated token as the password.
+4. For scripts, send `Authorization: Bearer <token>`.
+
+**Important boundary:** the `/mcp` endpoint intentionally keeps the existing
+ChatGPT connector behavior and is not protected by this HTTP preview token.
+The MCP `speak` tool can therefore still generate audio if the MCP endpoint is
+publicly reachable. Before public deployment, add authentication compatible
+with the configured ChatGPT connector, or restrict ingress to a private
+network, and add rate limits/quotas. Do not mistake this preview gate for
+complete server-wide protection.
+
 ## Using the preview after deploying a separate TEST instance
 
-1. Open `https://<your-test-host>/drama-preview` in Chrome, Edge or Safari.
+1. Set `PRIVATE_DRAMA_ACCESS_TOKEN` on the TEST deployment, then open
+   `https://<your-test-host>/drama-preview` in Chrome, Edge or Safari and enter
+   the Basic Auth credentials described above.
 2. Choose an existing spoken-audio file, **or** enter a Japanese script and
    explicitly click `生成日语人声` (this calls ElevenLabs and uses credits).
 3. Choose local FX audio files, enter start times, adjust per-cue volume
@@ -71,10 +101,10 @@ repository.** Keep the actual FX files locally, and keep track of each
 recording's source, license and allowed uses. You can share URLs or
 short test clips for evaluation without committing an asset.
 
-**Important production blocker:** the existing server's speech endpoints are
-not authenticated. Deploy the preview only behind a private access control,
-and add authentication, rate limits and appropriate quotas before public
-usage, or an unauthorized caller could consume ElevenLabs credits.
+**Important production blocker:** browser/HTTP routes now have a fail-closed
+access-token gate, but the existing MCP `/mcp` endpoint remains unauthenticated
+for connector compatibility. Add connector-compatible MCP authentication or
+private ingress, plus rate limits and appropriate quotas, before public usage.
 
 ## What this beta does NOT do
 

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createDramaTimeline, DRAMA_TIMELINE_LIMITS } from "../src/drama-timeline.mjs";
+import { createDramaTimeline, createVoiceDuckingEnvelope, DRAMA_TIMELINE_LIMITS } from "../src/drama-timeline.mjs";
 import { dramaPreviewHtml } from "../src/drama-preview.mjs";
 
 test("creates a restrained private drama cue sheet with local-only references", () => {
@@ -78,9 +78,29 @@ test("validates mix buses, ducking and spatial modes", () => {
   assert.throws(() => createDramaTimeline({ voiceDurationSec: 5, duckingAmount: 1.2 }), /duckingAmount/);
   assert.throws(() => createDramaTimeline({ voiceDurationSec: 5, spatialMode: "surround" }), /spatialMode/);
 });
+test("voice ducking envelope lowers effects during speech and releases through silence", () => {
+  const samples = new Float32Array(1000);
+  samples.fill(0.25, 200, 600);
+  const envelope = createVoiceDuckingEnvelope([samples], 1000, {
+    amount: 0.6,
+    thresholdDb: -42,
+    attackSec: 0.045,
+    releaseSec: 0.26,
+    frameMs: 40,
+  });
+  assert.equal(envelope[0].gain, 1);
+  const duringSpeech = envelope[10].gain;
+  const afterSpeech = envelope[24].gain;
+  assert.ok(duringSpeech < 1, "speech should lower the effects bus");
+  assert.ok(afterSpeech > duringSpeech, "the effects bus should recover during silence");
+  assert.ok(afterSpeech <= 1);
+  assert.ok(Object.isFrozen(envelope));
+  assert.throws(() => createVoiceDuckingEnvelope([], 44100), /non-empty array/);
+  assert.throws(() => createVoiceDuckingEnvelope([new Float32Array(10)], 0), /positive finite number/);
+});
 test("local preview has a player, multitrack cue editing, optional TTS and WAV export", () => {
   const html = dramaPreviewHtml();
-  for (const marker of ['id="voice"', 'id="fx"', 'id="preview"', 'id="export"', 'id="generateVoice"', 'id="ambienceBusGain"', 'id="foleyBusGain"', 'id="spatialMode"', 'id="duckingEnabled"', '淡入 / 秒', '淡出 / 秒', "scheduleVoiceDucking", 'panner.panningModel = "HRTF"', "OfflineAudioContext", "encodeWav", "createDramaTimeline", 'type="module"']) {
+  for (const marker of ['id="voice"', 'id="fx"', 'id="preview"', 'id="export"', 'id="generateVoice"', 'id="ambienceBusGain"', 'id="foleyBusGain"', 'id="spatialMode"', 'id="duckingEnabled"', '淡入 / 秒', '淡出 / 秒', "scheduleVoiceDucking", "createVoiceDuckingEnvelope", 'panner.panningModel = "HRTF"', "OfflineAudioContext", "encodeWav", "createDramaTimeline", 'type="module"']) {
     assert.ok(html.includes(marker), "Missing preview feature: " + marker);
   }
   assert.ok(html.includes("本机"));
@@ -91,6 +111,6 @@ test("embedded preview JS has valid browser module syntax", () => {
   const html = dramaPreviewHtml();
   const script = html.match(/<script type="module">([\s\S]*?)<\/script>/);
   assert.ok(script);
-  const source = script[1].replace(/import \{ createDramaTimeline \} from "\/drama\/timeline\.mjs";/, "");
+  const source = script[1].replace(/import \{ createDramaTimeline, createVoiceDuckingEnvelope \} from "\/drama\/timeline\.mjs";/, "");
   assert.doesNotThrow(() => new Function(source));
 });

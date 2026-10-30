@@ -261,7 +261,7 @@ export function buildVoiceSettings(mode, modelId, env = process.env) {
   );
   if (similarity !== undefined) settings.similarity_boost = similarity;
 
-  if (modelId === "eleven_v4" || modelId === "eleven_v4_turbo") {
+  if (modelId === "eleven_v4") {
     const cloneStrength = readBoundedNumber(
       env.ELEVENLABS_CLONE_STRENGTH,
       "ELEVENLABS_CLONE_STRENGTH",

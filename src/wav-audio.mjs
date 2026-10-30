@@ -218,6 +218,31 @@ function ambienceLoudnessBoost(channels) {
   return Math.max(1, Math.min(4, desiredRms / rms, headroomCap));
 }
 
+/**
+ * Foley cues may be tiny fragments from a long recording whose first seconds
+ * are almost silent. Measure the actual selected excerpt, not the whole file.
+ * The following boost is applied with tanh soft limiting so transient spikes
+ * do not clip even when the useful texture is quiet.
+ */
+function foleyExcerptBoost(channels, startFrame, frames, loop) {
+  const sourceFrames = channels[0].length;
+  const stride = Math.max(1, Math.floor(frames / 100000));
+  let sumSquares = 0;
+  let samples = 0;
+  for (let frame = 0; frame < frames; frame += stride) {
+    const idx = loop ? (startFrame + frame) % sourceFrames : startFrame + frame;
+    if (idx >= sourceFrames) break;
+    for (const channel of channels) {
+      const value = channel[idx];
+      sumSquares += value * value;
+      samples += 1;
+    }
+  }
+  const rms = samples ? Math.sqrt(sumSquares / samples) : 0;
+  if (rms < 0.000001) return 1;
+  return Math.max(1, Math.min(16, 0.10 / rms));
+}
+
 export function mixSoundscape({
   voicePcm,
   assets,
@@ -281,12 +306,17 @@ export function mixSoundscape({
       : decodePcmWav(assetBytes);
     const sourceChannels = resampleChannels(decoded.channels, decoded.sampleRate, TARGET_SAMPLE_RATE);
     const sourceFrames = sourceChannels[0].length;
+    const sourceOffsetFrames = Math.round(cue.sourceOffsetSec * TARGET_SAMPLE_RATE);
+    if (sourceOffsetFrames >= sourceFrames) {
+      throw new Error("Foley/ambience source offset exceeds audio asset duration");
+    }
     const startFrame = Math.round(cue.atSec * TARGET_SAMPLE_RATE);
     const remainingFrames = voiceFrames - startFrame;
     const requestedFrames = cue.durationSec == null
-      ? (cue.loop ? remainingFrames : sourceFrames)
+      ? (cue.loop ? remainingFrames : sourceFrames - sourceOffsetFrames)
       : Math.round(cue.durationSec * TARGET_SAMPLE_RATE);
-    const cueFrames = Math.min(remainingFrames, requestedFrames);
+    const cueFrames = Math.min(remainingFrames, requestedFrames,
+      cue.loop ? remainingFrames : sourceFrames - sourceOffsetFrames);
     if (cueFrames <= 0) continue;
 
     const busGain = cue.kind === "ambience"
@@ -304,14 +334,17 @@ export function mixSoundscape({
     const ambienceBoost = cue.kind === "ambience"
       ? ambienceLoudnessBoost(sourceChannels)
       : 1;
+    const foleyBoost = cue.kind === "foley"
+      ? foleyExcerptBoost(sourceChannels, sourceOffsetFrames, cueFrames, cue.loop)
+      : 1;
     const fadeInFrames = Math.round(cue.fadeInSec * TARGET_SAMPLE_RATE);
     const fadeOutFrames = Math.round(cue.fadeOutSec * TARGET_SAMPLE_RATE);
     const fadeOutStart = cueFrames - fadeOutFrames;
 
     for (let frame = 0; frame < cueFrames; frame += 1) {
       const sourceFrame = cue.loop
-        ? frame % sourceFrames
-        : frame;
+        ? (sourceOffsetFrames + frame) % sourceFrames
+        : sourceOffsetFrames + frame;
       if (sourceFrame >= sourceFrames) break;
 
       let fade = fadeInFrames > 0 ? Math.min(1, frame / fadeInFrames) : 1;
@@ -322,14 +355,20 @@ export function mixSoundscape({
       const gain = cue.gain * busGain * distanceGain * ambienceBoost * fade * duckGain;
       const targetFrame = startFrame + frame;
 
+      const leftSample = sourceChannels[0][sourceFrame];
+      const rightSample = sourceChannels.length > 1
+        ? sourceChannels[1][sourceFrame] : leftSample;
+      const leftFx = cue.kind === "foley" ? Math.tanh(leftSample * foleyBoost) : leftSample;
+      const rightFx = cue.kind === "foley" ? Math.tanh(rightSample * foleyBoost) : rightSample;
+
       if (sourceChannels.length === 1) {
-        left[targetFrame] += sourceChannels[0][sourceFrame] * gain * monoLeft;
-        right[targetFrame] += sourceChannels[0][sourceFrame] * gain * monoRight;
+        left[targetFrame] += leftFx * gain * monoLeft;
+        right[targetFrame] += rightFx * gain * monoRight;
       } else {
         const balanceLeft = cue.pan > 0 ? 1 - cue.pan : 1;
         const balanceRight = cue.pan < 0 ? 1 + cue.pan : 1;
-        left[targetFrame] += sourceChannels[0][sourceFrame] * gain * balanceLeft;
-        right[targetFrame] += sourceChannels[1][sourceFrame] * gain * balanceRight;
+        left[targetFrame] += leftFx * gain * balanceLeft;
+        right[targetFrame] += rightFx * gain * balanceRight;
       }
     }
   }

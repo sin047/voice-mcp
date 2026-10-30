@@ -84,7 +84,7 @@ button.remove{padding:7px 14px;font-size:12px}
 <p class="hint privacy">隐私：你从本机选择的语音与音效文件只在浏览器中解码和混音，不会上传到服务器。仅当主动点击「生成日语人声」时，输入的台词才会发送至当前 Voice MCP 和 ElevenLabs，且会消耗 ElevenLabs 额度。仅使用你有权使用的音效素材；不要把私人素材提交到公开 GitHub 仓库。</p>
 </main>
 <script type="module">
-import { createDramaTimeline } from "/drama/timeline.mjs";
+import { createDramaTimeline, createVoiceDuckingEnvelope } from "/drama/timeline.mjs";
 
 const $ = (id) => document.getElementById(id);
 let items = [];
@@ -308,37 +308,17 @@ function scheduleVoiceDucking(bus, voiceBuffer, start, baseGain, enabled, amount
   param.setValueAtTime(baseGain, start);
   if (!enabled || amount <= 0) return;
 
-  const sampleRate = voiceBuffer.sampleRate;
-  const frameSize = Math.max(1, Math.floor(sampleRate * 0.04));
-  const channelCount = voiceBuffer.numberOfChannels;
-  const channels = Array.from({ length: channelCount }, (_, index) => voiceBuffer.getChannelData(index));
-  const thresholdDb = settings.thresholdDb;
-  let smoothed = 1;
-
-  for (let offset = 0; offset < voiceBuffer.length; offset += frameSize) {
-    const end = Math.min(voiceBuffer.length, offset + frameSize);
-    let sumSquares = 0;
-    let count = 0;
-    for (const channel of channels) {
-      for (let i = offset; i < end; i++) {
-        const sample = channel[i];
-        sumSquares += sample * sample;
-        count += 1;
-      }
-    }
-    const rms = count ? Math.sqrt(sumSquares / count) : 0;
-    const levelDb = rms > 0.000001 ? 20 * Math.log10(rms) : -120;
-    const activity = Math.max(0, Math.min(1, (levelDb - thresholdDb) / (0 - thresholdDb)));
-    const target = 1 - amount * activity;
-    const frameSeconds = (end - offset) / sampleRate;
-    const timeConstant = target < smoothed ? settings.attackSec : settings.releaseSec;
-    const smoothing = 1 - Math.exp(-frameSeconds / Math.max(0.001, timeConstant));
-    smoothed += (target - smoothed) * smoothing;
-    const at = start + end / sampleRate;
-    param.linearRampToValueAtTime(baseGain * smoothed, at);
+  const channels = Array.from({ length: voiceBuffer.numberOfChannels }, (_, index) => voiceBuffer.getChannelData(index));
+  const envelope = createVoiceDuckingEnvelope(channels, voiceBuffer.sampleRate, {
+    amount,
+    thresholdDb: settings.thresholdDb,
+    attackSec: settings.attackSec,
+    releaseSec: settings.releaseSec,
+  });
+  for (const point of envelope) {
+    param.linearRampToValueAtTime(baseGain * point.gain, start + point.atSec);
   }
 }
-
 function schedule(ctx, bundle, start) {
   const duration = bundle.timeline.voice.durationSec;
   const mixSettings = bundle.timeline.mix;

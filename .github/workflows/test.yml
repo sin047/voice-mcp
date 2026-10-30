@@ -69,6 +69,10 @@ jobs:
           test "$SPEAK_UNAUTH" = "401"
           SPEAK_AUTH=$(curl -s -o /tmp/speak-bad-request.json -w '%{http_code}' -u "voice-mcp:$TEST_ACCESS_TOKEN" -X POST http://127.0.0.1:8765/speak -H 'Content-Type: application/json' -d '{"text":""}')
           test "$SPEAK_AUTH" = "400"
+          SPEAK_GET_UNAUTH=$(curl -s -o /tmp/speak-get-unauthorized.json -w '%{http_code}' 'http://127.0.0.1:8765/speak?text=test')
+          test "$SPEAK_GET_UNAUTH" = "401"
+          SPEAK_GET_AUTH=$(curl -s -o /tmp/speak-get-bad-request.json -w '%{http_code}' -u "voice-mcp:$TEST_ACCESS_TOKEN" 'http://127.0.0.1:8765/speak?text=')
+          test "$SPEAK_GET_AUTH" = "400"
           node --input-type=module -e '
             import fs from "node:fs";
             import assert from "node:assert/strict";

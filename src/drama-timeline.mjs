@@ -51,6 +51,7 @@ export function createDramaTimeline(input) {
     const atSec = boundedNumber(cue.atSec ?? 0, "atSec", 0, duration);
     const gain = boundedNumber(cue.gain ?? (kind === "ambience" ? 0.1 : 0.22), "gain", 0, 0.7);
     const pan = boundedNumber(cue.pan ?? 0, "pan", -1, 1);
+    const distanceMeters = boundedNumber(cue.distanceMeters ?? 1.5, "distanceMeters", 0.5, 8);
     const fadeInSec = boundedNumber(cue.fadeInSec ?? (kind === "ambience" ? 1 : 0.03), "fadeInSec", 0, 10);
     const fadeOutSec = boundedNumber(cue.fadeOutSec ?? (kind === "ambience" ? 1 : 0.1), "fadeOutSec", 0, 10);
 
@@ -71,6 +72,7 @@ export function createDramaTimeline(input) {
       atSec,
       gain,
       pan,
+      distanceMeters,
       loop,
       fadeInSec,
       fadeOutSec,
@@ -163,4 +165,5 @@ export const DRAMA_TIMELINE_LIMITS = Object.freeze({
   maxSeconds: MAX_SECONDS,
   effectKinds: Object.freeze([...EFFECT_KINDS]),
   spatialModes: Object.freeze([...SPATIAL_MODES]),
+  distanceMeters: Object.freeze({ min: 0.5, max: 8, default: 1.5 }),
 });

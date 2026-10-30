@@ -26,6 +26,8 @@ jobs:
           node --check src/drama-preview.mjs
           node --check src/http-auth.mjs
           node --check src/usage-guard.mjs
+          node --check src/audio-assets.mjs
+          node --check src/wav-audio.mjs
       - name: Regression tests
         run: npm test
       - name: Install runtime dependencies
@@ -34,7 +36,7 @@ jobs:
         shell: bash
         run: |
           TEST_ACCESS_TOKEN="ci-only-private-drama-token-0123456789abcdef"
-          PRIVATE_DRAMA_ACCESS_TOKEN="$TEST_ACCESS_TOKEN" MCP_MAX_REQUESTS_PER_MINUTE=1 PORT=8765 node src/server.mjs > /tmp/voice-mcp.log 2>&1 &
+          PRIVATE_DRAMA_ACCESS_TOKEN="$TEST_ACCESS_TOKEN" MCP_PUBLIC_BASE_URL="https://voice.example.test" AUDIO_ASSET_DIR="/tmp/voice-mcp-assets" MCP_MAX_REQUESTS_PER_MINUTE=2 PORT=8765 node src/server.mjs > /tmp/voice-mcp.log 2>&1 &
           SERVER_PID=$!
           trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
           for attempt in {1..20}; do
@@ -48,21 +50,46 @@ jobs:
             import assert from "node:assert/strict";
             const status = JSON.parse(fs.readFileSync("/tmp/voice-status.json", "utf8"));
             assert.equal(status.status, "ok");
-            assert.equal(status.version, "1.4.0-beta.5");
+            assert.equal(status.version, "1.4.0-beta.6");
             assert.equal(status.features.request_id_continuity, true);
             assert.equal(status.features.language_auto_detection, true);
             assert.equal(status.features.local_drama_preview, true);
+            assert.equal(status.features.private_audio_asset_library, true);
+            assert.equal(status.features.speak_with_soundscape, true);
           '
           curl -fsS -X POST http://127.0.0.1:8765/mcp \
             -H "Content-Type: application/json" \
             -H "Accept: application/json, text/event-stream" \
             -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"voice-mcp-ci","version":"1.0.0"}}}' \
             > /tmp/mcp-initialize.json
+          curl -fsS -X POST http://127.0.0.1:8765/mcp \
+            -H "Content-Type: application/json" \
+            -H "Accept: application/json, text/event-stream" \
+            -d '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}' \
+            > /tmp/mcp-tools.json
           MCP_THROTTLED=$(curl -s -o /tmp/mcp-throttled.json -w '%{http_code}' -X POST http://127.0.0.1:8765/mcp \
             -H "Content-Type: application/json" \
             -H "Accept: application/json, text/event-stream" \
-            -d '{"jsonrpc":"2.0","id":2,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"voice-mcp-ci","version":"1.0.0"}}}')
+            -d '{"jsonrpc":"2.0","id":3,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"voice-mcp-ci","version":"1.0.0"}}}')
           test "$MCP_THROTTLED" = "429"
+          ASSETS_UNAUTH=$(curl -s -o /tmp/assets-unauthorized.json -w '%{http_code}' http://127.0.0.1:8765/assets)
+          test "$ASSETS_UNAUTH" = "401"
+          node --input-type=module -e '
+            import fs from "node:fs";
+            import { encodePcm16Wav } from "./src/wav-audio.mjs";
+            fs.writeFileSync("/tmp/ci-audio.wav", encodePcm16Wav([new Float32Array(4410).fill(0.1)], 44100));
+          '
+          ASSET_UPLOAD=$(curl -s -o /tmp/asset-upload.json -w '%{http_code}' -u "voice-mcp:$TEST_ACCESS_TOKEN" -X POST http://127.0.0.1:8765/assets -H 'Content-Type: audio/wav' -H 'X-Asset-Name: ci-test.wav' -H 'X-Asset-Kind: foley' --data-binary @/tmp/ci-audio.wav)
+          test "$ASSET_UPLOAD" = "201"
+          curl -fsS -u "voice-mcp:$TEST_ACCESS_TOKEN" http://127.0.0.1:8765/assets -o /tmp/assets-list.json
+          node --input-type=module -e '
+            import fs from "node:fs";
+            import assert from "node:assert/strict";
+            const payload = JSON.parse(fs.readFileSync("/tmp/assets-list.json", "utf8"));
+            assert.equal(payload.assets.length, 1);
+            assert.match(payload.assets[0].id, /^fx_/);
+            assert.equal(payload.assets[0].name, "ci-test.wav");
+          '
           PREVIEW_UNAUTH=$(curl -s -o /tmp/drama-unauthorized.json -w '%{http_code}' http://127.0.0.1:8765/drama-preview)
           test "$PREVIEW_UNAUTH" = "401"
           curl -fsS -u "voice-mcp:$TEST_ACCESS_TOKEN" http://127.0.0.1:8765/drama-preview -o /tmp/drama-preview.html
@@ -89,4 +116,13 @@ jobs:
             const init = JSON.parse(fs.readFileSync("/tmp/mcp-initialize.json", "utf8"));
             assert.equal(init.result.serverInfo.name, "voice-mcp");
             assert.ok(init.result.capabilities);
+          '
+          node --input-type=module -e '
+            import fs from "node:fs";
+            import assert from "node:assert/strict";
+            const tools = JSON.parse(fs.readFileSync("/tmp/mcp-tools.json", "utf8")).result.tools;
+            const names = tools.map((tool) => tool.name);
+            assert.ok(names.includes("speak"));
+            assert.ok(names.includes("list_sound_assets"));
+            assert.ok(names.includes("speak_with_soundscape"));
           '

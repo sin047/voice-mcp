@@ -76,6 +76,17 @@ app.use((req, res, next) => {
   return next();
 });
 
+// Apply the MCP request budget before JSON parsing to reject bursts cheaply.
+app.use((req, res, next) => {
+  if (req.path !== "/mcp") return next();
+  const requestBudget = mcpRequestLimiter();
+  if (!requestBudget.allowed) {
+    res.setHeader("Retry-After", String(requestBudget.retryAfterSeconds));
+    return res.status(429).json({ error: "MCP request rate limit reached" });
+  }
+  return next();
+});
+
 app.use(express.json({ limit: "20mb" }));
 
 function normalizeContext(value, fieldName) {
@@ -372,12 +383,6 @@ function createServer() {
 }
 
 app.all("/mcp", async (req, res) => {
-  const requestBudget = mcpRequestLimiter();
-  if (!requestBudget.allowed) {
-    res.setHeader("Retry-After", String(requestBudget.retryAfterSeconds));
-    return res.status(429).json({ error: "MCP request rate limit reached" });
-  }
-
   const mcp = createServer();
   const transport = new StreamableHTTPServerTransport({
     sessionIdGenerator: undefined,

@@ -1,6 +1,8 @@
 import express from "express";
 import { createAccessGuard } from "./http-auth.mjs";
 import { createFixedWindowRateLimiter, createVoiceUsageGuard } from "./usage-guard.mjs";
+import { createAudioAssetStore } from "./audio-assets.mjs";
+import { decodeRawPcm16, mixSoundscape } from "./wav-audio.mjs";
 import process from "node:process";
 import { readFile } from "node:fs/promises";
 import { dramaPreviewHtml } from "./drama-preview.mjs";
@@ -25,9 +27,21 @@ const MODEL_ID = process.env.ELEVENLABS_MODEL_ID || "eleven_v4";
 const OUTPUT_FORMAT = process.env.ELEVENLABS_OUTPUT_FORMAT || "mp3_44100_128";
 const PLAYER_URI = "ui://voice-mcp/player.html";
 const PLAYER_MIME = "text/html;profile=mcp-app";
-const VERSION = "1.4.0-beta.5";
+const VERSION = "1.4.0-beta.6";
 const MAX_CONTEXT_CHARS = 4000;
 const MAX_SPEAK_CHARS = 4000;
+const MAX_SOUND_SCAPE_TEXT_CHARS = 1200;
+const MAX_SOUND_SCAPE_SECONDS = 60;
+const audioAssetStore = createAudioAssetStore({
+  directory: process.env.AUDIO_ASSET_DIR,
+  maxAssetBytes: Number(process.env.AUDIO_ASSET_MAX_BYTES || 20 * 1024 * 1024),
+  maxAssetCount: Number(process.env.AUDIO_ASSET_MAX_COUNT || 100),
+  maxTotalBytes: Number(process.env.AUDIO_ASSET_MAX_TOTAL_BYTES || 200 * 1024 * 1024),
+});
+const generatedAudioCache = new Map();
+const GENERATED_AUDIO_TTL_MS = 10 * 60 * 1000;
+const GENERATED_AUDIO_MAX_ITEMS = 4;
+const GENERATED_AUDIO_MAX_BYTES = 40 * 1024 * 1024;
 const mcpRequestLimiter = createFixedWindowRateLimiter({
   limit: process.env.MCP_MAX_REQUESTS_PER_MINUTE || 120,
 });
@@ -49,6 +63,7 @@ const PRIVATE_HTTP_PATHS = new Set([
   "/speak",
   "/panel",
   "/events/latest",
+  "/assets",
 ]);
 
 let latestEvent = null;
@@ -59,7 +74,7 @@ const recentPerformancePatterns = [];
 const cors = (_req, res, next) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,DELETE,OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, Accept, Mcp-Session-Id, Last-Event-ID");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, Accept, Mcp-Session-Id, Last-Event-ID, X-Asset-Name, X-Asset-Kind");
   if (_req.method === "OPTIONS") return res.status(204).end();
   next();
 };
@@ -70,7 +85,7 @@ app.use(cors);
 // The /mcp endpoint intentionally keeps its existing connector behavior; this
 // HTTP token is not MCP authentication and does not protect MCP tool calls.
 app.use((req, res, next) => {
-  if (PRIVATE_HTTP_PATHS.has(req.path)) {
+  if (PRIVATE_HTTP_PATHS.has(req.path) || req.path.startsWith("/assets/")) {
     return requirePrivateHttpAccess(req, res, next);
   }
   return next();
@@ -86,6 +101,27 @@ app.use((req, res, next) => {
   }
   return next();
 });
+
+app.post(
+  "/assets",
+  express.raw({ type: ["audio/wav", "audio/x-wav"], limit: Number(process.env.AUDIO_ASSET_MAX_BYTES || 20 * 1024 * 1024) }),
+  async (req, res) => {
+    if (!Buffer.isBuffer(req.body)) {
+      return res.status(415).json({ error: "Upload a WAV file with Content-Type: audio/wav" });
+    }
+    let name = req.get("x-asset-name") || "sound-effect.wav";
+    try { name = decodeURIComponent(name); } catch { /* Keep the original safe-name input. */ }
+    const kind = req.get("x-asset-kind") || "foley";
+    try {
+      const asset = await audioAssetStore.save({ buffer: req.body, name, kind });
+      return res.status(201).json({ asset });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const statusCode = /file size limit|storage limit|library is full/.test(message) ? 413 : 400;
+      return res.status(statusCode).json({ error: message });
+    }
+  },
+);
 
 app.use(express.json({ limit: "20mb" }));
 
@@ -148,6 +184,7 @@ async function synthesize(text, options = {}) {
     nextText,
     previousRequestIds,
     includeAlignment,
+    outputFormat = OUTPUT_FORMAT,
   } = options;
 
   const apiKey = process.env.ELEVENLABS_API_KEY;
@@ -167,7 +204,7 @@ async function synthesize(text, options = {}) {
   const nextContext = normalizeContext(nextText, "next_text");
 
   const url = new URL(`https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(voiceId)}/with-timestamps`);
-  url.searchParams.set("output_format", OUTPUT_FORMAT);
+  url.searchParams.set("output_format", outputFormat);
 
   const voiceSettings = buildVoiceSettings(performancePlan.mode, MODEL_ID);
   const body = {
@@ -219,7 +256,7 @@ async function synthesize(text, options = {}) {
     releaseUsage();
   }
 
-  latestEvent = {
+  if (outputFormat === OUTPUT_FORMAT) latestEvent = {
     id: crypto.randomUUID(),
     text,
     audio_base64: data.audio_base64,
@@ -278,7 +315,8 @@ function apply(data){
   if(!data)return;
   if(data.error){state.textContent=data.error;return;}
   if(data.text)text.textContent=data.text;
-  if(data.audio_base64){audio.src="data:audio/mpeg;base64,"+data.audio_base64;state.textContent="Tap to play";}
+  if(data.audio_url){audio.src=data.audio_url;state.textContent="Tap to play";}
+  else if(data.audio_base64){audio.src="data:"+(data.audio_mime_type||"audio/mpeg")+";base64,"+data.audio_base64;state.textContent="Tap to play";}
 }
 window.addEventListener("message",(event)=>{
  const msg=event.data;
@@ -295,7 +333,7 @@ setTimeout(()=>send("ui/notifications/initialized",{}),50);
 </html>`;
 }
 
-function createServer() {
+function createServer({ publicBaseUrl } = {}) {
   const mcp = new McpServer({ name: "voice-mcp", version: VERSION });
 
   mcp.server.registerCapabilities({
@@ -352,6 +390,7 @@ function createServer() {
           structuredContent: {
             text,
             audio_base64: result.audio_base64,
+            audio_mime_type: "audio/mpeg",
             performance: result.performance,
             direction: result.performance?.direction || normalizeDirection(direction) || null,
             language: result.language,
@@ -372,6 +411,166 @@ function createServer() {
         const message = error instanceof Error ? error.message : String(error);
         return {
           content: [{ type: "text", text: `Voice generation failed: ${message}` }],
+          structuredContent: { error: message },
+          isError: true,
+        };
+      }
+    },
+  );
+
+  mcp.registerTool(
+    "list_sound_assets",
+    {
+      title: "List sound-effect library",
+      description: "List private WAV sound assets already uploaded to this voice-mcp instance. Call this first to obtain asset_id values before using speak_with_soundscape.",
+      inputSchema: z.object({}),
+    },
+    async () => {
+      try {
+        const [assets, usage] = await Promise.all([
+          audioAssetStore.list(),
+          audioAssetStore.getUsage(),
+        ]);
+        const summary = assets.length
+          ? assets.map((asset) => `- ${asset.name} | asset_id=${asset.id} | ${asset.kind} | ${asset.durationSec}s | ${asset.channels}ch`).join("\\n")
+          : "The sound-effect library is empty. Upload WAV files from the Private Drama preview first.";
+        return {
+          content: [{ type: "text", text: summary }],
+          structuredContent: { assets, usage },
+        };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        return { content: [{ type: "text", text: `Could not list sound assets: ${message}` }], isError: true };
+      }
+    },
+  );
+
+  mcp.registerTool(
+    "speak_with_soundscape",
+    {
+      title: `${BOT_NAME}'s Voice + Soundscape`,
+      description: `Generate ${BOT_NAME}'s spoken voice and mix it with sound effects from the private audio asset library. First call list_sound_assets to discover asset_id values. The final mix is returned as a short-lived playable audio URL in the inline player. Keep text under ${MAX_SOUND_SCAPE_TEXT_CHARS} characters and the finished mix under ${MAX_SOUND_SCAPE_SECONDS} seconds. Use only assets the user has uploaded and is authorized to use. Voice remains centered; mono effects support left/right pan and distance attenuation; stereo effects retain their stereo image. This server-side MCP mix is stereo panning, not browser HRTF.`,
+      inputSchema: z.object({
+        text: z.string().min(1).max(MAX_SOUND_SCAPE_TEXT_CHARS).describe("Text to speak (maximum 1200 characters; final audio is limited to 60 seconds)"),
+        performance: z.enum(["auto", "natural", "soft", "close", "breathy", "expressive"]).optional(),
+        language: z.enum(["auto", "zh", "ja", "en", "ko"]).optional(),
+        direction: z.string().max(180).optional(),
+        cues: z.array(z.object({
+          asset_id: z.string().min(1).max(64).describe("asset_id returned by list_sound_assets"),
+          kind: z.enum(["ambience", "foley"]),
+          at_sec: z.number().min(0).max(MAX_SOUND_SCAPE_SECONDS).optional(),
+          gain: z.number().min(0).max(0.7).optional(),
+          pan: z.number().min(-1).max(1).optional(),
+          distance_meters: z.number().min(0.5).max(8).optional(),
+          fade_in_sec: z.number().min(0).max(10).optional(),
+          fade_out_sec: z.number().min(0).max(10).optional(),
+          duration_sec: z.number().min(0.01).max(MAX_SOUND_SCAPE_SECONDS).optional(),
+          loop: z.boolean().optional(),
+        })).min(1).max(12),
+        voice_gain: z.number().min(0).max(1).optional(),
+        ambience_bus_gain: z.number().min(0).max(1).optional(),
+        foley_bus_gain: z.number().min(0).max(1).optional(),
+        master_gain: z.number().min(0).max(1).optional(),
+        ducking_enabled: z.boolean().optional(),
+        ducking_amount: z.number().min(0).max(1).optional(),
+      }),
+    },
+    async ({ text, performance, language, direction, cues, voice_gain, ambience_bus_gain, foley_bus_gain, master_gain, ducking_enabled, ducking_amount }) => {
+      try {
+        const baseUrlValue = process.env.MCP_PUBLIC_BASE_URL;
+        if (!baseUrlValue) throw new Error("MCP_PUBLIC_BASE_URL must be configured before soundscape playback can be returned");
+        const baseUrl = new URL(baseUrlValue);
+        if (baseUrl.protocol !== "https:" && !["localhost", "127.0.0.1"].includes(baseUrl.hostname)) {
+          throw new Error("MCP_PUBLIC_BASE_URL must use HTTPS");
+        }
+        if (baseUrl.pathname !== "/" || baseUrl.search || baseUrl.hash) {
+          throw new Error("MCP_PUBLIC_BASE_URL must contain only the public origin, without a path");
+        }
+
+        const loadedAssets = new Map();
+        for (const cue of cues) {
+          if (loadedAssets.has(cue.asset_id)) continue;
+          const stored = await audioAssetStore.get(cue.asset_id);
+          if (!stored) throw new Error("Sound asset not found: " + cue.asset_id);
+          loadedAssets.set(cue.asset_id, stored.buffer);
+        }
+
+        const result = await synthesize(text, {
+          performance,
+          language,
+          direction,
+          outputFormat: "pcm_44100",
+        });
+        const voicePcm = decodeRawPcm16(Buffer.from(result.audio_base64, "base64"), {
+          sampleRate: 44100,
+          channels: 1,
+        });
+        if (voicePcm.durationSec > MAX_SOUND_SCAPE_SECONDS) {
+          throw new Error(`Generated voice exceeds the ${MAX_SOUND_SCAPE_SECONDS} second soundscape limit; shorten the text`);
+        }
+
+        const mix = mixSoundscape({
+          voicePcm,
+          assets: loadedAssets,
+          cues: cues.map((cue) => ({
+            fileId: cue.asset_id,
+            kind: cue.kind,
+            atSec: cue.at_sec,
+            gain: cue.gain,
+            pan: cue.pan,
+            distanceMeters: cue.distance_meters,
+            fadeInSec: cue.fade_in_sec,
+            fadeOutSec: cue.fade_out_sec,
+            durationSec: cue.duration_sec,
+            loop: cue.loop,
+          })),
+          voiceGain: voice_gain,
+          ambienceBusGain: ambience_bus_gain,
+          foleyBusGain: foley_bus_gain,
+          masterGain: master_gain,
+          duckingEnabled: ducking_enabled,
+          duckingAmount: ducking_amount,
+        });
+
+        if (mix.buffer.length > 16 * 1024 * 1024) throw new Error("Mixed audio exceeds the 16 MB playback cache limit");
+        const now = Date.now();
+        for (const [id, item] of generatedAudioCache) {
+          if (item.expiresAt <= now) generatedAudioCache.delete(id);
+        }
+        while (generatedAudioCache.size >= GENERATED_AUDIO_MAX_ITEMS ||
+          [...generatedAudioCache.values()].reduce((sum, item) => sum + item.buffer.length, 0) + mix.buffer.length > GENERATED_AUDIO_MAX_BYTES) {
+          const oldestId = generatedAudioCache.keys().next().value;
+          if (!oldestId) break;
+          generatedAudioCache.delete(oldestId);
+        }
+        const audioId = crypto.randomUUID();
+        generatedAudioCache.set(audioId, {
+          buffer: mix.buffer,
+          expiresAt: now + GENERATED_AUDIO_TTL_MS,
+        });
+        const audioUrl = new URL(`/audio/${audioId}`, baseUrl.origin).toString();
+
+        return {
+          content: [{ type: "text", text: `🎙️ ${BOT_NAME}: "${text}" · mixed soundscape ready` }],
+          structuredContent: {
+            text,
+            audio_url: audioUrl,
+            audio_mime_type: "audio/wav",
+            duration_sec: mix.durationSec,
+            sample_rate: mix.sampleRate,
+            channels: mix.channels,
+            cues: mix.timeline.cues.map((cue) => ({ asset_id: cue.fileId, kind: cue.kind, at_sec: cue.atSec, pan: cue.pan, distance_meters: cue.distanceMeters })),
+            performance: result.performance,
+            language: result.language,
+            request_id: result.request_id,
+            expires_in_seconds: GENERATED_AUDIO_TTL_MS / 1000,
+            limiter_gain: Number(mix.limiterGain.toFixed(4)),
+          },
+        };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        return {
+          content: [{ type: "text", text: `Soundscape generation failed: ${message}` }],
           structuredContent: { error: message },
           isError: true,
         };
@@ -402,6 +601,41 @@ app.all("/mcp", async (req, res) => {
   }
 });
 
+app.get("/audio/:id", (req, res) => {
+  const id = req.params.id;
+  if (!/^[0-9a-f-]{36}$/i.test(id)) return res.status(404).end();
+  const item = generatedAudioCache.get(id);
+  if (!item || item.expiresAt <= Date.now()) {
+    generatedAudioCache.delete(id);
+    return res.status(404).json({ error: "Audio preview expired" });
+  }
+  res.setHeader("Content-Type", "audio/wav");
+  res.setHeader("Content-Length", String(item.buffer.length));
+  res.setHeader("Cache-Control", "private, no-store, max-age=0");
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  return res.send(item.buffer);
+});
+
+app.get("/assets", async (_req, res) => {
+  try {
+    const [assets, usage] = await Promise.all([audioAssetStore.list(), audioAssetStore.getUsage()]);
+    res.json({ assets, usage });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(500).json({ error: message });
+  }
+});
+
+app.delete("/assets/:id", async (req, res) => {
+  try {
+    const deleted = await audioAssetStore.remove(req.params.id);
+    return deleted ? res.status(204).end() : res.status(404).json({ error: "Audio asset not found" });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(500).json({ error: message });
+  }
+});
+
 app.get("/status", (_req, res) => {
   res.json({
     status: "ok",
@@ -423,6 +657,9 @@ app.get("/status", (_req, res) => {
       language_auto_detection: true,
       japanese_text_normalization_opt_in: true,
       local_drama_preview: true,
+      private_audio_asset_library: true,
+      speak_with_soundscape: true,
+      soundscape_max_seconds: MAX_SOUND_SCAPE_SECONDS,
       character_alignment: true,
       legacy_style_presets: true,
       inline_audio_tags: true,

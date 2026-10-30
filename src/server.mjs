@@ -379,7 +379,7 @@ function createServer() {
       try {
         const directive = parseSoundscapeDirective(direction);
         if (directive.preset) {
-          const baseUrlValue = process.env.MCP_PUBLIC_BASE_URL;
+          const baseUrlValue = (process.env.MCP_PUBLIC_BASE_URL || process.env.ZEABUR_WEB_URL);
           if (!baseUrlValue) {
             throw new Error("MCP_PUBLIC_BASE_URL must be configured before soundscape playback can be returned");
           }
@@ -600,7 +600,7 @@ function createServer() {
     },
     async ({ text, performance, language, direction, cues, voice_gain, ambience_bus_gain, foley_bus_gain, master_gain, ducking_enabled, ducking_amount }) => {
       try {
-        const baseUrlValue = process.env.MCP_PUBLIC_BASE_URL;
+        const baseUrlValue = (process.env.MCP_PUBLIC_BASE_URL || process.env.ZEABUR_WEB_URL);
         if (!baseUrlValue) throw new Error("MCP_PUBLIC_BASE_URL must be configured before soundscape playback can be returned");
         const baseUrl = new URL(baseUrlValue);
         if (baseUrl.protocol !== "https:" && !["localhost", "127.0.0.1"].includes(baseUrl.hostname)) {

@@ -66,6 +66,10 @@ test("all curated presets resolve to assets with the intended bus and timeline",
   assert.equal(close.cues.length, 2);
   assert.equal(close.cues[0].fileId, "fx_cloth");
   assert.equal(close.cues[1].fileId, "fx_wet");
+  assert.deepEqual(close.cues.map((cue) => cue.sourceOffsetSec), [12, 12]);
+  assert.deepEqual(close.cues.map((cue) => cue.gain), [0.46, 0.46]);
+  assert.ok(close.cues[0].pan < 0 && close.cues[1].pan > 0);
+
 
   const intimate = buildSoundscapePresetCues("intimate", assets);
   assert.equal(intimate.cues.length, 5);

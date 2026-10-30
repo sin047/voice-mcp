@@ -57,9 +57,13 @@ preview. It is experimental and is **not** the stable ChatGPT MCP deployment.
 - Headphone preview and local stereo WAV export.
 
 See [PRIVATE_DRAMA.md](PRIVATE_DRAMA.md) for setup, limitations, privacy and
-acceptance tests. Do not deploy this branch publicly until the speech endpoints
-have authentication, rate limits and quotas. The audio preview does not yet
-return a mixed audio file through the embedded ChatGPT MCP player.
+acceptance tests. The experimental browser/HTTP routes require
+`PRIVATE_DRAMA_ACCESS_TOKEN`; the `/mcp` route remains unauthenticated for the
+current direct-URL ChatGPT connection, but now has a process-wide request limit
+and global ElevenLabs usage quotas. These are abuse/spend guardrails, not user
+authentication. Add OAuth or transport-level ChatGPT client verification
+before exposing the endpoint as a public service. The audio preview does not
+yet return a mixed audio file through the embedded ChatGPT MCP player.
 
 ### Zeabur environment variables
 
@@ -80,6 +84,12 @@ return a mixed audio file through the embedded ChatGPT MCP player.
 | `ELEVENLABS_JA_TEXT_NORMALIZATION` | Set to `true` to enable Japanese text normalization; may increase latency |
 | `BOT_NAME` | Optional player/tool display name |
 | `PRIVATE_DRAMA_ACCESS_TOKEN` | Required for private browser/HTTP routes on the experimental branch; use a random secret of at least 32 characters. Supports browser Basic Auth and Bearer tokens. Does not authenticate `/mcp`. |
+| `MCP_MAX_REQUESTS_PER_MINUTE` | Process-wide MCP HTTP request limit (default `120` per minute). |
+| `VOICE_MAX_BILLABLE_CHARS_PER_REQUEST` | Maximum generated text sent to ElevenLabs per request (default `4200`, including generated tags). |
+| `VOICE_MAX_CALLS_PER_MINUTE` | Maximum ElevenLabs generation attempts per minute (default `8`). |
+| `VOICE_MAX_CALLS_PER_DAY` | Maximum ElevenLabs generation attempts per UTC day (default `120`). |
+| `VOICE_MAX_CHARS_PER_DAY` | Maximum generated text characters per UTC day (default `12000`). |
+| `VOICE_MAX_CONCURRENT_SYNTHESIS` | Maximum simultaneous ElevenLabs generation requests (default `2`). |
 
 For Eleven v4, only stability and similarity are standard voice controls; style, speed and speaker-boost settings are not sent to v4. The legacy variables for other model families remain supported where applicable.
 

@@ -58,14 +58,28 @@ button.remove{padding:7px 14px;font-size:12px}
 <p class="hint">环境声建议音量 0.10，动作声建议 0.22。左右声像 -1 为左耳，+1 为右耳。循环只适用于环境声。</p>
 </section>
 <section>
-<h2>03 / 试听与导出</h2>
+<h2>03 / 混音总线与空间</h2>
+<div class="row">
+<div><label for="ambienceBusGain">环境音总线（0–1）</label><input id="ambienceBusGain" type="number" min="0" max="1" step="0.05" value="0.82"></div>
+<div><label for="foleyBusGain">动作音效总线（0–1）</label><input id="foleyBusGain" type="number" min="0" max="1" step="0.05" value="0.9"></div>
+<div><label for="masterGain">总输出（0–1）</label><input id="masterGain" type="number" min="0" max="1" step="0.05" value="0.85"></div>
+</div>
+<div class="row">
+<div><label for="spatialMode">耳机空间模式</label><select id="spatialMode"><option value="stereo">普通立体声 / Stereo</option><option value="hrtf">HRTF 空间定位（单声道音效）</option></select></div>
+<div><label for="duckingAmount">人声优先程度（0–1）</label><input id="duckingAmount" type="number" min="0" max="1" step="0.05" value="0.75"></div>
+</div>
+<label style="display:flex;align-items:center;gap:9px;margin-top:12px"><input id="duckingEnabled" type="checkbox" checked> 人声优先：说话时自动轻压音效，停顿时缓慢恢复</label>
+<p class="hint">HRTF 需要耳机；目前只对单声道音效使用 HRTF 定位。立体声音效会保留原始左右声道，并继续使用基础声像控制。</p>
+</section>
+<section>
+<h2>04 / 试听与导出</h2>
 <div class="actions">
 <button id="preview" class="primary">▶ 试听混音</button>
 <button id="stop">■ 停止</button>
 <button id="export">导出 WAV</button>
 </div>
 <p id="status" role="status" aria-live="polite">尚未选择音频。</p>
-<small>目前限制：总人声最长 180 秒，最多 12 个音效。音量与声像是基础后期，不代表专业 KU100 双耳录音。若导出声音太满，可降低音效增益。</small>
+<small>目前限制：总人声最长 180 秒，最多 12 个音效。HRTF 是浏览器实时空间化，不等于 KU100 实录；最终效果请戴耳机比较。导出 WAV 会进行保守峰值保护。</small>
 </section>
 <p class="hint privacy">隐私：你从本机选择的语音与音效文件只在浏览器中解码和混音，不会上传到服务器。仅当主动点击「生成日语人声」时，输入的台词才会发送至当前 Voice MCP 和 ElevenLabs，且会消耗 ElevenLabs 额度。仅使用你有权使用的音效素材；不要把私人素材提交到公开 GitHub 仓库。</p>
 </main>
@@ -195,6 +209,12 @@ async function getBuffers(ctx) {
   const timeline = createDramaTimeline({
     voiceDurationSec: voice.duration,
     voiceGain: Number($("voiceLevel").value),
+    ambienceBusGain: Number($("ambienceBusGain").value),
+    foleyBusGain: Number($("foleyBusGain").value),
+    masterGain: Number($("masterGain").value),
+    duckingEnabled: $("duckingEnabled").checked,
+    duckingAmount: Number($("duckingAmount").value),
+    spatialMode: $("spatialMode").value,
     cues: items.map((item) => ({
       fileId: item.fileId,
       kind: item.kind,
@@ -216,42 +236,146 @@ async function getBuffers(ctx) {
   return {voice, timeline, tracks};
 }
 
-function attachNode(ctx, buffer, at, length, gain, pan, fadeIn, fadeOut, loop, destination) {
+function attachNode(ctx, buffer, at, length, gain, pan, fadeIn, fadeOut, loop, destination, spatialMode) {
   if (length <= 0) return;
-  const source = ctx.createBufferSource(); source.buffer = buffer; source.loop=loop;
+  const source = ctx.createBufferSource();
+  source.buffer = buffer;
+  source.loop = loop;
   const volume = ctx.createGain();
-  const stereopan = ctx.createStereoPanner ? ctx.createStereoPanner() : null;
-  if (stereopan) {
-    stereopan.pan.value = pan;
-    source.connect(volume);volume.connect(stereopan);stereopan.connect(destination);
-  } else {
-    source.connect(volume);volume.connect(destination);
+  let spatialNode = null;
+
+  // HRTF PannerNode is used only for mono effects. Stereo recordings keep
+  // their original two-channel image and use StereoPanner when available.
+  if (spatialMode === "hrtf" && buffer.numberOfChannels === 1 && typeof ctx.createPanner === "function") {
+    try {
+      const panner = ctx.createPanner();
+      panner.panningModel = "HRTF";
+      panner.distanceModel = "linear";
+      panner.refDistance = 1;
+      panner.maxDistance = 2;
+      panner.rolloffFactor = 0;
+      panner.coneInnerAngle = 360;
+      panner.coneOuterAngle = 360;
+      panner.coneOuterGain = 1;
+      const x = Math.max(-1, Math.min(1, pan));
+      panner.positionX.value = x;
+      panner.positionY.value = 0;
+      panner.positionZ.value = -Math.sqrt(Math.max(0, 1 - x * x));
+      panner.orientationX.value = 0;
+      panner.orientationY.value = 0;
+      panner.orientationZ.value = 1;
+      source.connect(volume);
+      volume.connect(panner);
+      panner.connect(destination);
+      spatialNode = panner;
+    } catch {
+      spatialNode = null;
+    }
   }
-  const attack = Math.min(length/2,fadeIn), release = Math.min(length/2,fadeOut);
-  volume.gain.setValueAtTime(attack ? 0 : gain,at);
-  if (attack) volume.gain.linearRampToValueAtTime(gain,at+attack);
-  const releaseAt = Math.max(at+attack,at+length-release);
-  volume.gain.setValueAtTime(gain,releaseAt);
-  if (release) volume.gain.linearRampToValueAtTime(0,at+length);
+
+  if (!spatialNode) {
+    const stereoPan = typeof ctx.createStereoPanner === "function" ? ctx.createStereoPanner() : null;
+    if (stereoPan) {
+      stereoPan.pan.value = pan;
+      source.connect(volume);
+      volume.connect(stereoPan);
+      stereoPan.connect(destination);
+    } else {
+      source.connect(volume);
+      volume.connect(destination);
+    }
+  }
+
+  const attack = Math.min(length / 2, fadeIn);
+  const release = Math.min(length / 2, fadeOut);
+  volume.gain.setValueAtTime(attack ? 0 : gain, at);
+  if (attack) volume.gain.linearRampToValueAtTime(gain, at + attack);
+  const releaseAt = Math.max(at + attack, at + length - release);
+  volume.gain.setValueAtTime(gain, releaseAt);
+  if (release) volume.gain.linearRampToValueAtTime(0, at + length);
   source.start(at);
-  source.stop(at+length);
+  source.stop(at + length);
+}
+
+function scheduleVoiceDucking(bus, voiceBuffer, start, baseGain, enabled, amount, settings) {
+  const param = bus.gain;
+  param.setValueAtTime(baseGain, start);
+  if (!enabled || amount <= 0) return;
+
+  const sampleRate = voiceBuffer.sampleRate;
+  const frameSize = Math.max(1, Math.floor(sampleRate * 0.04));
+  const channelCount = voiceBuffer.numberOfChannels;
+  const channels = Array.from({ length: channelCount }, (_, index) => voiceBuffer.getChannelData(index));
+  const thresholdDb = settings.thresholdDb;
+  let smoothed = 1;
+
+  for (let offset = 0; offset < voiceBuffer.length; offset += frameSize) {
+    const end = Math.min(voiceBuffer.length, offset + frameSize);
+    let sumSquares = 0;
+    let count = 0;
+    for (const channel of channels) {
+      for (let i = offset; i < end; i++) {
+        const sample = channel[i];
+        sumSquares += sample * sample;
+        count += 1;
+      }
+    }
+    const rms = count ? Math.sqrt(sumSquares / count) : 0;
+    const levelDb = rms > 0.000001 ? 20 * Math.log10(rms) : -120;
+    const activity = Math.max(0, Math.min(1, (levelDb - thresholdDb) / (0 - thresholdDb)));
+    const target = 1 - amount * activity;
+    const frameSeconds = (end - offset) / sampleRate;
+    const timeConstant = target < smoothed ? settings.attackSec : settings.releaseSec;
+    const smoothing = 1 - Math.exp(-frameSeconds / Math.max(0.001, timeConstant));
+    smoothed += (target - smoothed) * smoothing;
+    const at = start + end / sampleRate;
+    param.linearRampToValueAtTime(baseGain * smoothed, at);
+  }
 }
 
 function schedule(ctx, bundle, start) {
   const duration = bundle.timeline.voice.durationSec;
-  const mix = ctx.createDynamicsCompressor();
-  mix.threshold.value=-8;mix.knee.value=8;mix.ratio.value=2;
-  mix.attack.value=.006;mix.release.value=.22;
-  mix.connect(ctx.destination);
+  const mixSettings = bundle.timeline.mix;
+  const compressor = ctx.createDynamicsCompressor();
+  compressor.threshold.value = -6;
+  compressor.knee.value = 3;
+  compressor.ratio.value = 12;
+  compressor.attack.value = 0.003;
+  compressor.release.value = 0.18;
 
-  attachNode(ctx,bundle.voice,start,duration,bundle.timeline.voice.gain,0,.015,.12,false,mix);
-  bundle.tracks.forEach(({cue,buffer}) => {
-    const remaining = duration-cue.atSec;
-    const length = Math.min(remaining,cue.loop ? remaining : buffer.duration);
-    attachNode(ctx,buffer,start+cue.atSec,length,cue.gain,cue.pan,cue.fadeInSec,cue.fadeOutSec,cue.loop,mix);
+  const master = ctx.createGain();
+  master.gain.setValueAtTime(mixSettings.masterGain, start);
+  compressor.connect(master);
+  master.connect(ctx.destination);
+
+  const ambienceBus = ctx.createGain();
+  const foleyBus = ctx.createGain();
+  ambienceBus.connect(compressor);
+  foleyBus.connect(compressor);
+
+  const ducking = mixSettings.ducking;
+  scheduleVoiceDucking(
+    ambienceBus, bundle.voice, start, mixSettings.ambienceBusGain,
+    mixSettings.duckingEnabled, mixSettings.duckingAmount * ducking.ambienceDepth, ducking
+  );
+  scheduleVoiceDucking(
+    foleyBus, bundle.voice, start, mixSettings.foleyBusGain,
+    mixSettings.duckingEnabled, mixSettings.duckingAmount * ducking.foleyDepth, ducking
+  );
+
+  // Keep the voice centered and in the foreground.
+  attachNode(ctx, bundle.voice, start, duration, bundle.timeline.voice.gain, 0, 0.015, 0.12, false, compressor, "stereo");
+
+  bundle.tracks.forEach(({ cue, buffer }) => {
+    const remaining = duration - cue.atSec;
+    const length = Math.min(remaining, cue.loop ? remaining : (cue.durationSec ?? buffer.duration));
+    const bus = cue.kind === "ambience" ? ambienceBus : foleyBus;
+    attachNode(
+      ctx, buffer, start + cue.atSec, length, cue.gain, cue.pan,
+      cue.fadeInSec, cue.fadeOutSec, cue.loop, bus, mixSettings.spatialMode
+    );
   });
 }
-
 async function stop() {
   if (active) {
     const old=active;active=null;

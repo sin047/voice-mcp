@@ -31,7 +31,7 @@ function matchesToken(candidate, expected) {
 }
 
 export function isAccessAuthorized(authorization, expectedToken) {
-  if (typeof expectedToken !== "string" || expectedToken.length < MIN_TOKEN_LENGTH) {
+  if (typeof expectedToken !== "string" || expectedToken.trim().length < MIN_TOKEN_LENGTH) {
     return false;
   }
   return matchesToken(extractCredential(authorization), expectedToken);
@@ -42,7 +42,7 @@ export function isAccessAuthorized(authorization, expectedToken) {
  * Browsers can authenticate with Basic Auth; scripts may use Bearer tokens.
  */
 export function createAccessGuard({ token, realm = "Shin Private Drama" } = {}) {
-  const configured = typeof token === "string" && token.length >= MIN_TOKEN_LENGTH;
+  const configured = typeof token === "string" && token.trim().length >= MIN_TOKEN_LENGTH;
   const safeRealm = String(realm).replace(/[^a-zA-Z0-9 ._-]/g, "").slice(0, 64) || "Private";
 
   return (req, res, next) => {

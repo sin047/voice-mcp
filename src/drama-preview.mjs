@@ -1,5 +1,5 @@
 export function dramaPreviewHtml() {
-  return String.raw\`<!doctype html>
+  return String.raw`<!doctype html>
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
@@ -293,5 +293,5 @@ $("export").onclick=async()=>{
   finally{$("export").disabled=false;}
 };
 </script>
-</body></html>\`;
+</body></html>`;
 }

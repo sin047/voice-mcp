@@ -262,6 +262,22 @@ export function mixSoundscape({
   const durationSec = voiceFrames / TARGET_SAMPLE_RATE;
   if (durationSec > MAX_SECONDS) throw new Error("Voice audio exceeds the 180 second mix limit");
 
+  // Speech duration varies between ElevenLabs takes. A short utterance may
+  // end before a preset's final cue; trim/fade the cue to the real voice length.
+  const trimmedCues = cues
+    .filter((cue) => (cue.atSec ?? 0) < durationSec - 0.01)
+    .map((cue) => {
+      if (cue.durationSec == null) return cue;
+      const remaining = durationSec - (cue.atSec ?? 0);
+      const duration = Math.min(cue.durationSec, remaining);
+      return {
+        ...cue,
+        durationSec: duration,
+        fadeInSec: Math.min(cue.fadeInSec ?? (cue.kind === "ambience" ? 1 : 0.03), duration / 2),
+        fadeOutSec: Math.min(cue.fadeOutSec ?? (cue.kind === "ambience" ? 1 : 0.1), duration / 2),
+      };
+    });
+
   const timeline = createDramaTimeline({
     voiceDurationSec: durationSec,
     voiceGain,
@@ -271,7 +287,7 @@ export function mixSoundscape({
     duckingEnabled,
     duckingAmount,
     spatialMode: "stereo",
-    cues,
+    cues: trimmedCues,
   });
 
   const left = new Float32Array(voiceFrames);

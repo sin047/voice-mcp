@@ -1,6 +1,6 @@
 # voice-mcp
 
-An MCP (Model Context Protocol) server for AI voice synthesis with an inline audio player. Give your AI assistant a custom cloned voice!
+An MCP (Model Context Protocol) server for AI voice synthesis, audio performance and spatial sound effects. Platform-agnostic Node.js runtime with an inline audio player.
 
 ![License](https://img.shields.io/badge/license-MIT-green)
 
@@ -43,6 +43,18 @@ v1.3.1 improvements:
 - **Regression tests:** the pure performance and language-selection logic is covered by Node's built-in test runner.
 
 The stable performance layer handles **voice performance**, not physical sound effects. The experimental v1.4 Private Drama branch adds a separate browser-based effects and mixing lab; it does not change the stable MCP `speak` tool.
+
+### Platform-neutral runtime
+
+The experimental branch now starts from `src/server.mjs` via `npm start`.
+The runtime is plain Node.js + Express + MCP SDK; it does not depend on Zeabur
+APIs or deployment-specific SDKs. The Dockerfile can run unchanged on any
+Docker-compatible host. The legacy `src/zeabur-server.mjs` filename remains
+only as a compatibility shim for old start commands.
+
+Persistent audio assets will use a configurable data directory rather than
+provider-specific storage. On a container host, mount a persistent volume at
+that directory; on VPS, it can be a normal disk path.
 
 ### Experimental v1.4 Private Drama Lab
 

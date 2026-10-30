@@ -101,9 +101,20 @@ with the configured ChatGPT connector, or restrict ingress to a private
 network, and add rate limits/quotas. Do not mistake this preview gate for
 complete server-wide protection.
 
-## Private audio asset library and MCP soundscape tools
+## Mobile-compatible soundscape playback through the existing `speak` tool
 
-The MCP soundscape tools are disabled by default with `MCP_SOUNDSCAPE_TOOLS_ENABLED=false`. Enable them only after the `/mcp` endpoint is restricted by private ingress, firewall/IP allowlist or a verified authentication layer. A direct-URL ChatGPT MCP endpoint without OAuth does not identify callers; exposing asset listing on that endpoint would disclose private asset IDs.
+The official ChatGPT custom MCP connection flow is currently web-only. For a mobile-first workflow, keep using the already-installed `voice2-v1.3.1` app and its existing `speak` action. The server keeps the existing tool name and input schema; the soundscape is selected by a marker in the existing `direction` string:
+
+- `[soundscape:rain]`
+- `[soundscape:desk]`
+- `[soundscape:package]`
+- `[soundscape:close]`
+- `[soundscape:intimate]`
+
+The server removes the marker before calling ElevenLabs, synthesizes 24 kHz PCM, mixes the chosen private assets, and returns a short-lived WAV playback URL in the same `speak` tool result. Ordinary calls without a marker keep the original MP3/base64 response. This avoids depending on mobile clients discovering a newly added MCP tool.
+
+
+The separate MCP asset-list/mix tools are disabled by default with `MCP_SOUNDSCAPE_TOOLS_ENABLED=false`. Mobile soundscape playback through the existing `speak` tool does not enable those extra tools or expose asset IDs.
 
 The preview remains local-first. Selecting a local file does not upload it.
 Each effect track has an explicit **保存到音效库** action. Only after that click

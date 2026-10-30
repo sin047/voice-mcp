@@ -58,11 +58,12 @@ function normalizeContext(value, fieldName) {
 function buildText(text, style, rawTags, direction, performance) {
   const supportsTags = ["eleven_v3", "eleven_v4", "eleven_v4_turbo"].includes(MODEL_ID);
   if (!supportsTags) {
+    const requestedMode = normalizePerformance(performance);
     return {
       finalText: stripAudioTags(text),
       plan: {
-        requested_mode: normalizePerformance(performance),
-        mode: "natural",
+        requested_mode: requestedMode,
+        mode: requestedMode === "auto" ? "natural" : requestedMode,
         direction: null,
         legacy_tag: null,
         breath_event: null,

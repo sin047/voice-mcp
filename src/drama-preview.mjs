@@ -130,6 +130,8 @@ function renderCues() {
     type.onchange = () => {
       item.kind = type.value;
       item.gain = item.kind === "ambience" ? 0.1 : 0.22;
+      item.fadeInSec = item.kind === "ambience" ? 0.7 : 0.03;
+      item.fadeOutSec = item.kind === "ambience" ? 0.7 : 0.07;
       item.loop = item.kind === "ambience";
       renderCues();
     };
@@ -138,6 +140,8 @@ function renderCues() {
     row.append(makeNumber("开始时间 / 秒", item.atSec,0,180,0.1,(v) => {item.atSec=v;}));
     row.append(makeNumber("音量 / 0–0.7", item.gain,0,0.7,0.01,(v) => {item.gain=v;}));
     row.append(makeNumber("左右声像 / -1…1", item.pan,-1,1,0.1,(v) => {item.pan=v;}));
+    row.append(makeNumber("淡入 / 秒", item.fadeInSec,0,10,0.05,(v) => {item.fadeInSec=v;}));
+    row.append(makeNumber("淡出 / 秒", item.fadeOutSec,0,10,0.05,(v) => {item.fadeOutSec=v;}));
     const loopWrap = document.createElement("div");
     const loopLabel = document.createElement("label"); loopLabel.textContent = "循环";
     const loop = document.createElement("input"); loop.type = "checkbox";
@@ -160,6 +164,8 @@ $("fx").addEventListener("change",(event) => {
       atSec: 0,
       gain: 0.22,
       pan: 0,
+      fadeInSec: 0.03,
+      fadeOutSec: 0.07,
       loop: false,
     });
   }
@@ -222,8 +228,8 @@ async function getBuffers(ctx) {
       gain: item.gain,
       pan: item.pan,
       loop: item.loop,
-      fadeInSec: item.kind === "ambience" ? 0.7 : 0.03,
-      fadeOutSec: item.kind === "ambience" ? 0.7 : 0.07,
+      fadeInSec: item.fadeInSec,
+      fadeOutSec: item.fadeOutSec,
     })),
   });
 
@@ -368,7 +374,7 @@ function schedule(ctx, bundle, start) {
 
   bundle.tracks.forEach(({ cue, buffer }) => {
     const remaining = duration - cue.atSec;
-    const length = Math.min(remaining, cue.loop ? remaining : (cue.durationSec ?? buffer.duration));
+    const length = Math.min(remaining, cue.durationSec ?? (cue.loop ? remaining : buffer.duration));
     const bus = cue.kind === "ambience" ? ambienceBus : foleyBus;
     attachNode(
       ctx, buffer, start + cue.atSec, length, cue.gain, cue.pan,

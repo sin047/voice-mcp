@@ -1,4 +1,4 @@
-# Shin · Private Drama Lab (v1.4.0-beta.3)
+# Shin · Private Drama Lab (v1.4.0-beta.4)
 
 This is an **experimental**, independent preview of multitrack voice / sound-effect mixing.
 It lives on the `voice-v1.4-private-drama` branch. **Do not replace the stable
@@ -71,6 +71,34 @@ with the configured ChatGPT connector, or restrict ingress to a private
 network, and add rate limits/quotas. Do not mistake this preview gate for
 complete server-wide protection.
 
+## MCP request and ElevenLabs usage guardrails
+
+The direct-URL ChatGPT MCP connection remains **unauthenticated** for now.
+To reduce accidental or abusive spend without changing the current connector,
+the experimental server applies these process-wide limits:
+
+| Environment variable | Default | Meaning |
+|---|---:|---|
+| `MCP_MAX_REQUESTS_PER_MINUTE` | 120 | All HTTP requests to `/mcp` per running process per minute |
+| `VOICE_MAX_BILLABLE_CHARS_PER_REQUEST` | 4200 | Maximum final text sent to ElevenLabs in one request |
+| `VOICE_MAX_CALLS_PER_MINUTE` | 8 | ElevenLabs generation attempts per minute |
+| `VOICE_MAX_CALLS_PER_DAY` | 120 | ElevenLabs generation attempts per UTC day |
+| `VOICE_MAX_CHARS_PER_DAY` | 12000 | Final text characters sent to ElevenLabs per UTC day |
+| `VOICE_MAX_CONCURRENT_SYNTHESIS` | 2 | Simultaneous ElevenLabs generation requests |
+
+The MCP `speak` tool also validates its input at 1–4000 characters. The same
+ElevenLabs quota guard covers both MCP `speak` and the protected HTTP
+`/speak` preview routes. A reservation is recorded before the upstream call;
+failed upstream attempts still count, and the concurrency slot is always
+released. HTTP callers receive 429 plus `Retry-After` when a quota is reached.
+
+**Limitations:** counters are held in process memory, shared across all callers
+of this one process, and reset when the process restarts. They are not per-user
+identity, not durable accounting, and not shared across multiple replicas.
+This is a useful single-instance spend ceiling, not a substitute for OAuth or
+network-level access control. Use a shared store such as Redis for a
+multi-instance deployment.
+
 ## Using the preview after deploying a separate TEST instance
 
 1. Set `PRIVATE_DRAMA_ACCESS_TOKEN` on the TEST deployment, then open
@@ -103,9 +131,11 @@ recording's source, license and allowed uses. You can share URLs or
 short test clips for evaluation without committing an asset.
 
 **Important production blocker:** browser/HTTP routes now have a fail-closed
-access-token gate, but the existing MCP `/mcp` endpoint remains unauthenticated
-for connector compatibility. Add connector-compatible MCP authentication or
-private ingress, plus rate limits and appropriate quotas, before public usage.
+access-token gate. The MCP `/mcp` endpoint remains unauthenticated for direct-URL
+connector compatibility; it has process-local request and ElevenLabs usage
+limits, but those do not identify or authorize the caller. Add OAuth 2.1 or
+verified ChatGPT client transport identity (mTLS / published egress IP allowlist)
+before treating the endpoint as a public service.
 
 ## What this beta does NOT do
 

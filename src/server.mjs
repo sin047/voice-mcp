@@ -22,12 +22,13 @@ import {
 const app = express();
 
 const PORT = Number.parseInt(process.env.PORT || "8080", 10);
+const HOST = process.env.HOST || "0.0.0.0";
 const BOT_NAME = process.env.BOT_NAME || "AI";
 const MODEL_ID = process.env.ELEVENLABS_MODEL_ID || "eleven_v4";
 const OUTPUT_FORMAT = process.env.ELEVENLABS_OUTPUT_FORMAT || "mp3_44100_128";
 const PLAYER_URI = "ui://voice-mcp/player.html";
 const PLAYER_MIME = "text/html;profile=mcp-app";
-const VERSION = "1.4.0-beta.6";
+const VERSION = "1.4.0-beta.7";
 const MAX_CONTEXT_CHARS = 4000;
 const MAX_SPEAK_CHARS = 4000;
 const MAX_SOUND_SCAPE_TEXT_CHARS = 1200;
@@ -772,8 +773,8 @@ app.get("/", (_req, res) => {
   res.type("html").send(`<h1>voice-mcp</h1><p>Node runtime is online.</p><p>Version: ${VERSION}</p><p><a href="/status">/status</a> · <a href="/panel">/panel</a> · <a href="/drama-preview">/drama-preview</a> · MCP: <code>/mcp</code></p>`);
 });
 
-const server = app.listen(PORT, "0.0.0.0", () => {
-  console.log(`[voice-mcp] v${VERSION} listening on 0.0.0.0:${PORT}`);
+const server = app.listen(PORT, HOST, () => {
+  console.log(`[voice-mcp] v${VERSION} listening on ${HOST}:${PORT}`);
 });
 
 for (const signal of ["SIGINT", "SIGTERM"]) {

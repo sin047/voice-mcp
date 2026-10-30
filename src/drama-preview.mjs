@@ -265,11 +265,16 @@ $("preview").onclick = async () => {
   $("preview").disabled = true;
   status("正在准备本地混音……");
   try {
-    await stop();
-    const ctx=new AudioContext();
-    active=ctx;
-    const bundle=await getBuffers(ctx);
-    await ctx.resume();
+    // On iOS/Safari the AudioContext must be unlocked from the actual tap,
+    // not after an awaited decode or a previous context close.
+    const prior = active;
+    active = null;
+    if (prior) void prior.close().catch(() => {});
+    const ctx = new AudioContext();
+    active = ctx;
+    const resumed = ctx.resume();
+    const bundle = await getBuffers(ctx);
+    await resumed;
     schedule(ctx,bundle,ctx.currentTime+.1);
     status("正在播放 · " + bundle.timeline.cues.length + " 条音效轨道");
     const current=ctx;

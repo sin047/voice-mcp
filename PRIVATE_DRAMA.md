@@ -83,13 +83,16 @@ configured size/count/storage limits.
 
 **Important boundary:** the `/mcp` endpoint intentionally keeps the existing
 ChatGPT connector behavior and is not protected by this HTTP preview token.
-The MCP `speak` tool can therefore still generate audio if the MCP endpoint is
-publicly reachable. Before public deployment, add authentication compatible
+The existing MCP `speak` tool can therefore still generate audio if the MCP
+endpoint is publicly reachable. The private asset listing/mixing tools are
+disabled by default and must only be enabled behind restricted ingress. Before public deployment, add authentication compatible
 with the configured ChatGPT connector, or restrict ingress to a private
 network, and add rate limits/quotas. Do not mistake this preview gate for
 complete server-wide protection.
 
 ## Private audio asset library and MCP soundscape tools
+
+The MCP soundscape tools are disabled by default with `MCP_SOUNDSCAPE_TOOLS_ENABLED=false`. Enable them only after the `/mcp` endpoint is restricted by private ingress, firewall/IP allowlist or a verified authentication layer. A direct-URL ChatGPT MCP endpoint without OAuth does not identify callers; exposing asset listing on that endpoint would disclose private asset IDs.
 
 The preview remains local-first. Selecting a local file does not upload it.
 Each effect track has an explicit **保存到音效库** action. Only after that click

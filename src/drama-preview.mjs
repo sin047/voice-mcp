@@ -69,7 +69,7 @@ button.remove{padding:7px 14px;font-size:12px}
 <div><label for="duckingAmount">人声优先程度（0–1）</label><input id="duckingAmount" type="number" min="0" max="1" step="0.05" value="0.75"></div>
 </div>
 <label style="display:flex;align-items:center;gap:9px;margin-top:12px"><input id="duckingEnabled" type="checkbox" checked> 人声优先：说话时自动轻压音效，停顿时缓慢恢复</label>
-<p class="hint">HRTF 需要耳机；目前只对单声道音效使用 HRTF 定位。立体声音效会保留原始左右声道，并继续使用基础声像控制。</p>
+<p class="hint">HRTF 需要耳机；单声道音效可分别设置左右声像与 0.5–8 米距离，距离会通过 inverse distance model 影响远近感。立体声音效保留原始声道，距离控制不作用于它们。</p>
 </section>
 <section>
 <h2>04 / 试听与导出</h2>
@@ -140,6 +140,7 @@ function renderCues() {
     row.append(makeNumber("开始时间 / 秒", item.atSec,0,180,0.1,(v) => {item.atSec=v;}));
     row.append(makeNumber("音量 / 0–0.7", item.gain,0,0.7,0.01,(v) => {item.gain=v;}));
     row.append(makeNumber("左右声像 / -1…1", item.pan,-1,1,0.1,(v) => {item.pan=v;}));
+    row.append(makeNumber("距离 / 米（HRTF 单声道）", item.distanceMeters,0.5,8,0.1,(v) => {item.distanceMeters=v;}));
     row.append(makeNumber("淡入 / 秒", item.fadeInSec,0,10,0.05,(v) => {item.fadeInSec=v;}));
     row.append(makeNumber("淡出 / 秒", item.fadeOutSec,0,10,0.05,(v) => {item.fadeOutSec=v;}));
     const loopWrap = document.createElement("div");
@@ -164,6 +165,7 @@ $("fx").addEventListener("change",(event) => {
       atSec: 0,
       gain: 0.22,
       pan: 0,
+      distanceMeters: 1.5,
       fadeInSec: 0.03,
       fadeOutSec: 0.07,
       loop: false,
@@ -227,6 +229,7 @@ async function getBuffers(ctx) {
       atSec: item.atSec,
       gain: item.gain,
       pan: item.pan,
+      distanceMeters: item.distanceMeters,
       loop: item.loop,
       fadeInSec: item.fadeInSec,
       fadeOutSec: item.fadeOutSec,
@@ -242,7 +245,7 @@ async function getBuffers(ctx) {
   return {voice, timeline, tracks};
 }
 
-function attachNode(ctx, buffer, at, length, gain, pan, fadeIn, fadeOut, loop, destination, spatialMode) {
+function attachNode(ctx, buffer, at, length, gain, pan, fadeIn, fadeOut, loop, destination, spatialMode, distanceMeters = 1.5) {
   if (length <= 0) return;
   const source = ctx.createBufferSource();
   source.buffer = buffer;
@@ -256,17 +259,18 @@ function attachNode(ctx, buffer, at, length, gain, pan, fadeIn, fadeOut, loop, d
     try {
       const panner = ctx.createPanner();
       panner.panningModel = "HRTF";
-      panner.distanceModel = "linear";
-      panner.refDistance = 1;
-      panner.maxDistance = 2;
-      panner.rolloffFactor = 0;
+      panner.distanceModel = "inverse";
+      panner.refDistance = 1.5;
+      panner.maxDistance = 8;
+      panner.rolloffFactor = 0.7;
       panner.coneInnerAngle = 360;
       panner.coneOuterAngle = 360;
       panner.coneOuterGain = 1;
-      const x = Math.max(-1, Math.min(1, pan));
-      panner.positionX.value = x;
+      const angle = Math.max(-1, Math.min(1, pan)) * Math.PI / 2;
+      const distance = Math.max(0.5, Math.min(8, distanceMeters));
+      panner.positionX.value = Math.sin(angle) * distance;
       panner.positionY.value = 0;
-      panner.positionZ.value = -Math.sqrt(Math.max(0, 1 - x * x));
+      panner.positionZ.value = -Math.cos(angle) * distance;
       panner.orientationX.value = 0;
       panner.orientationY.value = 0;
       panner.orientationZ.value = 1;
@@ -358,7 +362,7 @@ function schedule(ctx, bundle, start) {
     const bus = cue.kind === "ambience" ? ambienceBus : foleyBus;
     attachNode(
       ctx, buffer, start + cue.atSec, length, cue.gain, cue.pan,
-      cue.fadeInSec, cue.fadeOutSec, cue.loop, bus, mixSettings.spatialMode
+      cue.fadeInSec, cue.fadeOutSec, cue.loop, bus, mixSettings.spatialMode, cue.distanceMeters
     );
   });
 }

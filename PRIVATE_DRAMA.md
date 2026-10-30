@@ -1,4 +1,4 @@
-# Shin · Private Drama Lab (v1.4.0-beta.4)
+# Shin · Private Drama Lab (v1.4.0-beta.5)
 
 This is an **experimental**, independent preview of multitrack voice / sound-effect mixing.
 It lives on the `voice-v1.4-private-drama` branch. **Do not replace the stable
@@ -42,6 +42,14 @@ The selected target is **immersive foreground voice + headphone spatial depth + 
 - Regression coverage and HTTP smoke tests.
 
 The normal `speak` MCP tool is **unchanged** in this branch.
+
+## Platform-neutral runtime
+
+The canonical entrypoint is `src/server.mjs` and `npm start` uses it. The old
+`src/zeabur-server.mjs` path is a compatibility shim only. No Zeabur-specific
+SDK or API is used by the experimental runtime. Configure storage with a
+filesystem path and mount persistent storage when running in an ephemeral
+container.
 
 ## Private HTTP access
 

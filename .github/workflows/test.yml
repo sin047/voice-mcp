@@ -91,6 +91,9 @@ jobs:
             assert.match(payload.assets[0].id, /^fx_/);
             assert.equal(payload.assets[0].name, "ci-test.wav");
           '
+          ASSET_ID=$(node --input-type=module -e 'import fs from "node:fs"; const payload=JSON.parse(fs.readFileSync("/tmp/assets-list.json","utf8")); process.stdout.write(payload.assets[0].id);')
+          ASSET_DELETE=$(curl -s -o /tmp/asset-delete.json -w '%{http_code}' -u "voice-mcp:$TEST_ACCESS_TOKEN" -X DELETE "http://127.0.0.1:8765/assets/$ASSET_ID")
+          test "$ASSET_DELETE" = "204"
           PREVIEW_UNAUTH=$(curl -s -o /tmp/drama-unauthorized.json -w '%{http_code}' http://127.0.0.1:8765/drama-preview)
           test "$PREVIEW_UNAUTH" = "401"
           curl -fsS -u "voice-mcp:$TEST_ACCESS_TOKEN" http://127.0.0.1:8765/drama-preview -o /tmp/drama-preview.html

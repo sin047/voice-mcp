@@ -29,7 +29,7 @@ const MODEL_ID = process.env.ELEVENLABS_MODEL_ID || "eleven_v4";
 const OUTPUT_FORMAT = process.env.ELEVENLABS_OUTPUT_FORMAT || "mp3_44100_128";
 const PLAYER_URI = "ui://voice-mcp/player.html";
 const PLAYER_MIME = "text/html;profile=mcp-app";
-const VERSION = "1.4.0-beta.8";
+const VERSION = "1.4.0-beta.9";
 const MAX_CONTEXT_CHARS = 4000;
 const MAX_SPEAK_CHARS = 4000;
 const MAX_SOUND_SCAPE_TEXT_CHARS = 1200;
@@ -472,6 +472,8 @@ function createServer() {
                 asset_id: cue.fileId,
                 kind: cue.kind,
                 at_sec: cue.atSec,
+                source_offset_sec: cue.sourceOffsetSec,
+                gain: cue.gain,
                 pan: cue.pan,
                 distance_meters: cue.distanceMeters,
               })),

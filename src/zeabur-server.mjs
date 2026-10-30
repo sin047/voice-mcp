@@ -1,5 +1,6 @@
 import express from "express";
 import { createAccessGuard } from "./http-auth.mjs";
+import { createFixedWindowRateLimiter, createVoiceUsageGuard } from "./usage-guard.mjs";
 import process from "node:process";
 import { readFile } from "node:fs/promises";
 import { dramaPreviewHtml } from "./drama-preview.mjs";
@@ -24,8 +25,19 @@ const MODEL_ID = process.env.ELEVENLABS_MODEL_ID || "eleven_v4";
 const OUTPUT_FORMAT = process.env.ELEVENLABS_OUTPUT_FORMAT || "mp3_44100_128";
 const PLAYER_URI = "ui://voice-mcp/player.html";
 const PLAYER_MIME = "text/html;profile=mcp-app";
-const VERSION = "1.4.0-beta.3";
+const VERSION = "1.4.0-beta.4";
 const MAX_CONTEXT_CHARS = 4000;
+const MAX_SPEAK_CHARS = 4000;
+const mcpRequestLimiter = createFixedWindowRateLimiter({
+  limit: process.env.MCP_MAX_REQUESTS_PER_MINUTE || 120,
+});
+const voiceUsageGuard = createVoiceUsageGuard({
+  maxBillableCharsPerRequest: process.env.VOICE_MAX_BILLABLE_CHARS_PER_REQUEST || 4200,
+  maxCallsPerMinute: process.env.VOICE_MAX_CALLS_PER_MINUTE || 8,
+  maxCallsPerDay: process.env.VOICE_MAX_CALLS_PER_DAY || 120,
+  maxCharsPerDay: process.env.VOICE_MAX_CHARS_PER_DAY || 12000,
+  maxConcurrent: process.env.VOICE_MAX_CONCURRENT_SYNTHESIS || 2,
+});
 const PRIVATE_DRAMA_ACCESS_TOKEN = process.env.PRIVATE_DRAMA_ACCESS_TOKEN || "";
 const requirePrivateHttpAccess = createAccessGuard({
   token: PRIVATE_DRAMA_ACCESS_TOKEN,
@@ -108,6 +120,13 @@ function buildText(text, style, rawTags, direction, performance) {
 }
 
 async function synthesize(text, options = {}) {
+  if (typeof text !== "string" || !text.trim()) throw new Error("text must not be empty");
+  if (text.length > MAX_SPEAK_CHARS) {
+    const error = new Error("text exceeds the 4000 character limit");
+    error.statusCode = 413;
+    throw error;
+  }
+
   const {
     style,
     rawTags,
@@ -161,23 +180,33 @@ async function synthesize(text, options = {}) {
 
   if (nextContext) body.next_text = nextContext;
 
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      "xi-api-key": apiKey,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(body),
-  });
+  // Reserve budget before calling ElevenLabs. Failed upstream attempts still
+  // count against the spend ceiling; the concurrency slot is always released.
+  const releaseUsage = voiceUsageGuard.reserve(finalText);
+  let response;
+  let data;
+  let requestId;
+  try {
+    response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "xi-api-key": apiKey,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    });
 
-  if (!response.ok) {
-    const detail = await response.text();
-    throw new Error(`ElevenLabs API ${response.status}: ${detail}`);
+    if (!response.ok) {
+      const detail = await response.text();
+      throw new Error(`ElevenLabs API ${response.status}: ${detail}`);
+    }
+
+    requestId = response.headers.get("request-id") || response.headers.get("Request-Id") || null;
+    data = await response.json();
+    if (!data.audio_base64) throw new Error("ElevenLabs returned no audio");
+  } finally {
+    releaseUsage();
   }
-
-  const requestId = response.headers.get("request-id") || response.headers.get("Request-Id") || null;
-  const data = await response.json();
-  if (!data.audio_base64) throw new Error("ElevenLabs returned no audio");
 
   latestEvent = {
     id: crypto.randomUUID(),
@@ -277,7 +306,7 @@ function createServer() {
       title: `${BOT_NAME}'s Voice`,
       description: `Make ${BOT_NAME} speak with the configured ElevenLabs voice. Use natural for everyday speech; soft/close for quieter delivery; breathy/expressive only when explicitly requested. Natural is intentionally untagged. Use language=auto unless the language is ambiguous. For adjacent chunks of the SAME voice and model, pass the request_id returned by the immediately preceding call in previous_request_ids (max 3) to improve continuity; otherwise use previous_text / next_text. The tool returns a request_id for the next contiguous chunk. direction is an advanced override; include_alignment is only for timing-aware audio work.`,
       inputSchema: z.object({
-        text: z.string().min(1).describe("Text to speak"),
+        text: z.string().min(1).max(MAX_SPEAK_CHARS).describe("Text to speak (maximum 4000 characters)"),
         performance: z.enum(["auto", "natural", "soft", "close", "breathy", "expressive"]).optional().describe("High-level delivery mode. Prefer natural for everyday speech. Use breathy/expressive only when context explicitly calls for stronger breath/performance. Defaults to auto/natural."),
         language: z.enum(["auto", "zh", "ja", "en", "ko"]).optional().describe("Language override. Auto-detects Japanese kana, Korean Hangul, Chinese Han characters and English; set explicitly for kanji-only Japanese or ambiguous mixed text."),
         direction: z.string().max(180).optional().describe("Advanced free-form English voice direction override, without square brackets. Prefer performance for normal GPT use."),
@@ -343,6 +372,12 @@ function createServer() {
 }
 
 app.all("/mcp", async (req, res) => {
+  const requestBudget = mcpRequestLimiter();
+  if (!requestBudget.allowed) {
+    res.setHeader("Retry-After", String(requestBudget.retryAfterSeconds));
+    return res.status(429).json({ error: "MCP request rate limit reached" });
+  }
+
   const mcp = createServer();
   const transport = new StreamableHTTPServerTransport({
     sessionIdGenerator: undefined,
@@ -431,7 +466,11 @@ app.get("/speak", async (req, res) => {
     res.send(audio);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    res.status(500).json({ error: message });
+    const statusCode = Number.isInteger(error?.statusCode) ? error.statusCode : 500;
+    if (Number.isInteger(error?.retryAfterSeconds) && error.retryAfterSeconds > 0) {
+      res.setHeader("Retry-After", String(error.retryAfterSeconds));
+    }
+    res.status(statusCode).json({ error: message });
   }
 });
 

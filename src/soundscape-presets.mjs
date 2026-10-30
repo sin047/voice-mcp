@@ -4,7 +4,7 @@ const PRESETS = Object.freeze({
       assetName: "雨声",
       kind: "ambience",
       atSec: 0,
-      gain: 0.4,
+      gain: 0.48,
       pan: 0,
       distanceMeters: 1.5,
       fadeInSec: 0.15,

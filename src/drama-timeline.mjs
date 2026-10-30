@@ -52,6 +52,7 @@ export function createDramaTimeline(input) {
     const gain = boundedNumber(cue.gain ?? (kind === "ambience" ? 0.1 : 0.22), "gain", 0, 0.7);
     const pan = boundedNumber(cue.pan ?? 0, "pan", -1, 1);
     const distanceMeters = boundedNumber(cue.distanceMeters ?? 1.5, "distanceMeters", 0.5, 8);
+    const sourceOffsetSec = boundedNumber(cue.sourceOffsetSec ?? 0, "sourceOffsetSec", 0, MAX_SECONDS);
     const fadeInSec = boundedNumber(cue.fadeInSec ?? (kind === "ambience" ? 1 : 0.03), "fadeInSec", 0, 10);
     const fadeOutSec = boundedNumber(cue.fadeOutSec ?? (kind === "ambience" ? 1 : 0.1), "fadeOutSec", 0, 10);
 
@@ -73,6 +74,7 @@ export function createDramaTimeline(input) {
       gain,
       pan,
       distanceMeters,
+      sourceOffsetSec,
       loop,
       fadeInSec,
       fadeOutSec,

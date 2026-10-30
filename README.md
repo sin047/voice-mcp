@@ -52,8 +52,8 @@ preview. It is experimental and is **not** the stable ChatGPT MCP deployment.
 - One centered Japanese voice track plus up to 12 local sound-effect tracks.
 - Independent ambience and Foley buses, per-cue timing, gain, pan and fades.
 - Optional voice-priority ducking based on the voice track's RMS envelope.
-- Optional browser HRTF positioning for mono effects; stereo source files retain
-  their stereo image.
+- Optional browser HRTF positioning for mono effects, with per-cue near/far
+  distance; stereo source files retain their stereo image.
 - Headphone preview and local stereo WAV export.
 
 See [PRIVATE_DRAMA.md](PRIVATE_DRAMA.md) for setup, limitations, privacy and

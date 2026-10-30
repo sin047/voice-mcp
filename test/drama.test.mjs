@@ -22,6 +22,7 @@ test("creates a restrained private drama cue sheet with local-only references", 
   assert.deepEqual(timeline.cues.map((cue) => cue.gain), [0.1, 0.22]);
   assert.equal(timeline.cues[0].loop, true);
   assert.equal(timeline.cues[1].pan, -0.5);
+  assert.equal(timeline.cues[1].distanceMeters, 1.5);
   assert.equal(timeline.cues[1].loop, false);
   assert.ok(Object.isFrozen(timeline));
   assert.ok(Object.isFrozen(timeline.cues));
@@ -46,6 +47,7 @@ test("validates gain, pan, start time and total cue count", () => {
   assert.throws(() => createDramaTimeline({ voiceDurationSec: 5, cues: Array.from({ length: 13 }, () => ({ fileId: "f", kind: "foley" })) }), /at most/);
   assert.equal(DRAMA_TIMELINE_LIMITS.maxSeconds, 180);
   assert.deepEqual(DRAMA_TIMELINE_LIMITS.spatialModes, ["stereo", "hrtf"]);
+  assert.deepEqual(DRAMA_TIMELINE_LIMITS.distanceMeters, { min: 0.5, max: 8, default: 1.5 });
 });
 
 test("rejects non-finite duration and invalid fades", () => {
@@ -77,6 +79,8 @@ test("validates mix buses, ducking and spatial modes", () => {
   assert.throws(() => createDramaTimeline({ voiceDurationSec: 5, masterGain: 2 }), /masterGain/);
   assert.throws(() => createDramaTimeline({ voiceDurationSec: 5, duckingAmount: 1.2 }), /duckingAmount/);
   assert.throws(() => createDramaTimeline({ voiceDurationSec: 5, spatialMode: "surround" }), /spatialMode/);
+  assert.throws(() => createDramaTimeline({ voiceDurationSec: 5, cues: [{ fileId: "fx", kind: "foley", distanceMeters: 0.2 }] }), /distanceMeters/);
+  assert.throws(() => createDramaTimeline({ voiceDurationSec: 5, cues: [{ fileId: "fx", kind: "foley", distanceMeters: 9 }] }), /distanceMeters/);
 });
 test("voice ducking envelope lowers effects during speech and releases through silence", () => {
   const samples = new Float32Array(1000);
@@ -100,7 +104,7 @@ test("voice ducking envelope lowers effects during speech and releases through s
 });
 test("local preview has a player, multitrack cue editing, optional TTS and WAV export", () => {
   const html = dramaPreviewHtml();
-  for (const marker of ['id="voice"', 'id="fx"', 'id="preview"', 'id="export"', 'id="generateVoice"', 'id="ambienceBusGain"', 'id="foleyBusGain"', 'id="spatialMode"', 'id="duckingEnabled"', '淡入 / 秒', '淡出 / 秒', "scheduleVoiceDucking", "createVoiceDuckingEnvelope", 'panner.panningModel = "HRTF"', "OfflineAudioContext", "encodeWav", "createDramaTimeline", 'type="module"']) {
+  for (const marker of ['id="voice"', 'id="fx"', 'id="preview"', 'id="export"', 'id="generateVoice"', 'id="ambienceBusGain"', 'id="foleyBusGain"', 'id="spatialMode"', 'id="duckingEnabled"', '淡入 / 秒', '淡出 / 秒', '距离 / 米（HRTF 单声道）', 'distanceModel = "inverse"', "scheduleVoiceDucking", "createVoiceDuckingEnvelope", 'panner.panningModel = "HRTF"', "OfflineAudioContext", "encodeWav", "createDramaTimeline", 'type="module"']) {
     assert.ok(html.includes(marker), "Missing preview feature: " + marker);
   }
   assert.ok(html.includes("本机"));

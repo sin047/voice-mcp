@@ -188,6 +188,36 @@ function getEnvelopeGain(envelope, sampleIndex, frameSize) {
   return envelope[frameIndex]?.gain ?? 1;
 }
 
+/**
+ * Quiet ambient recordings often have a low average level even after
+ * peak-normalization (rain is an example). Raise only the quiet ambience bed,
+ * while preserving stereo differences and never boosting a peak past ~0.9.
+ * This is intentionally separate from per-cue gain and voice ducking.
+ */
+function ambienceLoudnessBoost(channels) {
+  const frames = channels[0]?.length || 0;
+  if (!frames) return 1;
+  const stride = Math.max(1, Math.floor(frames / 200_000));
+  let squared = 0;
+  let count = 0;
+  let peak = 0;
+
+  for (const channel of channels) {
+    for (let i = 0; i < frames; i += stride) {
+      const value = channel[i];
+      squared += value * value;
+      peak = Math.max(peak, Math.abs(value));
+      count += 1;
+    }
+  }
+
+  const rms = count ? Math.sqrt(squared / count) : 0;
+  if (rms <= 0.000001 || peak <= 0.000001) return 1;
+  const desiredRms = 0.09;
+  const headroomCap = Math.max(1, 0.9 / peak);
+  return Math.max(1, Math.min(4, desiredRms / rms, headroomCap));
+}
+
 export function mixSoundscape({
   voicePcm,
   assets,
@@ -266,7 +296,14 @@ export function mixSoundscape({
     const panAngle = ((cue.pan + 1) / 2) * Math.PI / 2;
     const monoLeft = Math.cos(panAngle);
     const monoRight = Math.sin(panAngle);
-    const distanceGain = Math.min(1, 1 / (1 + 0.7 * Math.max(0, cue.distanceMeters - 1.5)));
+    // Ambience is a surrounding stereo bed, not a distant point source.
+    // Applying distance attenuation to rain made it practically inaudible.
+    const distanceGain = cue.kind === "ambience"
+      ? 1
+      : Math.min(1, 1 / (1 + 0.7 * Math.max(0, cue.distanceMeters - 1.5)));
+    const ambienceBoost = cue.kind === "ambience"
+      ? ambienceLoudnessBoost(sourceChannels)
+      : 1;
     const fadeInFrames = Math.round(cue.fadeInSec * TARGET_SAMPLE_RATE);
     const fadeOutFrames = Math.round(cue.fadeOutSec * TARGET_SAMPLE_RATE);
     const fadeOutStart = cueFrames - fadeOutFrames;
@@ -282,7 +319,7 @@ export function mixSoundscape({
         fade = Math.min(fade, Math.max(0, (cueFrames - frame) / fadeOutFrames));
       }
       const duckGain = getEnvelopeGain(envelope, startFrame + frame, frameSize);
-      const gain = cue.gain * busGain * distanceGain * fade * duckGain;
+      const gain = cue.gain * busGain * distanceGain * ambienceBoost * fade * duckGain;
       const targetFrame = startFrame + frame;
 
       if (sourceChannels.length === 1) {

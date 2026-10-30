@@ -56,7 +56,7 @@ function normalizeContext(value, fieldName) {
 
 
 function buildText(text, style, rawTags, direction, performance) {
-  const supportsTags = ["eleven_v3", "eleven_v4", "eleven_v4_turbo"].includes(MODEL_ID);
+  const supportsTags = ["eleven_v3", "eleven_v3_conversational", "eleven_v4", "eleven_v4_turbo"].includes(MODEL_ID);
   if (!supportsTags) {
     const requestedMode = normalizePerformance(performance);
     return {

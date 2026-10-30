@@ -25,8 +25,6 @@ const PLAYER_MIME = "text/html;profile=mcp-app";
 const VERSION = "1.3.0";
 const MAX_CONTEXT_CHARS = 4000;
 
-const RECENT_PATTERN_LIMIT = 6;
-
 let latestEvent = null;
 const recentPerformancePatterns = [];
 
@@ -249,13 +247,16 @@ function createServer() {
     "speak",
     {
       title: `${BOT_NAME}'s Voice`,
-      description: `Make ${BOT_NAME} speak with the configured ElevenLabs voice. Choose performance from conversational context: natural for normal chat; soft or close for quiet/intimate delivery; breathy or expressive only when the user clearly asks for a breathier or more performed delivery. Usually text + performance is enough. direction is an advanced override. previous_text / next_text preserve prosody across adjacent chunks.`,
+      description: `Make ${BOT_NAME} speak with the configured ElevenLabs voice. Use natural for everyday speech; soft/close for quieter delivery; breathy/expressive only when explicitly requested. Natural is intentionally untagged. Use language=auto unless the language is ambiguous. For adjacent chunks of the SAME voice and model, pass the request_id returned by the immediately preceding call in previous_request_ids (max 3) to improve continuity; otherwise use previous_text / next_text. The tool returns a request_id for the next contiguous chunk. direction is an advanced override; include_alignment is only for timing-aware audio work.`,
       inputSchema: z.object({
         text: z.string().min(1).describe("Text to speak"),
         performance: z.enum(["auto", "natural", "soft", "close", "breathy", "expressive"]).optional().describe("High-level delivery mode. Prefer natural for everyday speech. Use breathy/expressive only when context explicitly calls for stronger breath/performance. Defaults to auto/natural."),
+        language: z.enum(["auto", "zh", "ja", "en", "ko"]).optional().describe("Language override. Auto-detects Japanese kana, Korean Hangul, Chinese Han characters and English; set explicitly for kanji-only Japanese or ambiguous mixed text."),
         direction: z.string().max(180).optional().describe("Advanced free-form English voice direction override, without square brackets. Prefer performance for normal GPT use."),
         previous_text: z.string().max(MAX_CONTEXT_CHARS).optional().describe("Plain text immediately before this chunk. Used only as prosody context and not spoken again."),
         next_text: z.string().max(MAX_CONTEXT_CHARS).optional().describe("Plain text immediately after this chunk. Used only as prosody context and not spoken in this chunk."),
+        previous_request_ids: z.array(z.string().min(1).max(128)).max(3).optional().describe("Advanced continuity: request_id values returned by immediately preceding chunks generated with the same ElevenLabs model and voice. Do not reuse IDs from unrelated conversations or voices."),
+        include_alignment: z.boolean().optional().describe("Return character-level timestamps from the with-timestamps endpoint. Keep false for normal ChatGPT voice playback; use true only for timing-aware captions or audio effects."),
         style: z.string().optional().describe("Legacy preset: soft, teasing, excited, tired, laughing, or curious. Ignored when direction is set."),
         raw_tags: z.boolean().optional().describe("Preserve inline ElevenLabs audio tags already present in text"),
       }),
@@ -264,13 +265,16 @@ function createServer() {
         "ui/resourceUri": PLAYER_URI,
       },
     },
-    async ({ text, performance, direction, previous_text, next_text, style, raw_tags }) => {
+    async ({ text, performance, language, direction, previous_text, next_text, previous_request_ids, include_alignment, style, raw_tags }) => {
       try {
         const result = await synthesize(text, {
           performance,
+          language,
           direction,
           previousText: previous_text,
           nextText: next_text,
+          previousRequestIds: previous_request_ids,
+          includeAlignment: include_alignment,
           style,
           rawTags: raw_tags,
         });
@@ -282,9 +286,17 @@ function createServer() {
             audio_base64: result.audio_base64,
             performance: result.performance,
             direction: result.performance?.direction || normalizeDirection(direction) || null,
+            language: result.language,
+            request_id: result.request_id,
+            voice_settings: result.voice_settings,
+            ...(include_alignment ? {
+              alignment: result.alignment,
+              normalized_alignment: result.normalized_alignment,
+            } : {}),
             continuity: {
               previous_text: result.previous_text || null,
               next_text: result.next_text || null,
+              previous_request_ids: previous_request_ids || [],
             },
           },
         };
@@ -330,7 +342,7 @@ app.get("/status", (_req, res) => {
     runtime: "node",
     provider: "elevenlabs",
     model_id: MODEL_ID,
-    configured: Boolean(process.env.ELEVENLABS_API_KEY && (process.env.ELEVENLABS_VOICE_ID || process.env.ELEVENLABS_VOICE_ID_ZH || process.env.ELEVENLABS_VOICE_ID_EN)),
+    configured: Boolean(process.env.ELEVENLABS_API_KEY && (process.env.ELEVENLABS_VOICE_ID || process.env.ELEVENLABS_VOICE_ID_ZH || process.env.ELEVENLABS_VOICE_ID_JA || process.env.ELEVENLABS_VOICE_ID_EN || process.env.ELEVENLABS_VOICE_ID_KO)),
     bot_name: BOT_NAME,
     features: {
       free_direction: true,
@@ -339,6 +351,10 @@ app.get("/status", (_req, res) => {
       tag_guard: true,
       restrained_breath_planner: true,
       continuity_context: true,
+      request_id_continuity: true,
+      language_auto_detection: true,
+      japanese_text_normalization_opt_in: true,
+      character_alignment: true,
       legacy_style_presets: true,
       inline_audio_tags: true,
     },
@@ -355,17 +371,23 @@ app.get("/speak", async (req, res) => {
     const text = String(req.query.text || "");
     const style = req.query.style ? String(req.query.style) : undefined;
     const performance = req.query.performance ? String(req.query.performance) : undefined;
+    const language = req.query.language ? String(req.query.language) : undefined;
     const direction = req.query.direction ? String(req.query.direction) : undefined;
     const previousText = req.query.previous_text ? String(req.query.previous_text) : undefined;
     const nextText = req.query.next_text ? String(req.query.next_text) : undefined;
     const rawTags = req.query.raw_tags === undefined
       ? undefined
       : String(req.query.raw_tags).toLowerCase() === "true";
+    const previousRequestIds = req.query.previous_request_ids
+      ? String(req.query.previous_request_ids).split(",").map((id) => id.trim()).filter(Boolean).slice(-3)
+      : undefined;
 
     const result = await synthesize(text, {
       style,
       performance,
+      language,
       direction,
+      previousRequestIds,
       previousText,
       nextText,
       rawTags,

@@ -433,8 +433,8 @@ app.get("/speak", async (req, res) => {
 });
 
 // POST keeps the spoken text out of URL logs and browser history.
-// This existing deployment remains unauthenticated; do not expose it publicly
-// with an unrestricted paid ElevenLabs key.
+// HTTP access is gated by PRIVATE_DRAMA_ACCESS_TOKEN above. The separate /mcp
+// connector route remains unauthenticated for compatibility with the existing setup.
 app.post("/speak", async (req, res) => {
   const text = req.body?.text;
   if (typeof text !== "string" || !text.trim() || text.length > 4000) {

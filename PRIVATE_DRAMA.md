@@ -1,4 +1,4 @@
-# Shin · Private Drama Lab (v1.4.0-beta.2)
+# Shin · Private Drama Lab (v1.4.0-beta.3)
 
 This is an **experimental**, independent preview of multitrack voice / sound-effect mixing.
 It lives on the `voice-v1.4-private-drama` branch. **Do not replace the stable

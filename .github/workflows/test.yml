@@ -1,0 +1,22 @@
+name: voice-mcp checks
+
+on:
+  push:
+    branches: [zeabur, voice-v1.3-quality]
+  pull_request:
+    branches: [zeabur]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Syntax check
+        run: |
+          node --check src/zeabur-server.mjs
+          node --check src/performance.mjs
+      - name: Regression tests
+        run: npm test

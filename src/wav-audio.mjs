@@ -243,9 +243,12 @@ export function mixSoundscape({
   for (const cue of timeline.cues) {
     const asset = assets instanceof Map ? assets.get(cue.fileId) : assets?.[cue.fileId];
     if (!asset) throw new Error("Audio asset not found: " + cue.fileId);
-    const decoded = asset.channels
+    const assetBytes = Buffer.isBuffer(asset) || asset instanceof Uint8Array
       ? asset
-      : decodePcmWav(asset.buffer ?? asset);
+      : asset?.buffer;
+    const decoded = asset?.channels
+      ? asset
+      : decodePcmWav(assetBytes);
     const sourceChannels = resampleChannels(decoded.channels, decoded.sampleRate, TARGET_SAMPLE_RATE);
     const sourceFrames = sourceChannels[0].length;
     const startFrame = Math.round(cue.atSec * TARGET_SAMPLE_RATE);

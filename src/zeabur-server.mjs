@@ -13,8 +13,33 @@ const MODEL_ID = process.env.ELEVENLABS_MODEL_ID || "eleven_v4";
 const OUTPUT_FORMAT = process.env.ELEVENLABS_OUTPUT_FORMAT || "mp3_44100_128";
 const PLAYER_URI = "ui://voice-mcp/player.html";
 const PLAYER_MIME = "text/html;profile=mcp-app";
-const VERSION = "1.2.0";
+const VERSION = "1.3.0";
 const MAX_CONTEXT_CHARS = 4000;
+
+const PERFORMANCE_MODES = new Set(["auto", "natural", "soft", "close", "breathy", "expressive"]);
+const PERFORMANCE_PRESETS = {
+  natural: "warm, natural, conversational, unhurried",
+  soft: "soft, warm, quiet, unhurried",
+  close: "low, close, quiet, unhurried",
+  breathy: "low, close, restrained, unhurried",
+  expressive: "close, warm, expressive, unhurried",
+};
+
+const BREATH_PATTERNS = {
+  breathy: [
+    { id: "exhale", tag: "[exhales]" },
+    { id: "pause", tag: "[short pause]" },
+    { id: "none", tag: "" },
+  ],
+  expressive: [
+    { id: "exhale", tag: "[exhales]" },
+    { id: "sigh", tag: "[sighs]" },
+    { id: "pause", tag: "[short pause]" },
+  ],
+};
+
+const RECENT_PATTERN_LIMIT = 6;
+const recentPerformancePatterns = [];
 
 let latestEvent = null;
 
@@ -80,28 +105,148 @@ function normalizeContext(value, fieldName) {
   return context;
 }
 
+function normalizePerformance(value) {
+  const mode = String(value ?? "auto").trim().toLowerCase() || "auto";
+  if (!PERFORMANCE_MODES.has(mode)) {
+    throw new Error(`Unknown performance mode: ${mode}`);
+  }
+  return mode;
+}
+
+function speakableCharCount(text) {
+  return stripAudioTags(String(text ?? ""))
+    .replace(/[\s\p{P}\p{S}]/gu, "")
+    .length;
+}
+
+function directionWordCount(value) {
+  return (String(value ?? "").match(/[A-Za-z0-9'-]+/g) || []).length;
+}
+
+function trimDirectionForText(direction, text) {
+  const normalized = normalizeDirection(direction);
+  if (!normalized) return undefined;
+
+  const chars = Math.max(1, speakableCharCount(text));
+  const allow = Math.max(4, Math.min(12, Math.floor(chars * 0.55)));
+  const parts = normalized.split(",").map((part) => part.trim()).filter(Boolean);
+  const totalWords = () => parts.reduce((sum, part) => sum + directionWordCount(part), 0);
+
+  while (parts.length > 1 && totalWords() > allow) {
+    parts.pop();
+  }
+
+  if (totalWords() > allow && parts.length === 1) {
+    parts[0] = parts[0].split(/\s+/).slice(0, allow).join(" ");
+  }
+
+  return parts.join(", ") || undefined;
+}
+
+function pickBreathPattern(mode, text) {
+  const options = BREATH_PATTERNS[mode];
+  if (!options || speakableCharCount(text) < 8) return null;
+
+  const recentlyUsed = new Set(recentPerformancePatterns.slice(-3));
+  const fresh = options.filter((item) => !recentlyUsed.has(item.id));
+  const pool = fresh.length ? fresh : options;
+
+  let hash = 0;
+  for (const ch of stripAudioTags(text)) hash = (hash * 31 + ch.codePointAt(0)) >>> 0;
+  const picked = pool[hash % pool.length];
+
+  recentPerformancePatterns.push(picked.id);
+  if (recentPerformancePatterns.length > RECENT_PATTERN_LIMIT) recentPerformancePatterns.shift();
+  return picked;
+}
+
+function insertPerformanceEvent(text, tag) {
+  if (!tag) return text;
+  const source = String(text ?? "").trim();
+  if (!source) return source;
+
+  const candidates = [];
+  const boundary = /(……|[，,。！？!?；;])/g;
+  let match;
+  while ((match = boundary.exec(source)) !== null) {
+    const ratio = (match.index + match[0].length) / Math.max(1, source.length);
+    if (ratio >= 0.25 && ratio <= 0.72) {
+      candidates.push(match.index + match[0].length);
+    }
+  }
+
+  if (candidates.length) {
+    const at = candidates[0];
+    return `${source.slice(0, at)} ${tag} ${source.slice(at).trimStart()}`;
+  }
+
+  if (speakableCharCount(source) >= 18) {
+    return `${tag} ${source}`;
+  }
+
+  return source;
+}
+
+function createPerformancePlan(text, { performance, direction, style, rawTags } = {}) {
+  const requestedMode = normalizePerformance(performance);
+  const mode = requestedMode === "auto" ? "natural" : requestedMode;
+  const preserveInlineTags = rawTags === true;
+  const baseText = preserveInlineTags ? String(text ?? "").trim() : stripAudioTags(text);
+
+  const explicitDirection = normalizeDirection(direction);
+  const legacyTag = !explicitDirection && (!performance || requestedMode === "auto") && style
+    ? styleTags[String(style).trim().toLowerCase()]
+    : undefined;
+
+  let selectedDirection = explicitDirection;
+  if (!selectedDirection && !legacyTag) {
+    selectedDirection = PERFORMANCE_PRESETS[mode] || PERFORMANCE_PRESETS.natural;
+  }
+
+  const safeDirection = trimDirectionForText(selectedDirection, baseText);
+  const breathPattern = !preserveInlineTags && (mode === "breathy" || mode === "expressive")
+    ? pickBreathPattern(mode, baseText)
+    : null;
+
+  return {
+    requested_mode: requestedMode,
+    mode,
+    direction: safeDirection,
+    legacy_tag: legacyTag,
+    breath_event: breathPattern?.id || null,
+    rendered_text: breathPattern ? insertPerformanceEvent(baseText, breathPattern.tag) : baseText,
+    raw_tags_preserved: preserveInlineTags,
+  };
+}
+
 function getVoiceId(text) {
   const isZh = /[\u3400-\u9fff\uf900-\ufaff]/.test(stripAudioTags(text));
   if (isZh) return process.env.ELEVENLABS_VOICE_ID_ZH || process.env.ELEVENLABS_VOICE_ID;
   return process.env.ELEVENLABS_VOICE_ID_EN || process.env.ELEVENLABS_VOICE_ID;
 }
 
-function buildText(text, style, rawTags, direction) {
+function buildText(text, style, rawTags, direction, performance) {
   const supportsTags = ["eleven_v3", "eleven_v4", "eleven_v4_turbo"].includes(MODEL_ID);
-  if (!supportsTags) return stripAudioTags(text);
-
-  const freeDirection = normalizeDirection(direction);
-  const preserveInlineTags = rawTags === true || (rawTags === undefined && hasAudioTags(text));
-
-  if (preserveInlineTags) {
-    return freeDirection ? `[${freeDirection}] ${String(text).trim()}` : String(text).trim();
+  if (!supportsTags) {
+    return {
+      finalText: stripAudioTags(text),
+      plan: {
+        requested_mode: normalizePerformance(performance),
+        mode: "natural",
+        direction: null,
+        legacy_tag: null,
+        breath_event: null,
+        rendered_text: stripAudioTags(text),
+        raw_tags_preserved: false,
+      },
+    };
   }
 
-  const clean = stripAudioTags(text);
-  const legacyTag = style ? styleTags[String(style).trim().toLowerCase()] : undefined;
-  const tag = freeDirection ? `[${freeDirection}]` : legacyTag;
+  const plan = createPerformancePlan(text, { performance, direction, style, rawTags });
+  const tag = plan.direction ? `[${plan.direction}]` : plan.legacy_tag;
+  const finalText = tag ? `${tag} ${plan.rendered_text}` : plan.rendered_text;
 
-  return tag ? `${tag} ${clean}` : clean;
+  return { finalText, plan };
 }
 
 function voiceSettings() {
@@ -118,6 +263,7 @@ async function synthesize(text, options = {}) {
     style,
     rawTags,
     direction,
+    performance,
     previousText,
     nextText,
   } = options;
@@ -128,7 +274,9 @@ async function synthesize(text, options = {}) {
   if (!apiKey) throw new Error("ELEVENLABS_API_KEY is not configured");
   if (!voiceId) throw new Error("ELEVENLABS_VOICE_ID is not configured");
 
-  const finalText = buildText(text, style, rawTags, direction);
+  const built = buildText(text, style, rawTags, direction, performance);
+  const finalText = built.finalText;
+  const performancePlan = built.plan;
   if (!stripAudioTags(finalText)) throw new Error("No speakable text");
 
   const previousContext = normalizeContext(previousText, "previous_text");
@@ -169,7 +317,8 @@ async function synthesize(text, options = {}) {
     audio_base64: data.audio_base64,
     created_at: new Date().toISOString(),
     style: style || null,
-    direction: normalizeDirection(direction) || null,
+    direction: performancePlan.direction || normalizeDirection(direction) || null,
+    performance: performancePlan,
     previous_text: previousContext || null,
     next_text: nextContext || null,
   };
@@ -179,6 +328,7 @@ async function synthesize(text, options = {}) {
     final_text: finalText,
     previous_text: previousContext,
     next_text: nextContext,
+    performance: performancePlan,
   };
 }
 
@@ -247,10 +397,11 @@ function createServer() {
     "speak",
     {
       title: `${BOT_NAME}'s Voice`,
-      description: `Make ${BOT_NAME} speak with the configured ElevenLabs voice. Use direction for performance, and previous_text / next_text to preserve prosody across adjacent chunks.`,
+      description: `Make ${BOT_NAME} speak with the configured ElevenLabs voice. Choose performance from conversational context: natural for normal chat; soft or close for quiet/intimate delivery; breathy or expressive only when the user clearly asks for a breathier or more performed delivery. Usually text + performance is enough. direction is an advanced override. previous_text / next_text preserve prosody across adjacent chunks.`,
       inputSchema: z.object({
         text: z.string().min(1).describe("Text to speak"),
-        direction: z.string().max(180).optional().describe("Optional free-form English voice direction, without square brackets. Example: low and close, quiet, unhurried, slight smile in the voice"),
+        performance: z.enum(["auto", "natural", "soft", "close", "breathy", "expressive"]).optional().describe("High-level delivery mode. Prefer natural for everyday speech. Use breathy/expressive only when context explicitly calls for stronger breath/performance. Defaults to auto/natural."),
+        direction: z.string().max(180).optional().describe("Advanced free-form English voice direction override, without square brackets. Prefer performance for normal GPT use."),
         previous_text: z.string().max(MAX_CONTEXT_CHARS).optional().describe("Plain text immediately before this chunk. Used only as prosody context and not spoken again."),
         next_text: z.string().max(MAX_CONTEXT_CHARS).optional().describe("Plain text immediately after this chunk. Used only as prosody context and not spoken in this chunk."),
         style: z.string().optional().describe("Legacy preset: soft, teasing, excited, tired, laughing, or curious. Ignored when direction is set."),
@@ -261,9 +412,10 @@ function createServer() {
         "ui/resourceUri": PLAYER_URI,
       },
     },
-    async ({ text, direction, previous_text, next_text, style, raw_tags }) => {
+    async ({ text, performance, direction, previous_text, next_text, style, raw_tags }) => {
       try {
         const result = await synthesize(text, {
+          performance,
           direction,
           previousText: previous_text,
           nextText: next_text,
@@ -276,7 +428,8 @@ function createServer() {
           structuredContent: {
             text,
             audio_base64: result.audio_base64,
-            direction: normalizeDirection(direction) || null,
+            performance: result.performance,
+            direction: result.performance?.direction || normalizeDirection(direction) || null,
             continuity: {
               previous_text: result.previous_text || null,
               next_text: result.next_text || null,
@@ -329,6 +482,10 @@ app.get("/status", (_req, res) => {
     bot_name: BOT_NAME,
     features: {
       free_direction: true,
+      performance_engine: true,
+      performance_modes: ["auto", "natural", "soft", "close", "breathy", "expressive"],
+      tag_guard: true,
+      restrained_breath_planner: true,
       continuity_context: true,
       legacy_style_presets: true,
       inline_audio_tags: true,
@@ -345,6 +502,7 @@ app.get("/speak", async (req, res) => {
   try {
     const text = String(req.query.text || "");
     const style = req.query.style ? String(req.query.style) : undefined;
+    const performance = req.query.performance ? String(req.query.performance) : undefined;
     const direction = req.query.direction ? String(req.query.direction) : undefined;
     const previousText = req.query.previous_text ? String(req.query.previous_text) : undefined;
     const nextText = req.query.next_text ? String(req.query.next_text) : undefined;
@@ -354,6 +512,7 @@ app.get("/speak", async (req, res) => {
 
     const result = await synthesize(text, {
       style,
+      performance,
       direction,
       previousText,
       nextText,
@@ -371,7 +530,7 @@ app.get("/speak", async (req, res) => {
 });
 
 app.get("/panel", (_req, res) => {
-  res.type("html").send(`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${BOT_NAME} Voice</title><style>body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;max-width:720px;margin:40px auto;padding:0 18px;background:#111;color:#eee}textarea,input{width:100%;box-sizing:border-box;border-radius:14px;padding:14px;background:#1c1c1c;color:#eee;border:1px solid #444}textarea{min-height:110px;margin-top:12px}input{margin-top:12px}button{margin-top:12px;padding:10px 16px;border:0;border-radius:999px}audio{width:100%;margin-top:20px}.hint{opacity:.65;font-size:13px;line-height:1.5}.context{min-height:70px}</style></head><body><h1>${BOT_NAME} Voice</h1><p>voice-mcp ${VERSION} · performance + continuity context</p><textarea id="t" placeholder="这一段真正要说的话"></textarea><input id="d" placeholder="声线指令，例如：low and close, quiet, unhurried"><textarea class="context" id="p" placeholder="上一段文字（可选，只用于语气衔接，不会重复念）"></textarea><textarea class="context" id="n" placeholder="下一段文字（可选，只用于语气衔接，不会提前念）"></textarea><p class="hint">previous / next 只作为 ElevenLabs 的韵律上下文。它们不会出现在这一段音频里。</p><button id="g">生成声音</button><div id="s"></div><audio id="a" controls></audio><script>g.onclick=async()=>{s.textContent="Generating...";const q=new URLSearchParams({text:t.value});if(d.value.trim())q.set("direction",d.value.trim());if(p.value.trim())q.set("previous_text",p.value.trim());if(n.value.trim())q.set("next_text",n.value.trim());const r=await fetch("/speak?"+q.toString());if(!r.ok){s.textContent=await r.text();return}a.src=URL.createObjectURL(await r.blob());s.textContent="Ready";await a.play().catch(()=>{})}</script></body></html>`);
+  res.type("html").send(`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${BOT_NAME} Voice</title><style>body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;max-width:720px;margin:40px auto;padding:0 18px;background:#111;color:#eee}textarea,input{width:100%;box-sizing:border-box;border-radius:14px;padding:14px;background:#1c1c1c;color:#eee;border:1px solid #444}textarea{min-height:110px;margin-top:12px}input{margin-top:12px}button{margin-top:12px;padding:10px 16px;border:0;border-radius:999px}audio{width:100%;margin-top:20px}.hint{opacity:.65;font-size:13px;line-height:1.5}.context{min-height:70px}</style></head><body><h1>${BOT_NAME} Voice</h1><p>voice-mcp ${VERSION} · performance engine + continuity context</p><textarea id="t" placeholder="这一段真正要说的话"></textarea><select id="pm" style="width:100%;box-sizing:border-box;border-radius:14px;padding:14px;background:#1c1c1c;color:#eee;border:1px solid #444;margin-top:12px"><option value="auto">auto / natural</option><option value="soft">soft</option><option value="close">close</option><option value="breathy">breathy</option><option value="expressive">expressive</option></select><input id="d" placeholder="高级声线覆盖（可选），例如：low and close, quiet, unhurried"><textarea class="context" id="p" placeholder="上一段文字（可选，只用于语气衔接，不会重复念）"></textarea><textarea class="context" id="n" placeholder="下一段文字（可选，只用于语气衔接，不会提前念）"></textarea><p class="hint">previous / next 只作为 ElevenLabs 的韵律上下文。它们不会出现在这一段音频里。</p><button id="g">生成声音</button><div id="s"></div><audio id="a" controls></audio><script>g.onclick=async()=>{s.textContent="Generating...";const q=new URLSearchParams({text:t.value,performance:pm.value});if(d.value.trim())q.set("direction",d.value.trim());if(p.value.trim())q.set("previous_text",p.value.trim());if(n.value.trim())q.set("next_text",n.value.trim());const r=await fetch("/speak?"+q.toString());if(!r.ok){s.textContent=await r.text();return}a.src=URL.createObjectURL(await r.blob());s.textContent="Ready";await a.play().catch(()=>{})}</script></body></html>`);
 });
 
 app.get("/", (_req, res) => {

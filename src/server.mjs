@@ -32,6 +32,7 @@ const MAX_CONTEXT_CHARS = 4000;
 const MAX_SPEAK_CHARS = 4000;
 const MAX_SOUND_SCAPE_TEXT_CHARS = 1200;
 const MAX_SOUND_SCAPE_SECONDS = 60;
+const SOUNDSCAPE_MCP_ENABLED = process.env.MCP_SOUNDSCAPE_TOOLS_ENABLED === "true";
 const audioAssetStore = createAudioAssetStore({
   directory: process.env.AUDIO_ASSET_DIR,
   maxAssetBytes: Number(process.env.AUDIO_ASSET_MAX_BYTES || 20 * 1024 * 1024),
@@ -419,6 +420,7 @@ function createServer() {
     },
   );
 
+  if (SOUNDSCAPE_MCP_ENABLED) {
   mcp.registerTool(
     "list_sound_assets",
     {
@@ -580,6 +582,8 @@ function createServer() {
     },
   );
 
+  }
+
   return mcp;
 }
 
@@ -660,7 +664,8 @@ app.get("/status", (_req, res) => {
       japanese_text_normalization_opt_in: true,
       local_drama_preview: true,
       private_audio_asset_library: true,
-      speak_with_soundscape: true,
+      soundscape_mcp_enabled: SOUNDSCAPE_MCP_ENABLED,
+      speak_with_soundscape: SOUNDSCAPE_MCP_ENABLED,
       soundscape_max_seconds: MAX_SOUND_SCAPE_SECONDS,
       character_alignment: true,
       legacy_style_presets: true,

@@ -1,12 +1,13 @@
 {
   "name": "voice-mcp",
-  "version": "1.3.1",
-  "description": "Voice MCP server for ElevenLabs on Zeabur",
+  "version": "1.4.0-beta.7",
+  "description": "Platform-agnostic voice MCP server with ElevenLabs and spatial audio",
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "node src/zeabur-server.mjs",
-    "test": "node --test"
+    "start": "node src/server.mjs",
+    "test": "node --test",
+    "desktop": "node --env-file=.env src/server.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.26.0",

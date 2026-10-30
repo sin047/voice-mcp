@@ -141,8 +141,10 @@ does **not** apply browser HRTF. Browser HRTF remains available in the local
 preview for headphone listening. The soundscape output is limited to 60 seconds
 and uses at most 12 cues.
 
-`MCP_PUBLIC_BASE_URL` must be configured as the public HTTPS origin (no path)
-so the MCP tool can return a playable URL. This setting is provider-neutral.
+`MCP_PUBLIC_BASE_URL` should be configured as the public HTTPS origin (no path)
+so the MCP tool can return a playable URL. On Zeabur, the server automatically
+falls back to the injected `ZEABUR_WEB_URL` special variable when the explicit
+setting is absent. This setting is provider-neutral.
 
 ## MCP request and ElevenLabs usage guardrails
 

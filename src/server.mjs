@@ -3,6 +3,7 @@ import { createAccessGuard } from "./http-auth.mjs";
 import { createFixedWindowRateLimiter, createVoiceUsageGuard } from "./usage-guard.mjs";
 import { createAudioAssetStore } from "./audio-assets.mjs";
 import { decodeRawPcm16, mixSoundscape } from "./wav-audio.mjs";
+import { buildSoundscapePresetCues, parseSoundscapeDirective } from "./soundscape-presets.mjs";
 import process from "node:process";
 import { readFile } from "node:fs/promises";
 import { dramaPreviewHtml } from "./drama-preview.mjs";
@@ -356,12 +357,12 @@ function createServer() {
     "speak",
     {
       title: `${BOT_NAME}'s Voice`,
-      description: `Make ${BOT_NAME} speak with the configured ElevenLabs voice. Use natural for everyday speech; soft/close for quieter delivery; breathy/expressive only when explicitly requested. Natural is intentionally untagged. Use language=auto unless the language is ambiguous. For adjacent chunks of the SAME voice and model, pass the request_id returned by the immediately preceding call in previous_request_ids (max 3) to improve continuity; otherwise use previous_text / next_text. The tool returns a request_id for the next contiguous chunk. direction is an advanced override; include_alignment is only for timing-aware audio work.`,
+      description: `Make ${BOT_NAME} speak with the configured ElevenLabs voice. Use natural for everyday speech; soft/close for quieter delivery; breathy/expressive only when explicitly requested. Natural is intentionally untagged. Use language=auto unless the language is ambiguous. For adjacent chunks of the SAME voice and model, pass the request_id returned by the immediately preceding call in previous_request_ids (max 3) to improve continuity; otherwise use previous_text / next_text. The tool returns a request_id for the next contiguous chunk. direction is an advanced override. To add a soundscape while keeping this same tool, prefix direction with one marker: [soundscape:rain], [soundscape:desk], [soundscape:package], [soundscape:close], or [soundscape:intimate]. The marker is removed before voice synthesis. Omit it for ordinary voice-only playback. Soundscape playback requires the matching private WAV assets to be uploaded on the server and MCP_PUBLIC_BASE_URL to be configured.`,
       inputSchema: z.object({
         text: z.string().min(1).max(MAX_SPEAK_CHARS).describe("Text to speak (maximum 4000 characters)"),
         performance: z.enum(["auto", "natural", "soft", "close", "breathy", "expressive"]).optional().describe("High-level delivery mode. Prefer natural for everyday speech. Use breathy/expressive only when context explicitly calls for stronger breath/performance. Defaults to auto/natural."),
         language: z.enum(["auto", "zh", "ja", "en", "ko"]).optional().describe("Language override. Auto-detects Japanese kana, Korean Hangul, Chinese Han characters and English; set explicitly for kanji-only Japanese or ambiguous mixed text."),
-        direction: z.string().max(180).optional().describe("Advanced free-form English voice direction override, without square brackets. Prefer performance for normal GPT use."),
+        direction: z.string().max(180).optional().describe("Advanced voice direction. For optional ambience/effects, prefix with [soundscape:rain], [soundscape:desk], [soundscape:package], [soundscape:close], or [soundscape:intimate]; the marker is not spoken."),
         previous_text: z.string().max(MAX_CONTEXT_CHARS).optional().describe("Plain text immediately before this chunk. Used only as prosody context and not spoken again."),
         next_text: z.string().max(MAX_CONTEXT_CHARS).optional().describe("Plain text immediately after this chunk. Used only as prosody context and not spoken in this chunk."),
         previous_request_ids: z.array(z.string().min(1).max(128)).max(3).optional().describe("Advanced continuity: request_id values returned by immediately preceding chunks generated with the same ElevenLabs model and voice. Do not reuse IDs from unrelated conversations or voices."),
@@ -376,10 +377,128 @@ function createServer() {
     },
     async ({ text, performance, language, direction, previous_text, next_text, previous_request_ids, include_alignment, style, raw_tags }) => {
       try {
+        const directive = parseSoundscapeDirective(direction);
+        if (directive.preset) {
+          const baseUrlValue = process.env.MCP_PUBLIC_BASE_URL;
+          if (!baseUrlValue) {
+            throw new Error("MCP_PUBLIC_BASE_URL must be configured before soundscape playback can be returned");
+          }
+          const baseUrl = new URL(baseUrlValue);
+          if (baseUrl.protocol !== "https:" && !["localhost", "127.0.0.1"].includes(baseUrl.hostname)) {
+            throw new Error("MCP_PUBLIC_BASE_URL must use HTTPS");
+          }
+          if (baseUrl.pathname !== "/" || baseUrl.search || baseUrl.hash) {
+            throw new Error("MCP_PUBLIC_BASE_URL must contain only the public origin, without a path");
+          }
+
+          const assetMetadata = await audioAssetStore.list();
+          const preset = buildSoundscapePresetCues(directive.preset, assetMetadata);
+          if (preset.missingAssets.length) {
+            throw new Error(
+              `Soundscape preset "${directive.preset}" is missing uploaded assets: ${preset.missingAssets.join(", ")}. Upload the curated WAV files through /drama-preview first.`,
+            );
+          }
+
+          const loadedAssets = new Map();
+          for (const cue of preset.cues) {
+            if (loadedAssets.has(cue.fileId)) continue;
+            const stored = await audioAssetStore.get(cue.fileId);
+            if (!stored) throw new Error("Sound asset not found: " + cue.fileId);
+            loadedAssets.set(cue.fileId, stored.buffer);
+          }
+
+          const result = await synthesize(text, {
+            performance,
+            language,
+            direction: directive.voiceDirection,
+            previousText: previous_text,
+            nextText: next_text,
+            previousRequestIds: previous_request_ids,
+            includeAlignment: include_alignment,
+            style,
+            rawTags: raw_tags,
+            outputFormat: "pcm_24000",
+            recordEvent: false,
+          });
+          const voicePcm = decodeRawPcm16(Buffer.from(result.audio_base64, "base64"), {
+            sampleRate: 24000,
+            channels: 1,
+          });
+          const mix = mixSoundscape({
+            voicePcm,
+            assets: loadedAssets,
+            cues: preset.cues,
+            voiceGain: 0.96,
+            ambienceBusGain: 0.82,
+            foleyBusGain: 0.9,
+            masterGain: 0.9,
+            duckingEnabled: true,
+            duckingAmount: 0.78,
+          });
+
+          if (mix.buffer.length > 16 * 1024 * 1024) {
+            throw new Error("Mixed audio exceeds the 16 MB playback cache limit");
+          }
+          const now = Date.now();
+          for (const [id, item] of generatedAudioCache) {
+            if (item.expiresAt <= now) generatedAudioCache.delete(id);
+          }
+          while (
+            generatedAudioCache.size >= GENERATED_AUDIO_MAX_ITEMS ||
+            [...generatedAudioCache.values()].reduce((sum, item) => sum + item.buffer.length, 0) + mix.buffer.length > GENERATED_AUDIO_MAX_BYTES
+          ) {
+            const oldestId = generatedAudioCache.keys().next().value;
+            if (!oldestId) break;
+            generatedAudioCache.delete(oldestId);
+          }
+          const audioId = crypto.randomUUID();
+          generatedAudioCache.set(audioId, {
+            buffer: mix.buffer,
+            expiresAt: now + GENERATED_AUDIO_TTL_MS,
+          });
+          const audioUrl = new URL(`/audio/${audioId}`, baseUrl.origin).toString();
+
+          return {
+            content: [{ type: "text", text: `🎙️ ${BOT_NAME}: "${text}" · ${directive.preset} soundscape ready` }],
+            structuredContent: {
+              text,
+              audio_url: audioUrl,
+              audio_mime_type: "audio/wav",
+              duration_sec: mix.durationSec,
+              sample_rate: mix.sampleRate,
+              channels: mix.channels,
+              soundscape_preset: directive.preset,
+              cues: preset.cues.map((cue) => ({
+                asset_id: cue.fileId,
+                kind: cue.kind,
+                at_sec: cue.atSec,
+                pan: cue.pan,
+                distance_meters: cue.distanceMeters,
+              })),
+              performance: result.performance,
+              direction: result.performance?.direction || normalizeDirection(directive.voiceDirection) || null,
+              language: result.language,
+              request_id: result.request_id,
+              voice_settings: result.voice_settings,
+              expires_in_seconds: GENERATED_AUDIO_TTL_MS / 1000,
+              limiter_gain: Number(mix.limiterGain.toFixed(4)),
+              ...(include_alignment ? {
+                alignment: result.alignment,
+                normalized_alignment: result.normalized_alignment,
+              } : {}),
+              continuity: {
+                previous_text: result.previous_text || null,
+                next_text: result.next_text || null,
+                previous_request_ids: previous_request_ids || [],
+              },
+            },
+          };
+        }
+
         const result = await synthesize(text, {
           performance,
           language,
-          direction,
+          direction: directive.voiceDirection,
           previousText: previous_text,
           nextText: next_text,
           previousRequestIds: previous_request_ids,
@@ -395,7 +514,7 @@ function createServer() {
             audio_base64: result.audio_base64,
             audio_mime_type: "audio/mpeg",
             performance: result.performance,
-            direction: result.performance?.direction || normalizeDirection(direction) || null,
+            direction: result.performance?.direction || normalizeDirection(directive.voiceDirection) || null,
             language: result.language,
             request_id: result.request_id,
             voice_settings: result.voice_settings,

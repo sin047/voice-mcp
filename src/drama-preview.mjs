@@ -55,7 +55,8 @@ button.remove{padding:7px 14px;font-size:12px}
 <label for="fx">选择本机音效（最多 12 个，可以多选；文件只留在你的浏览器里）</label>
 <input id="fx" type="file" accept="audio/*" multiple>
 <div id="cues"></div>
-<p class="hint">环境声建议音量 0.10，动作声建议 0.22。左右声像 -1 为左耳，+1 为右耳。循环只适用于环境声。</p>
+<div class="actions"><button id="refreshAssets">刷新服务器音效库</button></div><div id="assetLibrary" class="hint">服务器音效库尚未加载。</div>
+<p class="hint">环境声建议音量 0.10，动作声建议 0.22。左右声像 -1 为左耳，+1 为右耳。循环只适用于环境声。保存音效会把 WAV 上传到此 voice-mcp 实例的私有音效库。</p>
 </section>
 <section>
 <h2>03 / 混音总线与空间</h2>
@@ -81,7 +82,7 @@ button.remove{padding:7px 14px;font-size:12px}
 <p id="status" role="status" aria-live="polite">尚未选择音频。</p>
 <small>目前限制：总人声最长 180 秒，最多 12 个音效。HRTF 是浏览器实时空间化，不等于 KU100 实录；最终效果请戴耳机比较。导出 WAV 会进行保守峰值保护。</small>
 </section>
-<p class="hint privacy">隐私：你从本机选择的语音与音效文件只在浏览器中解码和混音，不会上传到服务器。仅当主动点击「生成日语人声」时，输入的台词才会发送至当前 Voice MCP 和 ElevenLabs，且会消耗 ElevenLabs 额度。仅使用你有权使用的音效素材；不要把私人素材提交到公开 GitHub 仓库。</p>
+<p class="hint privacy">隐私：本机选择的音频默认只在浏览器中解码和试听；只有主动点击某条音效的「保存到音效库」才会上传 WAV 到当前 voice-mcp 实例。点击「生成日语人声」时，台词会发送至 ElevenLabs 并消耗额度。仅使用你有权使用的音效素材；不要把私人素材提交到公开 GitHub 仓库。</p>
 </main>
 <script type="module">
 import { createDramaTimeline, createVoiceDuckingEnvelope } from "/drama/timeline.mjs";
@@ -106,6 +107,85 @@ function makeNumber(label, value, min, max, step, change) {
   return wrap;
 }
 
+async function encodeAssetFile(file) {
+  const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+  if (!AudioContextClass) throw new Error("当前浏览器不支持音频解码。");
+  const context = new AudioContextClass();
+  try {
+    const decoded = await context.decodeAudioData(await file.arrayBuffer());
+    const channelCount = Math.min(2, decoded.numberOfChannels);
+    const frameCount = decoded.length;
+    const blockAlign = channelCount * 2;
+    const dataSize = frameCount * blockAlign;
+    const wav = new ArrayBuffer(44 + dataSize);
+    const view = new DataView(wav);
+    const write = (offset, value) => { for (let i=0;i<value.length;i++) view.setUint8(offset+i,value.charCodeAt(i)); };
+    write(0,"RIFF"); view.setUint32(4,36+dataSize,true); write(8,"WAVE");
+    write(12,"fmt "); view.setUint32(16,16,true); view.setUint16(20,1,true);
+    view.setUint16(22,channelCount,true); view.setUint32(24,decoded.sampleRate,true);
+    view.setUint32(28,decoded.sampleRate*blockAlign,true); view.setUint16(32,blockAlign,true);
+    view.setUint16(34,16,true); write(36,"data"); view.setUint32(40,dataSize,true);
+    let offset=44;
+    for(let frame=0;frame<frameCount;frame++){
+      for(let channel=0;channel<channelCount;channel++){
+        const sample=Math.max(-1,Math.min(1,decoded.getChannelData(channel)[frame]));
+        view.setInt16(offset,sample<0?Math.round(sample*32768):Math.round(sample*32767),true);
+        offset+=2;
+      }
+    }
+    return new Blob([wav],{type:"audio/wav"});
+  } finally {
+    await context.close().catch(() => {});
+  }
+}
+
+async function saveAsset(item, button) {
+  if (item.assetId || item.saving) return;
+  item.saving = true;
+  button.disabled = true;
+  button.textContent = "转换并上传…";
+  try {
+    const wav = await encodeAssetFile(item.file);
+    const response = await fetch("/assets", {
+      method: "POST",
+      headers: {
+        "Content-Type": "audio/wav",
+        "X-Asset-Name": encodeURIComponent(item.file.name),
+        "X-Asset-Kind": item.kind,
+      },
+      cache: "no-store",
+      body: wav,
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload.error || ("HTTP " + response.status));
+    item.assetId = payload.asset.id;
+    status("音效已保存到服务器音效库。");
+    renderCues();
+    await loadAssetLibrary();
+  } catch (error) {
+    item.saving = false;
+    button.disabled = false;
+    button.textContent = "重试上传";
+    status("保存失败：" + error.message);
+  }
+}
+
+async function loadAssetLibrary() {
+  const panel = $("assetLibrary");
+  panel.textContent = "正在读取服务器音效库…";
+  try {
+    const response = await fetch("/assets", { cache: "no-store" });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload.error || ("HTTP " + response.status));
+    const assets = payload.assets || [];
+    panel.textContent = assets.length
+      ? assets.map((asset) => asset.name + " · " + asset.kind + " · " + asset.durationSec + "s · " + asset.id).join("\\n")
+      : "音效库为空。保存本地音效后，就能在 GPT 官端调用。";
+  } catch (error) {
+    panel.textContent = "无法读取音效库：" + error.message;
+  }
+}
+
 function renderCues() {
   const list = $("cues");
   list.replaceChildren();
@@ -114,10 +194,20 @@ function renderCues() {
     line.className = "cue";
     const header = document.createElement("div"); header.className = "cueheader";
     const name = document.createElement("strong"); name.textContent = item.file.name;
+    const actions = document.createElement("div"); actions.className = "actions";
+    const save = document.createElement("button");
+    save.textContent = item.assetId ? "已保存" : (item.saving ? "上传中…" : "保存到音效库");
+    save.disabled = Boolean(item.assetId || item.saving);
+    save.onclick = () => saveAsset(item, save);
     const remove = document.createElement("button"); remove.className = "remove";
     remove.textContent = "移除";
     remove.onclick = () => { items = items.filter((i) => i !== item); renderCues(); };
-    header.append(name,remove);
+    actions.append(save,remove);
+    header.append(name,actions);
+    if (item.assetId) {
+      const saved = document.createElement("small"); saved.textContent = "asset_id: " + item.assetId;
+      line.append(saved);
+    }
 
     const row = document.createElement("div"); row.className = "row";
     const typeWrap = document.createElement("div");
@@ -175,6 +265,9 @@ $("fx").addEventListener("change",(event) => {
   renderCues();
   status("已添加 " + items.length + " 条音效轨道。");
 });
+$("refreshAssets").onclick = loadAssetLibrary;
+loadAssetLibrary();
+
 $("voice").addEventListener("change",() => {
   generatedVoiceFile = null;
   status($("voice").files[0] ? "已选择人声：" + $("voice").files[0].name : "尚未选择人声。");

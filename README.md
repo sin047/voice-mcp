@@ -9,6 +9,27 @@ The experimental runtime is designed to run on a VPS, Docker host or another Nod
 - `zeabur`: existing stable v1.3.1 ChatGPT MCP deployment. This branch is not changed by the experimental work.
 - `voice-v1.4-private-drama`: experimental v1.4 audio engine, private sound library and soundscape MCP tools. Keep it separate until deployment and real-device acceptance tests pass.
 
+## Use directly in ChatGPT desktop (Windows)
+
+This experimental branch can run entirely on your own PC. No Zeabur, VPS, public tunnel or OAuth is needed for this local setup.
+
+1. Clone this branch and install dependencies:
+   ```powershell
+   git clone --branch voice-v1.4-private-drama https://github.com/sin047/voice-mcp.git
+   cd voice-mcp
+   npm install
+   Copy-Item .env.example .env
+   ```
+2. Edit `.env`: add your ElevenLabs API key, keep the configured voice ID, and set a private local token. The example already binds the server to `127.0.0.1` and enables the soundscape tools.
+3. Put the curated audio asset bundle's `data/audio-assets` folder into this repository's `data/audio-assets` directory.
+4. Start the local server:
+   ```powershell
+   npm run desktop
+   ```
+5. In ChatGPT desktop, open **Settings → MCP servers → Add server**, choose **Streamable HTTP**, and enter `http://127.0.0.1:8765/mcp`. Save, then select **Restart**. Type `/mcp` in the composer to confirm the tools are available.
+
+The local configuration uses `HOST=127.0.0.1`, so the unauthenticated MCP endpoint is reachable only from this PC. Do not change it to `0.0.0.0` or expose port 8765 publicly for this no-OAuth test. The private browser preview and asset management routes still use Basic Auth.
+
 ## Runtime
 
 Requirements: Node.js 22+.

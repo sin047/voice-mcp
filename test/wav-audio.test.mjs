@@ -120,6 +120,37 @@ test("loops ambience, applies ducking and protects the output peak", () => {
   assert.ok(Math.max(...output.channels[0].slice(0, 44100).filter((_, i) => i % 100 === 0).map(Math.abs)) <= 0.981);
 });
 
+test("quiet stereo rain ambience is clearly present while the voice stays in front", () => {
+  const voice = rawPcm(tone(44100 * 3, 0.1));
+  const rain = encodePcm16Wav([tone(44100, 0.025), tone(44100, -0.025)], 44100);
+  const mixed = mixSoundscape({
+    voicePcm: voice,
+    assets: new Map([["rain", rain]]),
+    cues: [{
+      fileId: "rain",
+      kind: "ambience",
+      atSec: 0,
+      gain: 0.4,
+      pan: 0,
+      distanceMeters: 2.4,
+      fadeInSec: 0,
+      fadeOutSec: 0,
+      loop: true,
+    }],
+    voiceGain: 1,
+    ambienceBusGain: 0.82,
+    masterGain: 0.9,
+    duckingEnabled: false,
+  });
+
+  const audio = decodePcmWav(mixed.buffer);
+  const frame = 22050;
+  const channelDifference = audio.channels[0][frame] - audio.channels[1][frame];
+  assert.ok(channelDifference > 0.04, "the quiet rain bed must be audible in the stereo result");
+  assert.ok(channelDifference < 0.12, "the rain bed must not overpower the voice");
+  assert.equal(audio.channelCount, 2);
+});
+
 test("rejects a soundscape longer than the supported duration", () => {
   const voice = rawPcm(tone(44100 * 181, 0.01));
   assert.throws(() => mixSoundscape({ voicePcm: voice, assets: new Map() }), /180 second/);

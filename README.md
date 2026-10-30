@@ -8,6 +8,41 @@ An MCP (Model Context Protocol) server for AI voice synthesis with an inline aud
   <img src="https://raw.githubusercontent.com/DasterProkio/awesome-ai-companion/main/assets/featured-in-awesome-ai-companion.png" alt="Featured in Awesome AI Companion" height="24">
 </a>
 
+
+## sin047 Zeabur Runtime — v1.3
+
+The `zeabur` branch is the lightweight Node/Express runtime used by the ChatGPT MCP connection.
+
+### GPT-first performance engine
+
+The MCP tool remains backward compatible with existing calls, while adding a high-level `performance` mode intended for direct use from ChatGPT:
+
+```text
+speak(
+  text,
+  performance?,   # auto | natural | soft | close | breathy | expressive
+  direction?,     # advanced override
+  previous_text?,
+  next_text?,
+  style?,         # legacy
+  raw_tags?       # advanced/debug opt-in
+)
+```
+
+Normal ChatGPT use should prefer `text + performance`. The tool description tells the model to use `natural` for everyday speech and reserve `breathy` / `expressive` for contexts that explicitly call for stronger breath or performance.
+
+v1.3 adds:
+
+- restrained breath-event planning for `breathy` and `expressive`
+- recent-pattern avoidance so the same opener/breath event is not repeated mechanically
+- tag-length guarding for short utterances to reduce duplicated speech
+- explicit-only raw inline tags; unrequested inline tags are stripped before synthesis
+- v1.2 continuity context via `previous_text` / `next_text`
+- structured performance metadata in MCP results
+- `/panel` performance-mode testing
+
+The performance layer intentionally handles **voice performance**, not physical sound effects. Kiss/wet/environment effects belong in a later independent audio/effects layer rather than being forced through TTS.
+
 ## Fork Notice
 
 This repository is a fork of [garan0613/voice-mcp](https://github.com/garan0613/voice-mcp), released under the MIT License.

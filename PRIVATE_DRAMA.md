@@ -1,4 +1,4 @@
-# Shin · Private Drama Lab (v1.4.0-beta.1)
+# Shin · Private Drama Lab (v1.4.0-beta.2)
 
 This is an **experimental**, independent preview of multitrack voice / sound-effect mixing.
 It lives on the `voice-v1.4-private-drama` branch. **Do not replace the stable
@@ -37,7 +37,6 @@ The selected target is **immersive foreground voice + headphone spatial depth + 
 - Voice-priority ducking: a short-window RMS envelope from the voice track gently lowers the effects buses while speech energy is present, then releases gradually during pauses.
 - Optional browser HRTF positioning for mono effects; stereo source files retain their original stereo image and use basic stereo panning.
 - Local preview with conservative master compression and offline WAV peak protection.
-- In-browser offline WAV rendering, peak protection and export.
 - Opt-in Japanese voice generation via `POST /speak`, using the existing
   ElevenLabs voice ID and restrained/close direction.
 - Regression coverage and HTTP smoke tests.

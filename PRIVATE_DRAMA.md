@@ -4,6 +4,28 @@ This is an **experimental**, independent preview of multitrack voice / sound-eff
 It lives on the `voice-v1.4-private-drama` branch. **Do not replace the stable
 `zeabur` deployment until you have tested the mix and access protections.**
 
+## Confirmed listening direction
+
+The selected target is **immersive foreground voice + headphone spatial depth + independent sound effects**.
+
+1. **Voice stays in front.** Keep the established ElevenLabs Japanese voice as the emotional and intelligibility anchor. Do not force breath tags or dramatic intensity into ordinary lines.
+2. **Spatial depth supports the voice.** Headphone-first listening, with subtle left/right placement and distance cues where appropriate. Basic stereo panning is available in this beta; true HRTF binaural positioning is a later phase and must be labelled as such until implemented and tested.
+3. **Effects are real, separate tracks.** Ambience and Foley/action cues remain independently adjustable. Effects should enrich a scene without masking speech.
+
+### Planned mix architecture
+
+- **Voice bus:** centered by default, foreground level, no automatic widening.
+- **Ambience bus:** optional low-level bed, loop and long fades allowed.
+- **Foley bus:** discrete event cues with manual start time, gain, pan/position and short fades.
+- **Master bus:** conservative peak protection; future voice-aware ducking should lower effects gently while speech is active, not pump or crush the mix.
+- Preserve source stereo when appropriate. Use simple pan for basic placement; use HRTF only for compatible mono sources and after headphone A/B validation.
+
+### Delivery phases
+
+- **Beta / current:** local voice + local effects, manual cue timing, ambience/Foley types, gain, pan, fades, ambience looping, stereo preview and local WAV export.
+- **Next audio pass:** separate bus controls, safer master headroom, optional voice-aware effects ducking, and an explicit spatial mode selector. Add HRTF positioning only after mono/stereo handling is validated.
+- **Later integration:** evaluate how a finished mixed audio result can be returned through the ChatGPT MCP tool/player. The separate browser preview is not the embedded ChatGPT player.
+
 ## What exists today
 
 - `/drama-preview`: a mobile-friendly browser prototype for a Japanese voice
@@ -54,6 +76,8 @@ usage, or an unauthorized caller could consume ElevenLabs credits.
 - No autonomous emotionally expressive multi-turn performance yet.
 - No real Foley sample library included; no asset downloads.
 - No KU100 recording or true binaural microphone simulation.
+- No HRTF spatial renderer yet; current positioning is basic stereo pan.
+- No voice-aware sidechain ducking yet.
 - No time-aligned dialogue-to-Foley cue inference; timestamps are manually set.
 - No automatic equalization, mastering or intelligibility scoring.
 - No completed single-click export inside the official ChatGPT MCP player.
@@ -61,7 +85,16 @@ usage, or an unauthorized caller could consume ElevenLabs credits.
 
 ## Next acceptance test
 
-With one real Japanese voice recording and 1–3 user-selected FX files, check:
-(a) human speech remains intelligible, (b) ambience is not too loud,
-(c) short action FX does not mask the voice, (d) a left/right pan is audible
-on headphones, and (e) mobile Safari playback/export works.
+Use one Japanese voice clip and 1–3 locally selected, properly licensed FX clips.
+The user has supplied a small WAV trial pack for local technical testing; do not
+commit those files or redistribute them. Check:
+
+(a) speech stays clearly in front, (b) ambience remains subtle,
+(c) short Foley cues do not mask consonants or line endings,
+(d) left/right placement is audible but not distracting,
+(e) stereo source material is preserved sensibly,
+(f) mobile Safari playback/export works, and
+(g) no source file is uploaded by the preview workflow.
+
+Only after this passes should HRTF and voice-aware ducking be implemented and
+compared against the simpler stereo mix.

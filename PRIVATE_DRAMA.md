@@ -1,4 +1,4 @@
-# Shin · Private Drama Lab (v1.4.0-beta.6)
+# Shin · Private Drama Lab (v1.4.0-beta.7)
 
 This is an **experimental**, independent preview of multitrack voice / sound-effect mixing.
 It lives on the `voice-v1.4-private-drama` branch. **Do not replace the stable
@@ -46,6 +46,17 @@ The selected target is **immersive foreground voice + headphone spatial depth + 
 - Regression coverage for WAV parsing, asset storage, mixing, access controls and usage limits.
 
 The normal `speak` MCP tool is **unchanged** in this branch.
+
+## ChatGPT desktop local test
+
+For a same-PC Windows test, use the Streamable HTTP endpoint on loopback:
+`http://127.0.0.1:8765/mcp`. Set `HOST=127.0.0.1`,
+`PORT=8765`, `MCP_PUBLIC_BASE_URL=http://127.0.0.1:8765`,
+`MCP_SOUNDSCAPE_TOOLS_ENABLED=true`, and `AUDIO_ASSET_DIR=./data/audio-assets`
+in the local `.env` file. The desktop app can connect from
+**Settings → MCP servers → Add server → Streamable HTTP** and restart its MCP
+host after saving. No OAuth or public hosting is needed because the listener is
+bound only to the local loopback interface.
 
 ## Platform-neutral runtime
 

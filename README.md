@@ -98,6 +98,7 @@ The soundscape path requests `pcm_24000` internally, then resamples and mixes to
 | `AUDIO_ASSET_MAX_COUNT` | 100 | Maximum number of stored assets |
 | `AUDIO_ASSET_MAX_TOTAL_BYTES` | 200 MiB | Total audio library storage ceiling |
 | `MCP_PUBLIC_BASE_URL` | — | Required public HTTPS origin used to create playable soundscape URLs |
+| `MCP_SOUNDSCAPE_TOOLS_ENABLED` | `false` | Explicit opt-in for `list_sound_assets` and `speak_with_soundscape`; enable only after `/mcp` access is restricted |
 
 ### Request and ElevenLabs usage limits
 

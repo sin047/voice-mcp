@@ -1,4 +1,5 @@
 import express from "express";
+import { createAccessGuard } from "./http-auth.mjs";
 import process from "node:process";
 import { readFile } from "node:fs/promises";
 import { dramaPreviewHtml } from "./drama-preview.mjs";
@@ -16,7 +17,6 @@ import {
 } from "./performance.mjs";
 
 const app = express();
-app.use(express.json({ limit: "20mb" }));
 
 const PORT = Number.parseInt(process.env.PORT || "8080", 10);
 const BOT_NAME = process.env.BOT_NAME || "AI";
@@ -26,6 +26,18 @@ const PLAYER_URI = "ui://voice-mcp/player.html";
 const PLAYER_MIME = "text/html;profile=mcp-app";
 const VERSION = "1.4.0-beta.2";
 const MAX_CONTEXT_CHARS = 4000;
+const PRIVATE_DRAMA_ACCESS_TOKEN = process.env.PRIVATE_DRAMA_ACCESS_TOKEN || "";
+const requirePrivateHttpAccess = createAccessGuard({
+  token: PRIVATE_DRAMA_ACCESS_TOKEN,
+  realm: "Shin Private Drama",
+});
+const PRIVATE_HTTP_PATHS = new Set([
+  "/drama-preview",
+  "/drama/timeline.mjs",
+  "/speak",
+  "/panel",
+  "/events/latest",
+]);
 
 let latestEvent = null;
 const recentPerformancePatterns = [];
@@ -40,6 +52,19 @@ const cors = (_req, res, next) => {
   next();
 };
 app.use(cors);
+
+// Gate browser/HTTP endpoints before parsing request bodies so anonymous callers
+// cannot spend ElevenLabs credits or make the JSON parser process large payloads.
+// The /mcp endpoint intentionally keeps its existing connector behavior; this
+// HTTP token is not MCP authentication and does not protect MCP tool calls.
+app.use((req, res, next) => {
+  if (PRIVATE_HTTP_PATHS.has(req.path)) {
+    return requirePrivateHttpAccess(req, res, next);
+  }
+  return next();
+});
+
+app.use(express.json({ limit: "20mb" }));
 
 function normalizeContext(value, fieldName) {
   if (value === undefined || value === null) return undefined;

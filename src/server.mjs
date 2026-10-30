@@ -333,7 +333,7 @@ setTimeout(()=>send("ui/notifications/initialized",{}),50);
 </html>`;
 }
 
-function createServer({ publicBaseUrl } = {}) {
+function createServer() {
   const mcp = new McpServer({ name: "voice-mcp", version: VERSION });
 
   mcp.server.registerCapabilities({
@@ -499,10 +499,10 @@ function createServer({ publicBaseUrl } = {}) {
           performance,
           language,
           direction,
-          outputFormat: "pcm_44100",
+          outputFormat: "pcm_24000",
         });
         const voicePcm = decodeRawPcm16(Buffer.from(result.audio_base64, "base64"), {
-          sampleRate: 44100,
+          sampleRate: 24000,
           channels: 1,
         });
         if (voicePcm.durationSec > MAX_SOUND_SCAPE_SECONDS) {

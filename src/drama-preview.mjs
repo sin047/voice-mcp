@@ -159,6 +159,7 @@ async function saveAsset(item, button) {
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(payload.error || ("HTTP " + response.status));
     item.assetId = payload.asset.id;
+    item.saving = false;
     status("音效已保存到服务器音效库。");
     renderCues();
     await loadAssetLibrary();
@@ -204,6 +205,7 @@ function renderCues() {
     remove.onclick = () => { items = items.filter((i) => i !== item); renderCues(); };
     actions.append(save,remove);
     header.append(name,actions);
+    line.append(header);
     if (item.assetId) {
       const saved = document.createElement("small"); saved.textContent = "asset_id: " + item.assetId;
       line.append(saved);
@@ -241,7 +243,7 @@ function renderCues() {
     loop.onchange = () => { item.loop=loop.checked; };
     loopWrap.append(loopLabel,loop);
     row.append(loopWrap);
-    line.append(header,row);list.append(line);
+    line.append(row);list.append(line);
   });
 }
 

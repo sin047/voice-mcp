@@ -1,4 +1,4 @@
-# Shin · Private Drama Lab (v1.4.0-beta.5)
+# Shin · Private Drama Lab (v1.4.0-beta.6)
 
 This is an **experimental**, independent preview of multitrack voice / sound-effect mixing.
 It lives on the `voice-v1.4-private-drama` branch. **Do not replace the stable
@@ -24,8 +24,8 @@ The selected target is **immersive foreground voice + headphone spatial depth + 
 ### Delivery phases
 
 - **Beta / current:** local voice + local effects, manual cue timing, ambience/Foley types, independent bus levels, per-cue gain/pan/fades, ambient looping, optional HRTF for mono effects, voice-priority ducking, stereo preview and local WAV export.
-- **Next audio pass:** validate real-world behavior on iPhone Safari and desktop browsers; refine HRTF positioning and ducking thresholds using A/B tests; add clearer per-track previews and safer failure handling if needed.
-- **Later integration:** evaluate how a finished mixed audio result can be returned through the ChatGPT MCP tool/player. The separate browser preview is not the embedded ChatGPT player.
+- **Current beta:** private WAV asset library, server-side stereo mixer and MCP tools `list_sound_assets` / `speak_with_soundscape`; the latter returns a short-lived playable audio URL for the inline MCP player.
+- **Next audio pass:** validate the new end-to-end asset upload → MCP tool → audio player flow on a real ChatGPT connection; refine ducking and spatial balance using headphone A/B tests.
 
 ## What exists today
 
@@ -39,7 +39,11 @@ The selected target is **immersive foreground voice + headphone spatial depth + 
 - Local preview with conservative master compression and offline WAV peak protection.
 - Opt-in Japanese voice generation via `POST /speak`, using the existing
   ElevenLabs voice ID and restrained/close direction.
-- Regression coverage and HTTP smoke tests.
+- Private WAV asset library with explicit upload from the preview page; browser-selected MP3/M4A files are decoded and converted to PCM WAV before upload.
+- MCP `list_sound_assets` tool for discovering stored `asset_id` values.
+- MCP `speak_with_soundscape` tool: generate voice in 24 kHz PCM, resample and mix up to 12 stored effects into a stereo WAV, then return a 10-minute short-lived playback URL.
+- Private asset management endpoints: `GET/POST /assets`, `DELETE /assets/:id`.
+- Regression coverage for WAV parsing, asset storage, mixing, access controls and usage limits.
 
 The normal `speak` MCP tool is **unchanged** in this branch.
 
@@ -59,6 +63,7 @@ The experimental browser and direct HTTP routes are protected by
 - `/drama-preview` and `/drama/timeline.mjs`
 - `/speak` (GET and POST), including preview TTS generation
 - `/panel` and `/events/latest`
+- `/assets` and `/assets/:id`, including uploads and deletion
 
 The server fails closed: if the token is missing or shorter than 32 characters,
 these routes return HTTP 503. Missing or incorrect credentials return HTTP 401.
@@ -71,6 +76,11 @@ Authentication runs before JSON body parsing on protected routes.
    `voice-mcp` and the generated token as the password.
 4. For scripts, send `Authorization: Bearer <token>`.
 
+The `AUDIO_ASSET_DIR` path defaults to `./data/audio-assets`. Mount this
+directory to persistent disk when using a replaceable container. The asset
+library accepts mono/stereo 16-bit PCM or 32-bit float WAV files, up to the
+configured size/count/storage limits.
+
 **Important boundary:** the `/mcp` endpoint intentionally keeps the existing
 ChatGPT connector behavior and is not protected by this HTTP preview token.
 The MCP `speak` tool can therefore still generate audio if the MCP endpoint is
@@ -78,6 +88,36 @@ publicly reachable. Before public deployment, add authentication compatible
 with the configured ChatGPT connector, or restrict ingress to a private
 network, and add rate limits/quotas. Do not mistake this preview gate for
 complete server-wide protection.
+
+## Private audio asset library and MCP soundscape tools
+
+The preview remains local-first. Selecting a local file does not upload it.
+Each effect track has an explicit **保存到音效库** action. Only after that click
+does the browser decode the selected file and upload a WAV representation to
+the authenticated `POST /assets` route. The asset is stored under
+`AUDIO_ASSET_DIR`, outside the Git repository.
+
+Use the new MCP tools in this order:
+
+1. Open `/drama-preview`, select one or more sound-effect files and click
+   **保存到音效库** for each one.
+2. Call `list_sound_assets` in ChatGPT. It returns the stored asset IDs, names,
+   duration, channel count and library usage.
+3. Call `speak_with_soundscape` with the spoken text and 1–12 cues referencing
+   those asset IDs. Each cue can choose `ambience` or `foley`, start time,
+   gain, left/right pan, distance, fades, duration and optional ambience loop.
+4. The server synthesizes voice using ElevenLabs `pcm_24000`, resamples to
+   44.1 kHz, mixes voice and effects, then stores a temporary stereo WAV.
+5. The MCP inline player receives a short-lived `audio_url`. Generated audio
+   is kept in memory for 10 minutes; restarting the server invalidates the URL.
+
+The server-side MCP mix supports stereo panning and distance attenuation. It
+does **not** apply browser HRTF. Browser HRTF remains available in the local
+preview for headphone listening. The soundscape output is limited to 60 seconds
+and uses at most 12 cues.
+
+`MCP_PUBLIC_BASE_URL` must be configured as the public HTTPS origin (no path)
+so the MCP tool can return a playable URL. This setting is provider-neutral.
 
 ## MCP request and ElevenLabs usage guardrails
 
@@ -133,10 +173,11 @@ Local audio file contents are decoded and mixed only in the browser. They are
 you explicitly click `生成日语人声`: the text is sent by HTTPS POST to the
 configured server and its ElevenLabs provider.
 
-**Avoid submitting private recordings or licensed sound effects to this public
-repository.** Keep the actual FX files locally, and keep track of each
-recording's source, license and allowed uses. You can share URLs or
-short test clips for evaluation without committing an asset.
+**Avoid committing private recordings or licensed sound effects to this public
+repository.** Uploaded assets are stored only in the configured server data
+directory; they are not added to Git. Keep track of each recording's source,
+license and allowed uses. Files remain local until you explicitly click
+**保存到音效库**.
 
 **Important production blocker:** browser/HTTP routes now have a fail-closed
 access-token gate. The MCP `/mcp` endpoint remains unauthenticated for direct-URL
@@ -157,8 +198,9 @@ before treating the endpoint as a public service.
   dialogue understanding or a live hardware-style compressor sidechain.
 - No time-aligned dialogue-to-Foley cue inference; timestamps are manually set.
 - No automatic equalization, mastering or intelligibility scoring.
-- No completed single-click export inside the official ChatGPT MCP player.
-  Current rendering/export happens on the separate browser preview page.
+- No in-player multitrack editor or WAV export inside the official ChatGPT MCP
+  player. The MCP tool returns a finished, short-lived playable mix; editing
+  cues and uploading assets still happens in the separate browser preview.
 
 ## Next acceptance test
 
@@ -171,7 +213,9 @@ commit those files or redistribute them. Check:
 (d) voice-priority ducking is gentle and does not audibly pump,
 (e) HRTF near/mid/far placement on mono effects is clearly differentiated but not distracting,
 (f) stereo source material is preserved sensibly,
-(g) mobile Safari playback/export works, and
-(h) no source file is uploaded by the preview workflow.
+(g) mobile Safari playback/export works,
+(h) only explicitly saved effects are uploaded,
+(i) `list_sound_assets` returns the expected asset IDs, and
+(j) `speak_with_soundscape` returns a playable audio URL in the ChatGPT inline player.
 
 Use the results to tune the existing HRTF and ducking implementation. Do not describe the feature as production-ready until headphone A/B testing passes on both mobile Safari and desktop browsers.

@@ -79,6 +79,7 @@ return a mixed audio file through the embedded ChatGPT MCP player.
 | `ELEVENLABS_CLONE_STRENGTH` | Optional v4 Professional Voice Clone setting (0–1) |
 | `ELEVENLABS_JA_TEXT_NORMALIZATION` | Set to `true` to enable Japanese text normalization; may increase latency |
 | `BOT_NAME` | Optional player/tool display name |
+| `PRIVATE_DRAMA_ACCESS_TOKEN` | Required for private browser/HTTP routes on the experimental branch; use a random secret of at least 32 characters. Supports browser Basic Auth and Bearer tokens. Does not authenticate `/mcp`. |
 
 For Eleven v4, only stability and similarity are standard voice controls; style, speed and speaker-boost settings are not sent to v4. The legacy variables for other model families remain supported where applicable.
 

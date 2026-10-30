@@ -64,6 +64,16 @@ The existing `speak` tool remains available. The private asset tools `list_sound
 
 Generate a voice clip with the configured ElevenLabs voice. Supports performance modes (`natural`, `soft`, `close`, `breathy`, `expressive`), language selection and request stitching.
 
+For the already-installed mobile `voice2-v1.3.1` app, soundscapes are backward-compatible through the existing `direction` parameter; no new mobile MCP connection is required. Prefix `direction` with one of these markers:
+
+- `[soundscape:rain]` — quiet looping rain ambience
+- `[soundscape:desk]` — keyboard ambience
+- `[soundscape:package]` — packaging / unboxing Foley
+- `[soundscape:close]` — subtle close-detail Foley
+- `[soundscape:intimate]` — layered adult/intimate Foley
+
+The marker is stripped before the direction reaches ElevenLabs. Omit the marker for the original voice-only MP3 path. Soundscape playback uses a temporary WAV URL and requires the curated assets plus `MCP_PUBLIC_BASE_URL`.
+
 ### `list_sound_assets`
 
 List the WAV assets that have been explicitly uploaded to this server's private audio library. Use this tool to retrieve `asset_id` values.

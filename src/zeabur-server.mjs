@@ -407,6 +407,30 @@ app.get("/speak", async (req, res) => {
   }
 });
 
+// POST keeps the spoken text out of URL logs and browser history.
+// This existing deployment remains unauthenticated; do not expose it publicly
+// with an unrestricted paid ElevenLabs key.
+app.post("/speak", async (req, res) => {
+  const text = req.body?.text;
+  if (typeof text !== "string" || !text.trim() || text.length > 4000) {
+    return res.status(400).json({ error: "text must be 1–4000 characters" });
+  }
+  try {
+    const result = await synthesize(text, {
+      performance: req.body?.performance,
+      language: req.body?.language,
+      direction: req.body?.direction,
+    });
+    const audio = Buffer.from(result.audio_base64, "base64");
+    res.setHeader("Content-Type", "audio/mpeg");
+    res.setHeader("Cache-Control", "no-store");
+    res.send(audio);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(500).json({ error: message });
+  }
+});
+
 // Experimental, local-only multitrack sound lab. Does not accept file uploads.
 app.get("/drama-preview", (_req, res) => {
   res.setHeader("Cache-Control", "no-store");

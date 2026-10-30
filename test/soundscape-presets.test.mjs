@@ -54,6 +54,7 @@ test("all curated presets resolve to assets with the intended bus and timeline",
   assert.equal(rain.cues[0].fileId, "fx_rain");
   assert.equal(rain.cues[0].kind, "ambience");
   assert.equal(rain.cues[0].loop, true);
+  assert.equal(rain.cues[0].gain, 0.48, "approved rain v2 level stays frozen");
 
   const desk = buildSoundscapePresetCues("desk", assets);
   assert.equal(desk.cues[0].fileId, "fx_keyboard");
@@ -67,7 +68,7 @@ test("all curated presets resolve to assets with the intended bus and timeline",
   assert.equal(close.cues[0].fileId, "fx_cloth");
   assert.equal(close.cues[1].fileId, "fx_wet");
   assert.deepEqual(close.cues.map((cue) => cue.sourceOffsetSec), [12, 12]);
-  assert.deepEqual(close.cues.map((cue) => cue.gain), [0.46, 0.46]);
+  assert.deepEqual(close.cues.map((cue) => cue.gain), [0.54, 0.46]);
   assert.ok(close.cues[0].pan < 0 && close.cues[1].pan > 0);
 
 

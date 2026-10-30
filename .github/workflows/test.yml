@@ -2,7 +2,7 @@ name: voice-mcp checks
 
 on:
   push:
-    branches: [zeabur, voice-v1.3-quality]
+    branches: [zeabur, voice-v1.3-quality, voice-v1.4-private-drama]
   pull_request:
     branches: [zeabur]
 
@@ -18,6 +18,8 @@ jobs:
         run: |
           node --check src/zeabur-server.mjs
           node --check src/performance.mjs
+          node --check src/drama-timeline.mjs
+          node --check src/drama-preview.mjs
       - name: Regression tests
         run: npm test
       - name: Install runtime dependencies
@@ -39,15 +41,24 @@ jobs:
             import assert from "node:assert/strict";
             const status = JSON.parse(fs.readFileSync("/tmp/voice-status.json", "utf8"));
             assert.equal(status.status, "ok");
-            assert.equal(status.version, "1.3.1");
+            assert.equal(status.version, "1.4.0-beta.1");
             assert.equal(status.features.request_id_continuity, true);
             assert.equal(status.features.language_auto_detection, true);
+            assert.equal(status.features.local_drama_preview, true);
           '
           curl -fsS -X POST http://127.0.0.1:8765/mcp \
             -H "Content-Type: application/json" \
             -H "Accept: application/json, text/event-stream" \
             -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"voice-mcp-ci","version":"1.0.0"}}}' \
             > /tmp/mcp-initialize.json
+          curl -fsS http://127.0.0.1:8765/drama-preview -o /tmp/drama-preview.html
+          grep -q 'Shin · Private Drama' /tmp/drama-preview.html
+          curl -fsS http://127.0.0.1:8765/drama/timeline.mjs -o /tmp/drama-timeline.mjs
+          grep -q 'createDramaTimeline' /tmp/drama-timeline.mjs
+          STATUS=$(curl -s -o /tmp/drama-bad-request.json -w '%{http_code}' \
+            -X POST http://127.0.0.1:8765/speak \
+            -H 'Content-Type: application/json' -d '{"text":""}')
+          test "$STATUS" = "400"
           node --input-type=module -e '
             import fs from "node:fs";
             import assert from "node:assert/strict";

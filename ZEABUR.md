@@ -2,7 +2,7 @@
 
 Last verified against source: 2026-10-31  
 Maintained branch: `zeabur`  
-Current source version: `1.4.0-beta.23`
+Current source version: `1.4.0-beta.24`
 
 This service is a **Node.js / Express application**, not the former Cloudflare Worker + Wrangler runtime.
 
@@ -110,7 +110,7 @@ After every code deployment:
 
 1. Confirm the latest GitHub Actions run for `zeabur` is successful.
 2. Confirm Zeabur reports the deployment as complete.
-3. Open `GET /status` and verify `status: "ok"` and `version: "1.4.0-beta.23"` (or the new expected version).
+3. Open `GET /status` and verify `status: "ok"` and `version: "1.4.0-beta.24"` (or the new expected version).
 4. Refresh the existing `voice2-v1.3.1` custom MCP app in ChatGPT after tool UI metadata changes, then make one real `speak` call and confirm the inline audio player appears.
 5. Call `speak_with_soundscape` and confirm the same inline player loads the mixed WAV URL and native audio controls can play it.
 6. For soundscape playback, verify the expected private assets exist and that the returned temporary WAV URL plays.

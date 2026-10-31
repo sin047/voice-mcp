@@ -908,6 +908,7 @@ app.get("/status", (_req, res) => {
       local_drama_preview: true,
       private_audio_asset_library: true,
       persistent_recording_archive: true,
+      mcp_apps_audio_player: true,
       soundscape_mcp_enabled: SOUNDSCAPE_MCP_ENABLED,
       speak_with_soundscape: SOUNDSCAPE_MCP_ENABLED,
       soundscape_max_seconds: MAX_SOUND_SCAPE_SECONDS,

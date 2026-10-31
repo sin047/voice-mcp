@@ -53,7 +53,7 @@ jobs:
             import assert from "node:assert/strict";
             const status = JSON.parse(fs.readFileSync("/tmp/voice-status.json", "utf8"));
             assert.equal(status.status, "ok");
-            assert.equal(status.version, "1.4.0-beta.22");
+            assert.equal(status.version, "1.4.0-beta.23");
             assert.equal(status.features.request_id_continuity, true);
             assert.equal(status.features.language_auto_detection, true);
             assert.equal(status.features.local_drama_preview, true);
@@ -186,6 +186,8 @@ jobs:
             const speak = tools.find((tool) => tool.name === "speak");
             const soundscape = tools.find((tool) => tool.name === "speak_with_soundscape");
             assert.equal(speak._meta.ui.resourceUri, "ui://voice-mcp/player.html");
+            assert.deepEqual(speak.inputSchema.properties.emotion.enum, ["neutral", "calm", "warm", "tender", "curious", "excited", "nervous", "intense", "tired"]);
+            assert.deepEqual(soundscape.inputSchema.properties.emotion.enum, ["neutral", "calm", "warm", "tender", "curious", "excited", "nervous", "intense", "tired"]);
             assert.equal(soundscape._meta.ui.resourceUri, "ui://voice-mcp/player.html");
             const caps = JSON.parse(fs.readFileSync("/tmp/mcp-initialize.json", "utf8")).result.capabilities;
             assert.deepEqual(caps.extensions["io.modelcontextprotocol/ui"].mimeTypes, ["text/html;profile=mcp-app"]);

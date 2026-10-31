@@ -2,7 +2,7 @@
 
 A platform-neutral Node.js MCP server for ElevenLabs voice generation, expressive delivery and mixed voice + sound-effect playback.
 
-The actively maintained development and deployment branch is `zeabur`, currently at **v1.4.0-beta.32**. It runs as a Node.js 22+ / Express 5 service with Streamable HTTP MCP and is deployed on Zeabur. The same runtime can also run on a VPS or Docker host.
+The actively maintained development and deployment branch is `zeabur`, currently at **v1.4.0-beta.33**. It runs as a Node.js 22+ / Express 5 service with Streamable HTTP MCP and is deployed on Zeabur. The same runtime can also run on a VPS or Docker host.
 
 
 
@@ -29,6 +29,12 @@ The MCP tool `plan_voice_chunks` divides long text at sentence and clause bounda
 
 The continuous timeline response also includes `alignment_audit`, a non-blocking check of provider character alignment completeness and timestamp ordering. This is an alignment-integrity diagnostic, **not ASR**: it cannot prove that every intended word was actually spoken in the rendered waveform. A future ASR-backed check would be a separate opt-in feature.
 
+### Continuous voice timeline tail (beta.33)
+
+The continuous timeline tool accepts optional `timeline_duration_sec`. By default the final WAV ends with the generated voice, as before. When a longer duration is supplied, Foley or ambience cues may continue after the final spoken sample, creating a deliberate pure-sound tail without another TTS request. Absolute `at_sec` cues can be placed in that tail; every cue must still fit inside the requested timeline. The total duration remains capped at 60 seconds. The mixer already handles voice ducking against the voice envelope, so after speech ends the tail is no longer ducked by nonexistent speech.
+
+This is intentionally a small additive change: existing cue timing, gain, pan, distance, fade-in/fade-out, asset selection and approved sound levels remain unchanged.
+
 ### Continuous voice timeline (beta.30)
 
 The MCP tool `render_continuous_audio_timeline` synthesizes the full spoken passage once, requests ElevenLabs character-level timestamps, and overlays Foley/ambience without splitting the voice. Each cue can use either `at_sec` for an absolute offset or `after_text` for an exact spoken phrase; `occurrence` selects a later match when the phrase repeats. This is the preferred mode when speech should remain prosodically continuous. Maximum: 60 seconds and 12 effect cues. Use `list_sound_assets` to discover private asset IDs.
@@ -37,7 +43,7 @@ Use `render_audio_timeline` when you intentionally need separately generated voi
 
 ## Branches
 
-- `zeabur`: **active maintained branch** for development and current Zeabur deployment; currently v1.4.0-beta.32.
+- `zeabur`: **active maintained branch** for development and current Zeabur deployment; currently v1.4.0-beta.33.
 - `voice-v1.4-private-drama`: historical v1.4 beta.7 snapshot. It is not the active deployment branch; do not switch to it without comparing its history against `zeabur`.
 - `main`: repository default branch; it may not contain the latest maintained v1.4 work. Do not assume it is the deployment branch.
 

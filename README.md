@@ -178,3 +178,8 @@ The tests cover performance planning, cue validation, authentication, usage limi
 ## License
 
 MIT. This fork preserves the upstream license from [garan0613/voice-mcp](https://github.com/garan0613/voice-mcp).
+
+
+## Persistent recording archive
+
+The optional `speak_with_soundscape` parameter `save_recording: true` saves the completed mixed WAV and its metadata to a private persistent recording directory. Saving is opt-in and defaults to false. Configure `RECORDING_DIR` on a persistent volume; see [ZEABUR.md](./ZEABUR.md) for storage limits, private archive endpoints and backup guidance.

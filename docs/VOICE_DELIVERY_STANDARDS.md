@@ -45,3 +45,24 @@ Breathing tags are vocal-performance instructions for TTS, not separate Foley tr
 - `src/performance.mjs`: breath tag selection and placement.
 - `test/performance.test.mjs`: regression coverage for inhale-only B2.1 behavior.
 - `docs/SOUNDSCAPE_MIX_LEVELS.md`: environmental and Foley loudness standards.
+
+## Emotion-aware breathing profiles (beta.23)
+
+The optional MCP `emotion` field lets the caller steer both emotional delivery and breathing intensity. If omitted, existing `performance` behavior is unchanged.
+
+| Emotion | Breath profile | Behavior |
+| --- | --- | --- |
+| `neutral`, `calm`, `curious`, `tired` | B1 | Subtle natural breathing direction; no forced inhale tag |
+| `warm`, `tender` | B2.1 | At most one inhale at an existing natural pause; no explicit exhale or sigh |
+| `excited`, `nervous`, `intense` | B3 (experimental) | More noticeable inhale-only direction and tag; never auto-inserts gasps, sighs or exhales |
+
+Safety against mechanical delivery:
+- No breath tag is inserted into speech shorter than 18 speakable characters.
+- No breath tag is inserted if there is no punctuation-based natural pause.
+- B2.1 and B3 can choose no inhale on a nearby call to avoid repetition.
+- B3 is opt-in through an explicit emotion value; it is never the default.
+- Keep the existing warm, close-mic youth-voice direction. Emotion adds a concise direction prefix rather than replacing the configured voice.
+
+For a gradual emotional transition across a longer passage, split at a natural sentence boundary, change `emotion` one step at a time (for example `neutral → warm → tender`), and pass the immediately preceding `request_id` through `previous_request_ids` when the voice and model are unchanged. Each chunk remains independently generated, but request continuity helps preserve vocal consistency.
+
+The user-approved `breathy` default remains B2.1. The emotion field is an explicit steering control, not an automatic inference from the text; the calling assistant should choose it from the conversational context.

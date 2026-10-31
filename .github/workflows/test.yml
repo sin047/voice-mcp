@@ -52,7 +52,7 @@ jobs:
             import assert from "node:assert/strict";
             const status = JSON.parse(fs.readFileSync("/tmp/voice-status.json", "utf8"));
             assert.equal(status.status, "ok");
-            assert.equal(status.version, "1.4.0-beta.16");
+            assert.equal(status.version, "1.4.0-beta.17");
             assert.equal(status.features.request_id_continuity, true);
             assert.equal(status.features.language_auto_detection, true);
             assert.equal(status.features.local_drama_preview, true);
@@ -108,6 +108,32 @@ jobs:
             assert.equal(payload.recordings.length, 0);
             assert.equal(payload.usage.recordingCount, 0);
           '
+          RECORDING_UPLOAD=$(curl -s -o /tmp/recording-upload.json -w '%{http_code}' -u "voice-mcp:$TEST_ACCESS_TOKEN" -X POST http://127.0.0.1:8765/recordings -H 'Content-Type: audio/wav' -H 'X-Recording-Text: CI recording' --data-binary @/tmp/ci-audio.wav)
+          test "$RECORDING_UPLOAD" = "201"
+          RECORDING_ID=$(node --input-type=module -e 'import fs from "node:fs"; const payload=JSON.parse(fs.readFileSync("/tmp/recording-upload.json","utf8")); process.stdout.write(payload.recording.id);')
+          RECORDING_PATCH_UNAUTH=$(curl -s -o /tmp/recording-patch-unauthorized.json -w '%{http_code}' -X PATCH "http://127.0.0.1:8765/recordings/$RECORDING_ID" -H 'Content-Type: application/json' -d '{"favorite":true}')
+          test "$RECORDING_PATCH_UNAUTH" = "401"
+          RECORDING_PATCH=$(curl -s -o /tmp/recording-patch.json -w '%{http_code}' -u "voice-mcp:$TEST_ACCESS_TOKEN" -X PATCH "http://127.0.0.1:8765/recordings/$RECORDING_ID" -H 'Content-Type: application/json' -d '{"title":"CI favorite","tags":["ci","test"],"favorite":true}')
+          test "$RECORDING_PATCH" = "200"
+          node --input-type=module -e '
+            import fs from "node:fs";
+            import assert from "node:assert/strict";
+            const payload = JSON.parse(fs.readFileSync("/tmp/recording-patch.json", "utf8"));
+            assert.equal(payload.recording.title, "CI favorite");
+            assert.deepEqual(payload.recording.tags, ["ci", "test"]);
+            assert.equal(payload.recording.favorite, true);
+          '
+          curl -fsS -u "voice-mcp:$TEST_ACCESS_TOKEN" http://127.0.0.1:8765/recordings -o /tmp/recordings-list-updated.json
+          node --input-type=module -e '
+            import fs from "node:fs";
+            import assert from "node:assert/strict";
+            const payload = JSON.parse(fs.readFileSync("/tmp/recordings-list-updated.json", "utf8"));
+            assert.equal(payload.recordings.length, 1);
+            assert.equal(payload.recordings[0].title, "CI favorite");
+            assert.equal(payload.recordings[0].favorite, true);
+          '
+          RECORDING_DELETE=$(curl -s -o /tmp/recording-delete.json -w '%{http_code}' -u "voice-mcp:$TEST_ACCESS_TOKEN" -X DELETE "http://127.0.0.1:8765/recordings/$RECORDING_ID")
+          test "$RECORDING_DELETE" = "204"
           RECORDINGS_PAGE_UNAUTH=$(curl -s -o /tmp/recordings-page-unauthorized.json -w '%{http_code}' http://127.0.0.1:8765/recordings-library)
           test "$RECORDINGS_PAGE_UNAUTH" = "401"
           curl -fsS -u "voice-mcp:$TEST_ACCESS_TOKEN" http://127.0.0.1:8765/recordings-library -o /tmp/recordings-page.html

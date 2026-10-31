@@ -129,7 +129,7 @@ export function parseEmotionDirective(direction) {
   if (typeof direction !== "string") {
     return Object.freeze({ emotion: undefined, direction });
   }
-  const match = direction.match(/^\\s*\\[emotion:([a-z-]+)\\]\\s*/i);
+  const match = direction.match(/^\s*\[emotion:([a-z-]+)\]\s*/i);
   if (!match) return Object.freeze({ emotion: undefined, direction });
   return Object.freeze({
     emotion: normalizeEmotion(match[1]),

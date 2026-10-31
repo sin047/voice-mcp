@@ -2,7 +2,7 @@
 
 Last verified against source: 2026-10-31  
 Maintained branch: `zeabur`  
-Current source version: `1.4.0-beta.16`
+Current source version: `1.4.0-beta.17`
 
 This service is a **Node.js / Express application**, not the former Cloudflare Worker + Wrangler runtime.
 
@@ -56,7 +56,7 @@ No OpenAI API key or OpenAI API dependency is required.
 - `RECORDING_MAX_COUNT` — optional; defaults to 500 recordings.
 - `RECORDING_MAX_TOTAL_BYTES` — optional; defaults to 2 GiB total.
 
-The `speak_with_soundscape` MCP tool accepts `save_recording: true` to persist the completed mixed WAV and metadata. It defaults to false. `GET /recordings` lists metadata and storage usage; `GET /recordings/:id` downloads a WAV; `DELETE /recordings/:id` deletes one. These routes use the private HTTP token. This archive is persistent storage, not a backup: export or copy the Volume contents to an independent backup location regularly.
+The `speak_with_soundscape` MCP tool accepts `save_recording: true` to persist the completed mixed WAV and metadata. It defaults to false. `GET /recordings` lists metadata and storage usage; `PATCH /recordings/:id` edits the title, up to 12 tags and favorite status; `GET /recordings/:id` downloads a WAV; `DELETE /recordings/:id` deletes one. These routes use the private HTTP token. This archive is persistent storage, not a backup: export or copy the Volume contents to an independent backup location regularly.
 
 Mount the persistent Volume at the exact directory configured by `AUDIO_ASSET_DIR`. Without persistent storage, uploaded WAV assets can be lost when the container is replaced.
 
@@ -87,6 +87,7 @@ Usage counters and generated-audio cache are process-local. They are not shared 
 | `POST /mcp` | Streamable HTTP MCP endpoint | No OAuth/authentication currently |
 | `GET /drama-preview` | Private soundscape preview UI | Private HTTP token |
 | `GET /recordings-library` | Private recording archive UI | Private HTTP token |
+| `PATCH /recordings/:id` | Edit recording title, tags and favorite status | Private HTTP token |
 | `GET /speak`, `POST /speak` | Direct HTTP speech preview | Private HTTP token |
 | `GET /assets`, `POST /assets`, `DELETE /assets/:id` | Private WAV asset management | Private HTTP token |
 | `GET /audio/:id` | Temporary generated soundscape playback | Short-lived unguessable URL |
@@ -109,7 +110,7 @@ After every code deployment:
 
 1. Confirm the latest GitHub Actions run for `zeabur` is successful.
 2. Confirm Zeabur reports the deployment as complete.
-3. Open `GET /status` and verify `status: "ok"` and `version: "1.4.0-beta.16"` (or the new expected version).
+3. Open `GET /status` and verify `status: "ok"` and `version: "1.4.0-beta.17"` (or the new expected version).
 4. Make one real call through the existing `voice2-v1.3.1` MCP connection.
 5. For soundscape playback, verify the expected private assets exist and that the returned temporary WAV URL plays.
 

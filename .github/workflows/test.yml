@@ -194,4 +194,6 @@ jobs:
             assert.match(resource.text, /appInfo/);
             assert.match(resource.text, /protocolVersion:"2026-01-26"/);
             assert.match(resource.text, /audio id="audio" controls/);
+            assert.match(resource.text, /fetch\(data.audio_url/);
+            assert.match(resource.text, /URL.createObjectURL/);
           '

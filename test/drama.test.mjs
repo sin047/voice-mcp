@@ -103,6 +103,8 @@ test("validates mix buses, ducking and spatial modes", () => {
   assert.equal(timeline.mix.duckingEnabled, false);
   assert.equal(timeline.mix.duckingAmount, 0.3);
   assert.equal(timeline.mix.ducking.foleyDepth, 0.55);
+  const intimateBalance = createDramaTimeline({ voiceDurationSec: 8, foleyDuckingDepth: 0.45 });
+  assert.equal(intimateBalance.mix.ducking.foleyDepth, 0.45);
   assert.equal(timeline.mix.spatialMode, "hrtf");
   assert.throws(() => createDramaTimeline({ voiceDurationSec: 5, ambienceBusGain: 1.1 }), /ambienceBusGain/);
   assert.throws(() => createDramaTimeline({ voiceDurationSec: 5, foleyBusGain: -0.1 }), /foleyBusGain/);

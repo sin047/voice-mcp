@@ -49,6 +49,15 @@ No OpenAI API key or OpenAI API dependency is required.
 - `AUDIO_ASSET_MAX_COUNT` — optional; defaults to 100 assets.
 - `AUDIO_ASSET_MAX_TOTAL_BYTES` — optional; defaults to 200 MiB total.
 
+### Persistent recordings
+
+- `RECORDING_DIR` — optional; defaults to `./data/recordings`. Mount this exact directory on a persistent Zeabur Volume, separately from `AUDIO_ASSET_DIR`.
+- `RECORDING_MAX_BYTES` — optional; defaults to 64 MiB per recording.
+- `RECORDING_MAX_COUNT` — optional; defaults to 500 recordings.
+- `RECORDING_MAX_TOTAL_BYTES` — optional; defaults to 2 GiB total.
+
+The `speak_with_soundscape` MCP tool accepts `save_recording: true` to persist the completed mixed WAV and metadata. It defaults to false. `GET /recordings` lists metadata and storage usage; `GET /recordings/:id` downloads a WAV; `DELETE /recordings/:id` deletes one. These routes use the private HTTP token. This archive is persistent storage, not a backup: export or copy the Volume contents to an independent backup location regularly.
+
 Mount the persistent Volume at the exact directory configured by `AUDIO_ASSET_DIR`. Without persistent storage, uploaded WAV assets can be lost when the container is replaced.
 
 ### Playback URL

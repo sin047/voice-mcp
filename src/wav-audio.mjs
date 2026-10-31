@@ -245,6 +245,8 @@ function foleyExcerptBoost(channels, startFrame, frames, loop, targetRms = 0.1) 
 
 export function mixSoundscape({
   voicePcm,
+  voiceSegments = [],
+  totalDurationSec,
   assets,
   cues = [],
   voiceGain = 0.9,
@@ -255,16 +257,41 @@ export function mixSoundscape({
   duckingAmount = 0.75,
   foleyDuckingDepth = 0.35,
 } = {}) {
-  const voice = voicePcm?.channels
-    ? voicePcm
-    : decodeRawPcm16(voicePcm, { sampleRate: TARGET_SAMPLE_RATE, channels: 1 });
-  const voiceChannels = resampleChannels(voice.channels, voice.sampleRate, TARGET_SAMPLE_RATE);
-  const voiceFrames = voiceChannels[0].length;
-  const durationSec = voiceFrames / TARGET_SAMPLE_RATE;
-  if (durationSec > MAX_SECONDS) throw new Error("Voice audio exceeds the 180 second mix limit");
+  const normalizedVoiceSegments = [];
+  if (voicePcm) {
+    const voice = voicePcm?.channels
+      ? voicePcm
+      : decodeRawPcm16(voicePcm, { sampleRate: TARGET_SAMPLE_RATE, channels: 1 });
+    normalizedVoiceSegments.push({ atSec: 0, pcm: voice });
+  }
+  for (const segment of voiceSegments) {
+    const pcm = segment.pcm?.channels
+      ? segment.pcm
+      : decodeRawPcm16(segment.pcm, { sampleRate: TARGET_SAMPLE_RATE, channels: 1 });
+    normalizedVoiceSegments.push({ atSec: segment.atSec ?? 0, pcm });
+  }
+  if (!normalizedVoiceSegments.length && totalDurationSec == null) {
+    throw new Error("A voicePcm, voiceSegments, or totalDurationSec is required");
+  }
+  const preparedVoiceSegments = normalizedVoiceSegments.map((segment) => ({
+    atSec: segment.atSec,
+    channels: resampleChannels(segment.pcm.channels, segment.pcm.sampleRate, TARGET_SAMPLE_RATE),
+  }));
+  const inferredDuration = preparedVoiceSegments.reduce((max, segment) =>
+    Math.max(max, segment.atSec + segment.channels[0].length / TARGET_SAMPLE_RATE), 0);
+  const durationSec = totalDurationSec ?? inferredDuration;
+  if (!Number.isFinite(durationSec) || durationSec <= 0 || durationSec > MAX_SECONDS) {
+    throw new Error("Timeline duration must be greater than zero and no more than 180 seconds");
+  }
+  const voiceFrames = Math.ceil(durationSec * TARGET_SAMPLE_RATE);
+  for (const segment of preparedVoiceSegments) {
+    if (!Number.isFinite(segment.atSec) || segment.atSec < 0 ||
+        Math.round(segment.atSec * TARGET_SAMPLE_RATE) + segment.channels[0].length > voiceFrames) {
+      throw new Error("Voice segment must fit within the total timeline duration");
+    }
+  }
 
-  // Speech duration varies between ElevenLabs takes. A short utterance may
-  // end before a preset's final cue; trim/fade the cue to the real voice length.
+  // Effects are bounded by the full timeline, not by the presence or duration of speech.
   const trimmedCues = cues
     .filter((cue) => (cue.atSec ?? 0) < durationSec - 0.01)
     .map((cue) => {
@@ -294,21 +321,26 @@ export function mixSoundscape({
 
   const left = new Float32Array(voiceFrames);
   const right = new Float32Array(voiceFrames);
-  for (let i = 0; i < voiceFrames; i += 1) {
-    const l = voiceChannels[0][i];
-    const r = voiceChannels.length > 1 ? voiceChannels[1][i] : l;
-    left[i] = l * timeline.voice.gain;
-    right[i] = r * timeline.voice.gain;
+  const duckingReference = new Float32Array(voiceFrames);
+  for (const segment of preparedVoiceSegments) {
+    const startFrame = Math.round(segment.atSec * TARGET_SAMPLE_RATE);
+    for (let i = 0; i < segment.channels[0].length; i += 1) {
+      const l = segment.channels[0][i];
+      const r = segment.channels.length > 1 ? segment.channels[1][i] : l;
+      left[startFrame + i] += l * timeline.voice.gain;
+      right[startFrame + i] += r * timeline.voice.gain;
+      duckingReference[startFrame + i] += (l + r) * 0.5;
+    }
   }
 
   const frameSize = Math.max(1, Math.floor(TARGET_SAMPLE_RATE * 40 / 1000));
   const ambienceEnvelope = duckingEnabled
-    ? createVoiceDuckingEnvelope(voiceChannels, TARGET_SAMPLE_RATE, {
+    ? createVoiceDuckingEnvelope([duckingReference], TARGET_SAMPLE_RATE, {
       amount: duckingAmount * timeline.mix.ducking.ambienceDepth,
     })
     : [{ gain: 1 }];
   const foleyEnvelope = duckingEnabled
-    ? createVoiceDuckingEnvelope(voiceChannels, TARGET_SAMPLE_RATE, {
+    ? createVoiceDuckingEnvelope([duckingReference], TARGET_SAMPLE_RATE, {
       amount: duckingAmount * timeline.mix.ducking.foleyDepth,
     })
     : [{ gain: 1 }];

@@ -1296,7 +1296,7 @@ app.get("/status", (_req, res) => {
       speak_with_soundscape: SOUNDSCAPE_MCP_ENABLED,
       soundscape_max_seconds: MAX_SOUND_SCAPE_SECONDS,
       character_alignment: true,
-      continuous_voice_timeline: true,
+      continuous_voice_timeline: SOUNDSCAPE_MCP_ENABLED,
       legacy_style_presets: true,
       inline_audio_tags: true,
     },

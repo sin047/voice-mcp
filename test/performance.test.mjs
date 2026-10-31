@@ -30,16 +30,23 @@ test("short utterances do not receive long direction tags", () => {
   assert.equal(plan.rendered_text, "嗯。");
 });
 
-test("breath events are only placed at an existing natural pause", () => {
+test("breathy mode uses a natural inhale or no tag, never a marked exhale", () => {
   const text = "我本来想告诉你一件事，可是看见你以后，又突然忘记了要说什么。";
-  const plan = createPerformancePlan(text, { performance: "breathy" });
-  if (plan.breath_event) {
-    assert.match(plan.rendered_text, /[，,、;；。！？!?].*\[(exhales|sighs)\]/);
-    assert.equal(plan.rendered_text.startsWith("[exhales]"), false);
-    assert.equal(plan.rendered_text.startsWith("[sighs]"), false);
-  } else {
-    assert.equal(plan.rendered_text, text);
-  }
+  const inhale = createPerformancePlan(text, {
+    performance: "breathy",
+    recentPatterns: ["none"],
+  });
+  assert.equal(inhale.breath_event, "inhale");
+  assert.match(inhale.rendered_text, /[，,、;；。！？!?].*\\[inhales\\]/);
+  assert.equal(inhale.rendered_text.startsWith("[inhales]"), false);
+  assert.doesNotMatch(inhale.rendered_text, /\\[(exhales|sighs)\\]/);
+
+  const quiet = createPerformancePlan(text, {
+    performance: "breathy",
+    recentPatterns: ["inhale"],
+  });
+  assert.equal(quiet.breath_event, "none");
+  assert.equal(quiet.rendered_text, text);
 });
 
 test("no pause means no invented breath at the beginning", () => {

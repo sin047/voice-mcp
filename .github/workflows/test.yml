@@ -33,6 +33,7 @@ jobs:
           node --check src/alignment-cues.mjs
           node --check src/voice-chunker.mjs
           node --check src/alignment-audit.mjs
+          node --check src/voice-long-audio.mjs
           node --check src/soundscape-presets.mjs
       - name: Regression tests
         run: npm test
@@ -56,13 +57,15 @@ jobs:
             import assert from "node:assert/strict";
             const status = JSON.parse(fs.readFileSync("/tmp/voice-status.json", "utf8"));
             assert.equal(status.status, "ok");
-            assert.equal(status.version, "1.4.0-beta.31");
+            assert.equal(status.version, "1.4.0-beta.32");
             assert.equal(status.features.request_id_continuity, true);
             assert.equal(status.features.language_auto_detection, true);
             assert.equal(status.features.local_drama_preview, true);
             assert.equal(status.features.private_audio_asset_library, true);
             assert.equal(status.features.persistent_recording_archive, true);
             assert.equal(status.features.continuous_voice_timeline, true);
+            assert.equal(status.features.speak_long, true);
+            assert.equal(status.features.long_voice_max_seconds, 180);
             assert.equal(status.features.speak_with_soundscape, true);
             assert.equal(status.features.soundscape_mcp_enabled, true);
             const ui = status.features.mcp_apps_audio_player;
@@ -190,6 +193,12 @@ jobs:
             assert.ok(names.includes("render_audio_timeline"));
             assert.ok(names.includes("render_continuous_audio_timeline"));
             assert.ok(names.includes("plan_voice_chunks"));
+            assert.ok(names.includes("speak_long"));
+            const speakLong = tools.find((tool) => tool.name === "speak_long");
+            assert.ok(speakLong.description.includes("ONE playable audio item"));
+            assert.ok(speakLong.description.includes("joins the PCM samples server-side"));
+            assert.ok(speakLong.inputSchema.properties.boundary_pause_ms);
+            assert.equal(speakLong._meta.ui.resourceUri, "ui://voice-mcp/player.html");
             const planner = tools.find((tool) => tool.name === "plan_voice_chunks");
             assert.ok(planner.description.includes("concatenate exactly"));
             assert.ok(planner.inputSchema.properties.target_chars);

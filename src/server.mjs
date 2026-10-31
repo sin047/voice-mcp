@@ -8,6 +8,7 @@ import { buildSoundscapePresetCues, parseSoundscapeDirective } from "./soundscap
 import process from "node:process";
 import { readFile } from "node:fs/promises";
 import { dramaPreviewHtml } from "./drama-preview.mjs";
+import { recordingsPreviewHtml } from "./recordings-preview.mjs";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { z } from "zod";
@@ -30,7 +31,7 @@ const MODEL_ID = process.env.ELEVENLABS_MODEL_ID || "eleven_v4";
 const OUTPUT_FORMAT = process.env.ELEVENLABS_OUTPUT_FORMAT || "mp3_44100_128";
 const PLAYER_URI = "ui://voice-mcp/player.html";
 const PLAYER_MIME = "text/html;profile=mcp-app";
-const VERSION = "1.4.0-beta.15";
+const VERSION = "1.4.0-beta.16";
 const MAX_CONTEXT_CHARS = 4000;
 const MAX_SPEAK_CHARS = 4000;
 const MAX_SOUND_SCAPE_TEXT_CHARS = 1200;
@@ -75,6 +76,7 @@ const PRIVATE_HTTP_PATHS = new Set([
   "/events/latest",
   "/assets",
   "/recordings",
+  "/recordings-library",
 ]);
 
 let latestEvent = null;
@@ -806,6 +808,11 @@ app.post(
     }
   },
 );
+
+app.get("/recordings-library", (_req, res) => {
+  res.setHeader("Cache-Control", "private, no-store, max-age=0");
+  res.type("html").send(recordingsPreviewHtml());
+});
 
 app.get("/recordings", async (_req, res) => {
   try {

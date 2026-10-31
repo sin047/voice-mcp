@@ -459,7 +459,7 @@ function createServer() {
             voicePcm,
             assets: loadedAssets,
             cues: preset.cues,
-            voiceGain: isIntimate ? 0.96 : 0.96,
+            voiceGain: 0.96,
             ambienceBusGain: 0.82,
             foleyBusGain: isIntimate ? 0.86 : 0.9,
             masterGain: 0.9,

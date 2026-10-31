@@ -38,6 +38,15 @@ test("soundscape directive is parsed and removed from the voice direction", () =
   );
 });
 
+test("single-action soundscape markers each resolve as independent presets", () => {
+  for (const name of ["clothing", "lubricant", "rhythm", "bed", "finish"]) {
+    assert.deepEqual(parseSoundscapeDirective("[soundscape:" + name + "] close-mic"), {
+      preset: name,
+      voiceDirection: "close-mic",
+    });
+  }
+});
+
 test("soundscape directive rejects unknown preset names", () => {
   assert.throws(
     () => parseSoundscapeDirective("[soundscape:unknown] close"),

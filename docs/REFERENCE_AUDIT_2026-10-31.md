@@ -71,13 +71,13 @@ The original reference is MIT-licensed. It provides the initial MCP/TTS/player f
 
 ## Current branch assessment
 
-The `zeabur` branch currently contains (beta.32):
+The `zeabur` branch currently contains (beta.33):
 - ElevenLabs synthesis with language/performance handling and previous/next text context.
 - Existing `speak` and `speak_with_soundscape` paths.
 - Private audio asset storage and soundscape mixing.
 - Independent `voiceSegments` and `totalDurationSec` support in the mixer.
 - `render_audio_timeline` with `voice`, `foley`, `ambience`, and `gap` segment types, where voice chunks are synthesized separately.
-- `render_continuous_audio_timeline`, which synthesizes the full passage once and resolves Foley/ambience cue offsets using ElevenLabs character timestamps.
+- `render_continuous_audio_timeline`, which synthesizes the full passage once and resolves Foley/ambience cue offsets using ElevenLabs character timestamps. Beta.33 adds an optional timeline tail so Foley/ambience can continue after speech ends without another TTS request.
 - `plan_voice_chunks`, which plans natural sentence/clause chunks with exact source reconstruction and bounded previous/next context, without spending TTS credits.
 - `alignment_audit`, a non-blocking check of provider character alignment text/timestamp integrity. It is not ASR and cannot verify the audible waveform.
 - `speak_long`, which plans long text, synthesizes chunks sequentially with a rolling request-ID chain, joins 24 kHz mono PCM server-side, and returns one WAV URL / one inline player card (up to 180 seconds). The inter-chunk silence is adjustable; this first version is voice-only.
@@ -88,9 +88,9 @@ Important caveats:
 
 ## Recommended sequence
 
-1. Deploy and listen-test beta.32 `speak_long`: confirm one player card, full duration, no truncation, and acceptable chunk transitions. A/B `boundary_pause_ms` at 0, 60 and 120 ms without changing voice settings.
-2. Add optional ASR-backed repetition / omission diagnostics as a separate opt-in, with non-blocking handling for breaths and non-verbal audio.
-3. Evaluate whether long voice should remain multi-request stitching or whether the provider's single-request duration/streaming limits permit longer uninterrupted synthesis.
+1. Deploy beta.33 and listen-test one continuous-voice Foley sequence with a short pure-sound tail. Keep the existing approved voice / Foley levels fixed; assess timing, tail length and fade shape only.
+2. Add a reusable cue-timing planner that can propose `after_text` anchors and pure-sound intervals without making TTS requests; use the user-approved Foley asset mapping.
+3. Add optional ASR-backed repetition / omission diagnostics as a separate opt-in, with non-blocking handling for breaths and non-verbal audio.
 4. Define a spatial cue contract (position, distance, start time, movement duration, interpolation, silence behavior).
 5. Prototype KU100 binaural rendering as an isolated optional module, preserving MIT and CC BY 4.0 notices.
 6. Keep Call/SIP work in `ringringring-shin`; do not introduce SIP or real-time transport into the speech-bar pipeline.

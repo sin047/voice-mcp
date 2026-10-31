@@ -610,6 +610,10 @@ function createServer() {
         ducking_amount: z.number().min(0).max(1).optional(),
         save_recording: z.boolean().optional().describe("Save the completed mixed WAV and its metadata to the persistent private recording archive; defaults to false."),
       }),
+      _meta: {
+        ui: { resourceUri: PLAYER_URI },
+        "ui/resourceUri": PLAYER_URI,
+      },
     },
     async ({ text, performance, language, direction, cues, voice_gain, ambience_bus_gain, foley_bus_gain, master_gain, ducking_enabled, ducking_amount, save_recording }) => {
       try {

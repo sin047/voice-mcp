@@ -58,6 +58,20 @@ test("soundscape directive accepts per-call duration overrides", () => {
   assert.throws(() => parseSoundscapeDirective("[soundscape:rhythm:61]"), /between 0.1 and 60/);
 });
 
+test("single-action Foley markers accept a per-call duration override", () => {
+  assert.deepEqual(parseSoundscapeDirective("[soundscape:clothing:10] close-mic"), {
+    preset: "clothing", durationSec: 10, voiceDirection: "close-mic",
+  });
+  assert.deepEqual(parseSoundscapeDirective("[soundscape:rhythm:12.5]"), {
+    preset: "rhythm", durationSec: 12.5, voiceDirection: undefined,
+  });
+  assert.equal(buildSoundscapePresetCues("clothing", assets, 10).cues[0].durationSec, 10);
+  assert.equal(buildSoundscapePresetCues("lubricant", assets, 3.5).cues[0].durationSec, 3.5);
+  assert.throws(() => parseSoundscapeDirective("[soundscape:clothing:0]"), /between 0.1 and 60/);
+  assert.throws(() => parseSoundscapeDirective("[soundscape:clothing:61]"), /between 0.1 and 60/);
+  assert.throws(() => buildSoundscapePresetCues("intimate", assets, 10), /single-action Foley/);
+});
+
 test("soundscape directive rejects unknown preset names", () => {
   assert.throws(
     () => parseSoundscapeDirective("[soundscape:unknown] close"),

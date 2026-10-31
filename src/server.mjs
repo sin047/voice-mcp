@@ -312,33 +312,35 @@ function playerHtml() {
 <style>
 body{margin:0;padding:10px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:transparent;color:#222}
 .card{border:1px solid rgba(127,127,127,.22);border-radius:16px;padding:12px;background:rgba(255,255,255,.92)}
-.row{display:flex;align-items:center;gap:10px}
-button{width:38px;height:38px;border:0;border-radius:999px;font-size:17px;cursor:pointer}
 .name{font-size:13px;opacity:.62}.text{font-size:14px;line-height:1.5;margin-top:8px;white-space:pre-wrap}
+audio{display:block;width:100%;height:40px;margin-top:12px}
+#state{font-size:12px;opacity:.7;margin-top:3px}
 @media(prefers-color-scheme:dark){body{color:#eee}.card{background:rgba(36,36,36,.94)}}
 </style>
 </head>
 <body>
-<div class="card"><div class="row"><button id="play">▶</button><div><div class="name" id="name"></div><div id="state">Ready</div></div></div><div class="text" id="text"></div><audio id="audio"></audio></div>
+<div class="card"><div class="name" id="name"></div><div id="state">Waiting for audio…</div><div class="text" id="text"></div><audio id="audio" controls preload="none"></audio></div>
 <script>
 const BOT_NAME=${safeBot};
 const VERSION=${safeVersion};
-const play=document.getElementById("play"),audio=document.getElementById("audio"),text=document.getElementById("text"),state=document.getElementById("state");
+const audio=document.getElementById("audio"),text=document.getElementById("text"),state=document.getElementById("state");
 document.getElementById("name").textContent=BOT_NAME;
 function apply(data){
   if(!data)return;
   if(data.error){state.textContent=data.error;return;}
   if(data.text)text.textContent=data.text;
-  if(data.audio_url){audio.src=data.audio_url;state.textContent="Tap to play";}
-  else if(data.audio_base64){audio.src="data:"+(data.audio_mime_type||"audio/mpeg")+";base64,"+data.audio_base64;state.textContent="Tap to play";}
+  if(data.audio_url){audio.src=data.audio_url;audio.load();state.textContent="Ready · tap play";}
+  else if(data.audio_base64){audio.src="data:"+(data.audio_mime_type||"audio/mpeg")+";base64,"+data.audio_base64;audio.load();state.textContent="Ready · tap play";}
 }
 window.addEventListener("message",(event)=>{
  const msg=event.data;
  if(msg?.method==="ui/notifications/tool-result") apply(msg.params?.structuredContent);
  if(msg?.structuredContent) apply(msg.structuredContent);
 });
-play.onclick=async()=>{if(!audio.src)return;if(audio.paused){await audio.play();play.textContent="❚❚"}else{audio.pause();play.textContent="▶"}};
-audio.onended=()=>play.textContent="▶";
+audio.addEventListener("play",()=>{state.textContent="Playing";});
+audio.addEventListener("pause",()=>{if(!audio.ended&&audio.currentTime>0)state.textContent="Paused";});
+audio.addEventListener("ended",()=>{state.textContent="Finished";});
+audio.addEventListener("error",()=>{state.textContent="Audio could not be loaded. Please try again.";});
 function send(method,params,id){const m={jsonrpc:"2.0",method,params:params||{}};if(id!==undefined)m.id=id;window.parent.postMessage(m,"*")}
 send("ui/initialize",{name:"voice-mcp",version:VERSION},1);
 setTimeout(()=>send("ui/notifications/initialized",{}),50);
@@ -346,7 +348,6 @@ setTimeout(()=>send("ui/notifications/initialized",{}),50);
 </body>
 </html>`;
 }
-
 function createServer() {
   const mcp = new McpServer({ name: "voice-mcp", version: VERSION });
 

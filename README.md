@@ -4,6 +4,12 @@ A platform-neutral Node.js MCP server for ElevenLabs voice generation, expressiv
 
 The actively maintained development and deployment branch is `zeabur`, currently at **v1.4.0-beta.26**. It runs as a Node.js 22+ / Express 5 service with Streamable HTTP MCP and is deployed on Zeabur. The same runtime can also run on a VPS or Docker host.
 
+
+
+### Multitrack timeline (beta.29)
+
+The MCP tool `render_audio_timeline` accepts a total `duration_sec` and ordered `segments`. Each segment has `type` (`voice`, `foley`, `ambience`, or `gap`), `at_sec`, and `duration_sec`. Voice segments also require `text`; Foley/ambience segments require an uploaded `asset_id`. Voice is synthesized as separate chunks and placed at its timeline offset; effects can play through voice-free sections or after the final voice segment. Gap segments reserve explicit silent intervals. Maximum: 60 seconds, 16 segments total, and 12 effect cues per render. Use `list_sound_assets` to discover private asset IDs. The original `speak` and `speak_with_soundscape` tools remain available.
+
 ## Branches
 
 - `zeabur`: **active maintained branch** for development and current Zeabur deployment; currently v1.4.0-beta.26.

@@ -1,6 +1,6 @@
 {
   "name": "voice-mcp",
-  "version": "1.4.0-beta.10",
+  "version": "1.4.0-beta.11",
   "description": "Platform-agnostic voice MCP server with ElevenLabs and spatial audio",
   "private": true,
   "type": "module",

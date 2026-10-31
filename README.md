@@ -2,7 +2,7 @@
 
 A platform-neutral Node.js MCP server for ElevenLabs voice generation, expressive delivery and mixed voice + sound-effect playback.
 
-The actively maintained development and deployment branch is `zeabur`, currently at **v1.4.0-beta.26**. It runs as a Node.js 22+ / Express 5 service with Streamable HTTP MCP and is deployed on Zeabur. The same runtime can also run on a VPS or Docker host.
+The actively maintained development and deployment branch is `zeabur`, currently at **v1.4.0-beta.30**. It runs as a Node.js 22+ / Express 5 service with Streamable HTTP MCP and is deployed on Zeabur. The same runtime can also run on a VPS or Docker host.
 
 
 
@@ -10,9 +10,15 @@ The actively maintained development and deployment branch is `zeabur`, currently
 
 The MCP tool `render_audio_timeline` accepts a total `duration_sec` and ordered `segments`. Each segment has `type` (`voice`, `foley`, `ambience`, or `gap`), `at_sec`, and `duration_sec`. Voice segments also require `text`; Foley/ambience segments require an uploaded `asset_id`. Voice is synthesized as separate chunks and placed at its timeline offset; effects can play through voice-free sections or after the final voice segment. Gap segments reserve explicit silent intervals. Maximum: 60 seconds, 16 segments total, and 12 effect cues per render. Use `list_sound_assets` to discover private asset IDs. The original `speak` and `speak_with_soundscape` tools remain available.
 
+### Continuous voice timeline (beta.30)
+
+The MCP tool `render_continuous_audio_timeline` synthesizes the full spoken passage once, requests ElevenLabs character-level timestamps, and overlays Foley/ambience without splitting the voice. Each cue can use either `at_sec` for an absolute offset or `after_text` for an exact spoken phrase; `occurrence` selects a later match when the phrase repeats. This is the preferred mode when speech should remain prosodically continuous. Maximum: 60 seconds and 12 effect cues. Use `list_sound_assets` to discover private asset IDs.
+
+Use `render_audio_timeline` when you intentionally need separately generated voice sections, voice-free gaps, or effects continuing independently of speech. The two timeline modes are complementary.
+
 ## Branches
 
-- `zeabur`: **active maintained branch** for development and current Zeabur deployment; currently v1.4.0-beta.26.
+- `zeabur`: **active maintained branch** for development and current Zeabur deployment; currently v1.4.0-beta.30.
 - `voice-v1.4-private-drama`: historical v1.4 beta.7 snapshot. It is not the active deployment branch; do not switch to it without comparing its history against `zeabur`.
 - `main`: repository default branch; it may not contain the latest maintained v1.4 work. Do not assume it is the deployment branch.
 

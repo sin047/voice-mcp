@@ -52,3 +52,38 @@ test("recording store enforces file, count, total storage and WAV format limits"
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+
+test("recording metadata supports persistent titles, tags and favorites with validation", async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), "voice-mcp-recordings-"));
+  const wav = fixtureWav();
+  const store = createRecordingStore({ directory });
+  try {
+    const saved = await store.save({ buffer: wav, text: "A saved line" });
+    const updated = await store.update(saved.id, {
+      title: "A quiet evening",
+      tags: ["favorite", "Japanese", "favorite", "  "],
+      favorite: true,
+    });
+    assert.equal(updated.title, "A quiet evening");
+    assert.deepEqual(updated.tags, ["favorite", "Japanese"]);
+    assert.equal(updated.favorite, true);
+    assert.ok(updated.updatedAt);
+    const restartedStore = createRecordingStore({ directory });
+    const listed = await restartedStore.list();
+    assert.equal(listed[0].title, "A quiet evening");
+    assert.deepEqual(listed[0].tags, ["favorite", "Japanese"]);
+    assert.equal(listed[0].favorite, true);
+
+    const reset = await restartedStore.update(saved.id, { title: "", tags: [], favorite: false });
+    assert.equal(reset.title, "");
+    assert.deepEqual(reset.tags, []);
+    assert.equal(reset.favorite, false);
+    await assert.rejects(() => restartedStore.update(saved.id, { favorite: "yes" }), /must be a boolean/);
+    await assert.rejects(() => restartedStore.update(saved.id, { tags: Array(13).fill("tag") }), /up to 12/);
+    await assert.rejects(() => restartedStore.update(saved.id, { fileName: "unsafe.wav" }), /Unsupported/);
+    assert.equal(await restartedStore.update("rec_00000000-0000-0000-0000-000000000000", { favorite: true }), null);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});

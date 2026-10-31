@@ -111,8 +111,9 @@ After every code deployment:
 1. Confirm the latest GitHub Actions run for `zeabur` is successful.
 2. Confirm Zeabur reports the deployment as complete.
 3. Open `GET /status` and verify `status: "ok"` and `version: "1.4.0-beta.17"` (or the new expected version).
-4. Make one real call through the existing `voice2-v1.3.1` MCP connection.
-5. For soundscape playback, verify the expected private assets exist and that the returned temporary WAV URL plays.
+4. Refresh the existing `voice2-v1.3.1` custom MCP app in ChatGPT after tool UI metadata changes, then make one real `speak` call and confirm the inline audio player appears.
+5. Call `speak_with_soundscape` and confirm the same inline player loads the mixed WAV URL and native audio controls can play it.
+6. For soundscape playback, verify the expected private assets exist and that the returned temporary WAV URL plays.
 
 Do not treat a successful CI run as proof that the live Zeabur deployment succeeded.
 

@@ -2,11 +2,11 @@
 
 A platform-neutral Node.js MCP server for ElevenLabs voice generation, expressive delivery and mixed voice + sound-effect playback.
 
-The actively maintained development and deployment branch is `zeabur`, currently at **v1.4.0-beta.23**. It runs as a Node.js 22+ / Express 5 service with Streamable HTTP MCP and is deployed on Zeabur. The same runtime can also run on a VPS or Docker host.
+The actively maintained development and deployment branch is `zeabur`, currently at **v1.4.0-beta.24**. It runs as a Node.js 22+ / Express 5 service with Streamable HTTP MCP and is deployed on Zeabur. The same runtime can also run on a VPS or Docker host.
 
 ## Branches
 
-- `zeabur`: **active maintained branch** for development and current Zeabur deployment; currently v1.4.0-beta.23.
+- `zeabur`: **active maintained branch** for development and current Zeabur deployment; currently v1.4.0-beta.24.
 - `voice-v1.4-private-drama`: historical v1.4 beta.7 snapshot. It is not the active deployment branch; do not switch to it without comparing its history against `zeabur`.
 - `main`: repository default branch; it may not contain the latest maintained v1.4 work. Do not assume it is the deployment branch.
 
@@ -63,7 +63,7 @@ The existing `speak` tool remains available. The private asset tools `list_sound
 
 ### `speak`
 
-Generate a voice clip with the configured ElevenLabs voice. Supports performance modes (`natural`, `soft`, `close`, `breathy`, `expressive`), language selection, request stitching and an optional `emotion` control. `emotion` maps neutral/calm/curious/tired to subtle B1, warm/tender to the approved inhale-only B2.1 profile, and excited/nervous/intense to experimental inhale-only B3. Omit it to preserve existing behavior; for gradual transitions across adjacent chunks, change the emotion one step at a time and pass the preceding `request_id`.
+Generate a voice clip with the configured ElevenLabs voice. Supports performance modes (`natural`, `soft`, `close`, `breathy`, `expressive`), language selection, request stitching and an optional `emotion` control. `emotion` maps neutral/calm/curious/tired to subtle B1, warm/tender to the approved inhale-only B2.1 profile, and excited/nervous/intense to experimental inhale-only B3. Omit it to preserve existing behavior; for gradual transitions across adjacent chunks, change the emotion one step at a time and pass the preceding `request_id`. Older MCP clients can use `[emotion:warm]` at the start of `direction` (after any `[soundscape:...]` marker) without changing the MCP connection.
 
 For the already-installed mobile `voice2-v1.3.1` app, soundscapes are backward-compatible through the existing `direction` parameter; no new mobile MCP connection is required. Prefix `direction` with one of these markers:
 

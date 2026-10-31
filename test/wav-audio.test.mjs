@@ -214,6 +214,49 @@ test("trims close cues to short synthesized speech without failing", () => {
   assert.equal(decodePcmWav(mixed.buffer).frameCount, 44100 * 4);
 });
 
+test("supports effects-only timeline sections after voice ends", () => {
+  const voice = rawPcm(tone(44100, 0.1));
+  const effect = encodePcm16Wav([tone(44100 * 2, 0.2)], 44100);
+  const mixed = mixSoundscape({
+    voicePcm: voice,
+    totalDurationSec: 4,
+    assets: new Map([["fx", effect]]),
+    cues: [{ fileId: "fx", kind: "foley", atSec: 2, durationSec: 2,
+      gain: 0.5, fadeInSec: 0, fadeOutSec: 0 }],
+    voiceGain: 1,
+    foleyBusGain: 1,
+    masterGain: 1,
+    duckingEnabled: false,
+  });
+  const output = decodePcmWav(mixed.buffer);
+  assert.equal(mixed.durationSec, 4);
+  assert.equal(output.frameCount, 44100 * 4);
+  assert.ok(Math.abs(output.channels[0][100] - 0.1) < 0.01, "voice remains in the first second");
+  assert.ok(output.channels[0][44100 * 3] > 0.05, "effects-only tail remains audible after voice ends");
+});
+
+test("mixes separated voice segments with a pure-Foley gap between them", () => {
+  const first = rawPcm(tone(44100, 0.1));
+  const second = rawPcm(tone(44100, 0.15));
+  const effect = encodePcm16Wav([tone(44100, 0.2)], 44100);
+  const mixed = mixSoundscape({
+    voiceSegments: [{ atSec: 0, pcm: first }, { atSec: 2, pcm: second }],
+    totalDurationSec: 3,
+    assets: new Map([["fx", effect]]),
+    cues: [{ fileId: "fx", kind: "foley", atSec: 1, durationSec: 1,
+      gain: 0.5, fadeInSec: 0, fadeOutSec: 0 }],
+    voiceGain: 1,
+    foleyBusGain: 1,
+    masterGain: 1,
+    duckingEnabled: false,
+  });
+  const output = decodePcmWav(mixed.buffer);
+  assert.equal(output.frameCount, 44100 * 3);
+  assert.ok(Math.abs(output.channels[0][22050] - 0.1) < 0.01, "voice segment starts at zero");
+  assert.ok(output.channels[0][44100 + 22050] > 0.05, "middle section contains Foley without speech");
+  assert.ok(output.channels[0][44100 * 2 + 22050] > 0.1, "second voice segment resumes at two seconds");
+});
+
 test("rejects a soundscape longer than the supported duration", () => {
   const voice = rawPcm(tone(44100 * 181, 0.01));
   assert.throws(() => mixSoundscape({ voicePcm: voice, assets: new Map() }), /180 second/);

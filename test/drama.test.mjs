@@ -73,6 +73,18 @@ test("validates optional source offsets for cue excerpts", () => {
   );
 });
 
+test("validates per-cue Foley normalization target", () => {
+  const timeline = createDramaTimeline({
+    voiceDurationSec: 8,
+    cues: [{ fileId: "cloth", kind: "foley", normalizationTargetRms: 0.14 }],
+  });
+  assert.equal(timeline.cues[0].normalizationTargetRms, 0.14);
+  assert.throws(() => createDramaTimeline({
+    voiceDurationSec: 8,
+    cues: [{ fileId: "cloth", kind: "foley", normalizationTargetRms: 0.21 }],
+  }), /normalizationTargetRms/);
+});
+
 test("validates mix buses, ducking and spatial modes", () => {
   const timeline = createDramaTimeline({
     voiceDurationSec: 12,

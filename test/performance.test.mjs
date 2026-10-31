@@ -37,9 +37,9 @@ test("breathy mode uses a natural inhale or no tag, never a marked exhale", () =
     recentPatterns: ["none"],
   });
   assert.equal(inhale.breath_event, "inhale");
-  assert.match(inhale.rendered_text, /[，,、;；。！？!?].*\\[inhales\\]/);
+  assert.match(inhale.rendered_text, /[，,、;；。！？!?].*\[inhales\]/);
   assert.equal(inhale.rendered_text.startsWith("[inhales]"), false);
-  assert.doesNotMatch(inhale.rendered_text, /\\[(exhales|sighs)\\]/);
+  assert.doesNotMatch(inhale.rendered_text, /\[(exhales|sighs)\]/);
 
   const quiet = createPerformancePlan(text, {
     performance: "breathy",

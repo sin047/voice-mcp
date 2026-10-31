@@ -68,7 +68,8 @@ test("all curated presets resolve to assets with the intended bus and timeline",
   assert.equal(close.cues[0].fileId, "fx_cloth");
   assert.equal(close.cues[1].fileId, "fx_wet");
   assert.deepEqual(close.cues.map((cue) => cue.sourceOffsetSec), [12, 12]);
-  assert.deepEqual(close.cues.map((cue) => cue.gain), [0.54, 0.46]);
+  assert.deepEqual(close.cues.map((cue) => cue.gain), [0.7, 0.46]);
+  assert.equal(close.cues[0].normalizationTargetRms, 0.14);
   assert.ok(close.cues[0].pan < 0 && close.cues[1].pan > 0);
 
 

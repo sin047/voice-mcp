@@ -827,6 +827,10 @@ function createServer() {
       ducking_amount: z.number().min(0).max(1).optional(),
       save_recording: z.boolean().optional(),
     }),
+    _meta: {
+      ui: { resourceUri: PLAYER_URI },
+      "ui/resourceUri": PLAYER_URI,
+    },
   }, async (args) => {
     try {
       const loadedAssets = new Map();

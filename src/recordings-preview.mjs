@@ -1,5 +1,5 @@
 export function recordingsPreviewHtml() {
-  return String.raw\`<!doctype html>
+  return String.raw`<!doctype html>
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
@@ -182,5 +182,5 @@ $("clear").addEventListener("click", () => { $("search").value = ""; renderList(
 load();
 </script>
 </body>
-</html>\`;
+</html>`;
 }

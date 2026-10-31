@@ -91,3 +91,10 @@
 - 音效不再被最后一段人声的结束时间截断；可在无人声区间继续播放，ducking 参考整条时间轴上的实际人声采样。
 - 原 `voicePcm` 调用保持兼容，既有 `speak`、beta.27 的 Lubricant 平衡、已验收 Clothing / Rhythm 参数均不变。
 - 本次完成的是混音引擎层与回归测试；尚未新增面向 MCP 用户的时间轴编排工具。下一步在 CI 通过后，新增可提交 `voice` / `foley` / `ambience` / `gap` 片段的 timeline MCP tool。
+
+### beta.29 · MCP 时间轴入口
+- 新增 `render_audio_timeline`：统一接收 `duration_sec` 与 `segments`，支持 `voice`、`foley`、`ambience`、`gap` 四类片段。
+- `voice` 片段独立调用 TTS 并放置到 `at_sec`；`foley` / `ambience` 使用私有素材库 `asset_id`，可在人声段之间或人声结束后播放；`gap` 保留明确的无声区间。
+- 限制：总长最多 60 秒、最多 16 个片段、最多 12 条音效 cue。每个人声片段必须在分配时长内生成完成，不自动加速或截断人声。
+- 原 `speak`、`speak_with_soundscape` 及已验收的 Rhythm / Clothing / Lubricant 参数保持不变。
+- CI 通过前不部署；实际 MCP 工具清单和 schema 由 Runtime Smoke Test 验证。

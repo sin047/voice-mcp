@@ -72,6 +72,7 @@ footer{font-size:11px;color:var(--muted);line-height:1.8;margin-top:28px;border-
 const $ = (id) => document.getElementById(id);
 let recordings = [];
 let favoritesOnly = false;
+let currentUsage = {};
 const fmtBytes = (n) => {
   if (!Number.isFinite(Number(n))) return "—";
   const value = Number(n);
@@ -110,13 +111,13 @@ function element(tag, className, text) {
   if (text !== undefined) node.textContent = String(text);
   return node;
 }
-function renderSummary(usage = {}) {
-  const count = Number(usage.recordingCount || 0);
-  const total = Number(usage.totalBytes || 0);
-  const max = Number(usage.maxTotalBytes || 0);
-  $("count").textContent = String(count);
+function renderSummary(usage) {
+  if (usage) currentUsage = usage;
+  const total = Number(currentUsage.totalBytes || 0);
+  const max = Number(currentUsage.maxTotalBytes || 0);
+  $("count").textContent = String(recordings.length);
   $("favorites").textContent = String(recordings.filter((item) => item.favorite).length);
-  $("usageText").textContent = fmtBytes(total) + " 已使用 · 单条上限 " + fmtBytes(usage.maxRecordingBytes || 0);
+  $("usageText").textContent = fmtBytes(total) + " 已使用 · 单条上限 " + fmtBytes(currentUsage.maxRecordingBytes || 0);
   $("meterFill").style.width = (max > 0 ? Math.min(100, total / max * 100) : 0) + "%";
 }
 async function updateMetadata(item, patch, button) {
@@ -235,6 +236,7 @@ function renderList() {
           recordings = recordings.filter((recording) => recording.id !== item.id);
           renderSummary();
           renderList();
+          await load();
           setStatus("录音已删除。");
         } catch (error) {
           remove.disabled = false;

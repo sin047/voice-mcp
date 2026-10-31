@@ -80,3 +80,8 @@
 - 每次只覆盖该 cue 的 `durationSec`，不改变素材、source offset、gain、RMS normalization、pan、distance 或 fades。
 - 最终可听长度仍受源 WAV 从 sourceOffset 开始的剩余长度、生成语音长度约束；不足时自动截短，不循环、不变速、不拉伸。
 - 此版本只增加调用级时长覆盖，不改动已通过的 Rhythm 与 Clothing 混音参数；Lubricant 等待试听验收。
+
+### beta.27 · Lubricant mix balance adjustment
+- 用户反馈 beta.26 的 10 秒润滑液试听中人声存在感太强。仅对 `lubricant` preset 做 A/B 微调：voiceGain 0.86（此前 0.96），foleyBusGain 0.95（此前 0.90），duckingAmount 0.68（此前 0.78），foleyDuckingDepth 0.20（此前 0.35）。
+- 润滑液素材本身的 cue gain、目标时长、source offset、pan、distance、fade 均不变。其他预设（尤其已通过的 clothing、rhythm）混音参数不变。
+- 验收目标：音效比 beta.26 更靠前，人声略退后但仍清晰可辨；若出现遮盖，回退或小幅修正。

@@ -60,6 +60,7 @@ jobs:
             assert.equal(status.features.local_drama_preview, true);
             assert.equal(status.features.private_audio_asset_library, true);
             assert.equal(status.features.persistent_recording_archive, true);
+            assert.equal(status.features.continuous_voice_timeline, true);
             assert.equal(status.features.speak_with_soundscape, true);
             assert.equal(status.features.soundscape_mcp_enabled, true);
             const ui = status.features.mcp_apps_audio_player;

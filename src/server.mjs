@@ -3,6 +3,7 @@ import { createAccessGuard } from "./http-auth.mjs";
 import { createFixedWindowRateLimiter, createVoiceUsageGuard } from "./usage-guard.mjs";
 import { createAudioAssetStore } from "./audio-assets.mjs";
 import { createRecordingStore } from "./recording-store.mjs";
+import { parseByteRange } from "./audio-range.mjs";
 import { decodeRawPcm16, mixSoundscape } from "./wav-audio.mjs";
 import { buildSoundscapePresetCues, parseSoundscapeDirective } from "./soundscape-presets.mjs";
 import process from "node:process";
@@ -782,11 +783,34 @@ app.get("/audio/:id", (req, res) => {
     generatedAudioCache.delete(id);
     return res.status(404).json({ error: "Audio preview expired" });
   }
+
+  const totalLength = item.buffer.length;
   res.setHeader("Content-Type", "audio/wav");
-  res.setHeader("Content-Length", String(item.buffer.length));
+  res.setHeader("Accept-Ranges", "bytes");
   res.setHeader("Cache-Control", "private, no-store, max-age=0");
   res.setHeader("X-Content-Type-Options", "nosniff");
-  return res.send(item.buffer);
+  // The MCP player runs in a cross-origin app frame; make media responses
+  // explicitly usable by the embedded audio element.
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+
+  let range;
+  try {
+    range = parseByteRange(req.headers.range, totalLength);
+  } catch {
+    res.setHeader("Content-Range", `bytes */${totalLength}`);
+    return res.status(416).end();
+  }
+
+  if (!range) {
+    res.setHeader("Content-Length", String(totalLength));
+    return res.status(200).send(item.buffer);
+  }
+
+  res.status(206);
+  res.setHeader("Content-Range", `bytes ${range.start}-${range.end}/${totalLength}`);
+  res.setHeader("Content-Length", String(range.length));
+  return res.send(item.buffer.subarray(range.start, range.end + 1));
 });
 
 app.get("/assets", async (_req, res) => {

@@ -188,7 +188,7 @@ jobs:
             assert.equal(speak._meta.ui.resourceUri, "ui://voice-mcp/player.html");
             assert.ok(speak.description.includes("[soundscape:rhythm]"));
             assert.ok(speak.description.includes("[soundscape:clothing]"));
-            assert.ok(speak.description.includes("Append an optional duration"));
+            assert.ok(speak.description.includes("Add a per-call duration"));
             assert.ok(speak.description.includes(":SECONDS"));
 
             assert.deepEqual(speak.inputSchema.properties.emotion.enum, ["neutral", "calm", "warm", "tender", "curious", "excited", "nervous", "intense", "tired"]);

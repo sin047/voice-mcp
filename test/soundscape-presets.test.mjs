@@ -47,6 +47,17 @@ test("single-action soundscape markers each resolve as independent presets", () 
   }
 });
 
+test("soundscape directive accepts per-call duration overrides", () => {
+  assert.deepEqual(parseSoundscapeDirective("[soundscape:clothing:10] close-mic"), {
+    preset: "clothing",
+    durationSec: 10,
+    voiceDirection: "close-mic",
+  });
+  assert.equal(parseSoundscapeDirective("[soundscape:rhythm:12.5]").durationSec, 12.5);
+  assert.throws(() => parseSoundscapeDirective("[soundscape:rhythm:0.05]"), /between 0.1 and 60/);
+  assert.throws(() => parseSoundscapeDirective("[soundscape:rhythm:61]"), /between 0.1 and 60/);
+});
+
 test("soundscape directive rejects unknown preset names", () => {
   assert.throws(
     () => parseSoundscapeDirective("[soundscape:unknown] close"),
@@ -113,6 +124,9 @@ test("all curated presets resolve to assets with the intended bus and timeline",
   assert.equal(buildSoundscapePresetCues("rhythm", assets).cues[0].durationSec, 8);
   assert.equal(buildSoundscapePresetCues("bed", assets).cues[0].durationSec, 8);
   assert.equal(buildSoundscapePresetCues("finish", assets).cues[0].durationSec, 4);
+  assert.equal(buildSoundscapePresetCues("clothing", assets, 10).cues[0].durationSec, 10);
+  assert.equal(buildSoundscapePresetCues("rhythm", assets, 12.5).cues[0].durationSec, 12.5);
+  assert.equal(buildSoundscapePresetCues("lubricant", assets).cues[0].durationSec, 6, "default duration remains unchanged when no override is supplied");
 });
 
 test("soundscape preset reports missing assets without returning incomplete cues silently", () => {

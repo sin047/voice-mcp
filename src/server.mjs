@@ -2,6 +2,7 @@ import express from "express";
 import { createAccessGuard } from "./http-auth.mjs";
 import { createFixedWindowRateLimiter, createVoiceUsageGuard } from "./usage-guard.mjs";
 import { createAudioAssetStore } from "./audio-assets.mjs";
+import { createRecordingStore } from "./recording-store.mjs";
 import { decodeRawPcm16, mixSoundscape } from "./wav-audio.mjs";
 import { buildSoundscapePresetCues, parseSoundscapeDirective } from "./soundscape-presets.mjs";
 import process from "node:process";
@@ -29,7 +30,7 @@ const MODEL_ID = process.env.ELEVENLABS_MODEL_ID || "eleven_v4";
 const OUTPUT_FORMAT = process.env.ELEVENLABS_OUTPUT_FORMAT || "mp3_44100_128";
 const PLAYER_URI = "ui://voice-mcp/player.html";
 const PLAYER_MIME = "text/html;profile=mcp-app";
-const VERSION = "1.4.0-beta.13";
+const VERSION = "1.4.0-beta.14";
 const MAX_CONTEXT_CHARS = 4000;
 const MAX_SPEAK_CHARS = 4000;
 const MAX_SOUND_SCAPE_TEXT_CHARS = 1200;
@@ -42,6 +43,12 @@ const audioAssetStore = createAudioAssetStore({
   maxTotalBytes: Number(process.env.AUDIO_ASSET_MAX_TOTAL_BYTES || 200 * 1024 * 1024),
 });
 const generatedAudioCache = new Map();
+const recordingStore = createRecordingStore({
+  directory: process.env.RECORDING_DIR,
+  maxRecordingBytes: Number(process.env.RECORDING_MAX_BYTES || 64 * 1024 * 1024),
+  maxRecordingCount: Number(process.env.RECORDING_MAX_COUNT || 500),
+  maxTotalBytes: Number(process.env.RECORDING_MAX_TOTAL_BYTES || 2 * 1024 * 1024 * 1024),
+});
 const GENERATED_AUDIO_TTL_MS = 10 * 60 * 1000;
 const GENERATED_AUDIO_MAX_ITEMS = 4;
 const GENERATED_AUDIO_MAX_BYTES = 40 * 1024 * 1024;
@@ -67,6 +74,7 @@ const PRIVATE_HTTP_PATHS = new Set([
   "/panel",
   "/events/latest",
   "/assets",
+  "/recordings",
 ]);
 
 let latestEvent = null;
@@ -88,7 +96,7 @@ app.use(cors);
 // The /mcp endpoint intentionally keeps its existing connector behavior; this
 // HTTP token is not MCP authentication and does not protect MCP tool calls.
 app.use((req, res, next) => {
-  if (PRIVATE_HTTP_PATHS.has(req.path) || req.path.startsWith("/assets/")) {
+  if (PRIVATE_HTTP_PATHS.has(req.path) || req.path.startsWith("/assets/") || req.path.startsWith("/recordings/")) {
     return requirePrivateHttpAccess(req, res, next);
   }
   return next();
@@ -598,9 +606,10 @@ function createServer() {
         master_gain: z.number().min(0).max(1).optional(),
         ducking_enabled: z.boolean().optional(),
         ducking_amount: z.number().min(0).max(1).optional(),
+        save_recording: z.boolean().optional().describe("Save the completed mixed WAV and its metadata to the persistent private recording archive; defaults to false."),
       }),
     },
-    async ({ text, performance, language, direction, cues, voice_gain, ambience_bus_gain, foley_bus_gain, master_gain, ducking_enabled, ducking_amount }) => {
+    async ({ text, performance, language, direction, cues, voice_gain, ambience_bus_gain, foley_bus_gain, master_gain, ducking_enabled, ducking_amount, save_recording }) => {
       try {
         const baseUrlValue = (process.env.MCP_PUBLIC_BASE_URL || process.env.ZEABUR_WEB_URL);
         if (!baseUrlValue) throw new Error("MCP_PUBLIC_BASE_URL must be configured before soundscape playback can be returned");
@@ -659,6 +668,14 @@ function createServer() {
         });
 
         if (mix.buffer.length > 16 * 1024 * 1024) throw new Error("Mixed audio exceeds the 16 MB playback cache limit");
+        const recording = save_recording ? await recordingStore.save({
+          buffer: mix.buffer,
+          text,
+          performance: result.performance?.mode || performance || "natural",
+          language: result.language || language || "auto",
+          source: "speak_with_soundscape",
+          cues: mix.timeline.cues.map((cue) => ({ asset_id: cue.fileId, kind: cue.kind, at_sec: cue.atSec, duration_sec: cue.durationSec })),
+        }) : null;
         const now = Date.now();
         for (const [id, item] of generatedAudioCache) {
           if (item.expiresAt <= now) generatedAudioCache.delete(id);
@@ -691,6 +708,7 @@ function createServer() {
             request_id: result.request_id,
             expires_in_seconds: GENERATED_AUDIO_TTL_MS / 1000,
             limiter_gain: Number(mix.limiterGain.toFixed(4)),
+            ...(recording ? { recording_id: recording.id, recording_saved: true } : { recording_saved: false }),
           },
         };
       } catch (error) {
@@ -764,6 +782,43 @@ app.delete("/assets/:id", async (req, res) => {
   }
 });
 
+
+app.get("/recordings", async (_req, res) => {
+  try {
+    const [recordings, usage] = await Promise.all([recordingStore.list(), recordingStore.getUsage()]);
+    return res.json({ recordings, usage });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return res.status(500).json({ error: message });
+  }
+});
+
+app.get("/recordings/:id", async (req, res) => {
+  try {
+    const item = await recordingStore.get(req.params.id);
+    if (!item) return res.status(404).json({ error: "Recording not found" });
+    res.setHeader("Content-Type", "audio/wav");
+    res.setHeader("Content-Length", String(item.buffer.length));
+    res.setHeader("Content-Disposition", `attachment; filename="${item.metadata.fileName}"`);
+    res.setHeader("Cache-Control", "private, no-store, max-age=0");
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    return res.send(item.buffer);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return res.status(500).json({ error: message });
+  }
+});
+
+app.delete("/recordings/:id", async (req, res) => {
+  try {
+    const deleted = await recordingStore.remove(req.params.id);
+    return deleted ? res.status(204).end() : res.status(404).json({ error: "Recording not found" });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return res.status(500).json({ error: message });
+  }
+});
+
 app.get("/status", (_req, res) => {
   res.json({
     status: "ok",
@@ -786,6 +841,7 @@ app.get("/status", (_req, res) => {
       japanese_text_normalization_opt_in: true,
       local_drama_preview: true,
       private_audio_asset_library: true,
+      persistent_recording_archive: true,
       soundscape_mcp_enabled: SOUNDSCAPE_MCP_ENABLED,
       speak_with_soundscape: SOUNDSCAPE_MCP_ENABLED,
       soundscape_max_seconds: MAX_SOUND_SCAPE_SECONDS,

@@ -71,7 +71,7 @@ The original reference is MIT-licensed. It provides the initial MCP/TTS/player f
 
 ## Current branch assessment
 
-The `zeabur` branch currently contains (beta.31):
+The `zeabur` branch currently contains (beta.32):
 - ElevenLabs synthesis with language/performance handling and previous/next text context.
 - Existing `speak` and `speak_with_soundscape` paths.
 - Private audio asset storage and soundscape mixing.
@@ -80,15 +80,17 @@ The `zeabur` branch currently contains (beta.31):
 - `render_continuous_audio_timeline`, which synthesizes the full passage once and resolves Foley/ambience cue offsets using ElevenLabs character timestamps.
 - `plan_voice_chunks`, which plans natural sentence/clause chunks with exact source reconstruction and bounded previous/next context, without spending TTS credits.
 - `alignment_audit`, a non-blocking check of provider character alignment text/timestamp integrity. It is not ASR and cannot verify the audible waveform.
+- `speak_long`, which plans long text, synthesizes chunks sequentially with a rolling request-ID chain, joins 24 kHz mono PCM server-side, and returns one WAV URL / one inline player card (up to 180 seconds). The inter-chunk silence is adjustable; this first version is voice-only.
 
-Important caveat:
-- Independent voice segments are not yet equivalent to a single continuous TTS pass with timestamp-aligned overlays. The latter is the key lesson to carry forward from the second article and the binaural reference.
+Important caveats:
+- `speak_long` creates one playback file/card, but the speech is still synthesized in multiple TTS requests. Request-ID continuity may reduce prosody changes but cannot guarantee the result sounds identical to one uninterrupted TTS pass. Listen testing is required.
+- `speak_long` currently has no Foley overlay. `render_continuous_audio_timeline` remains the single-request mode for timestamp-aligned Foley/ambience on passages within its limit.
 
 ## Recommended sequence
 
-1. Finish and listen-test the current multitrack timeline, including pure-Foley gaps and effects-only tails.
-2. Add a continuous-voice / timestamp-aligned overlay mode so effects do not require extra TTS boundaries.
-3. Add optional transcript-based repetition / omission diagnostics, with a non-blocking policy for non-verbal audio.
+1. Deploy and listen-test beta.32 `speak_long`: confirm one player card, full duration, no truncation, and acceptable chunk transitions. A/B `boundary_pause_ms` at 0, 60 and 120 ms without changing voice settings.
+2. Add optional ASR-backed repetition / omission diagnostics as a separate opt-in, with non-blocking handling for breaths and non-verbal audio.
+3. Evaluate whether long voice should remain multi-request stitching or whether the provider's single-request duration/streaming limits permit longer uninterrupted synthesis.
 4. Define a spatial cue contract (position, distance, start time, movement duration, interpolation, silence behavior).
 5. Prototype KU100 binaural rendering as an isolated optional module, preserving MIT and CC BY 4.0 notices.
 6. Keep Call/SIP work in `ringringring-shin`; do not introduce SIP or real-time transport into the speech-bar pipeline.

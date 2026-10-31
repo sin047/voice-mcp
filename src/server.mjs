@@ -85,7 +85,7 @@ const recentPerformancePatterns = [];
 const cors = (_req, res, next) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,DELETE,OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, Accept, Mcp-Session-Id, Last-Event-ID, X-Asset-Name, X-Asset-Kind");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, Accept, Mcp-Session-Id, Last-Event-ID, X-Asset-Name, X-Asset-Kind, X-Recording-Text, X-Recording-Performance, X-Recording-Language");
   if (_req.method === "OPTIONS") return res.status(204).end();
   next();
 };
@@ -782,6 +782,30 @@ app.delete("/assets/:id", async (req, res) => {
   }
 });
 
+
+app.post(
+  "/recordings",
+  express.raw({ type: ["audio/wav", "audio/x-wav"], limit: Number(process.env.RECORDING_MAX_BYTES || 64 * 1024 * 1024) }),
+  async (req, res) => {
+    if (!Buffer.isBuffer(req.body)) {
+      return res.status(415).json({ error: "Upload a WAV file with Content-Type: audio/wav" });
+    }
+    try {
+      const recording = await recordingStore.save({
+        buffer: req.body,
+        text: req.get("x-recording-text") || "Imported recording (private archive verification)",
+        performance: req.get("x-recording-performance") || "imported",
+        language: req.get("x-recording-language") || "auto",
+        source: "private_http_import",
+      });
+      return res.status(201).json({ recording });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const statusCode = /file size limit|storage limit|archive is full/.test(message) ? 413 : 400;
+      return res.status(statusCode).json({ error: message });
+    }
+  },
+);
 
 app.get("/recordings", async (_req, res) => {
   try {

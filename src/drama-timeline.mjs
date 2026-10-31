@@ -25,6 +25,7 @@ export function createDramaTimeline(input) {
   const foleyBusGain = boundedNumber(input.foleyBusGain ?? 0.9, "foleyBusGain", 0, 1);
   const masterGain = boundedNumber(input.masterGain ?? 0.85, "masterGain", 0, 1);
   const duckingAmount = boundedNumber(input.duckingAmount ?? 0.75, "duckingAmount", 0, 1);
+  const foleyDuckingDepth = boundedNumber(input.foleyDuckingDepth ?? 0.35, "foleyDuckingDepth", 0, 1);
   const duckingEnabled = input.duckingEnabled !== false;
   const spatialMode = String(input.spatialMode ?? "stereo");
   if (!SPATIAL_MODES.has(spatialMode)) {
@@ -105,7 +106,7 @@ export function createDramaTimeline(input) {
         attackSec: 0.045,
         releaseSec: 0.26,
         ambienceDepth: 0.65,
-        foleyDepth: 0.35,
+        foleyDepth: foleyDuckingDepth,
       }),
     }),
     cues: Object.freeze(normalized),

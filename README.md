@@ -2,11 +2,11 @@
 
 A platform-neutral Node.js MCP server for ElevenLabs voice generation, expressive delivery and mixed voice + sound-effect playback.
 
-The actively maintained development and deployment branch is `zeabur`, currently at **v1.4.0-beta.16**. It runs as a Node.js 22+ / Express 5 service with Streamable HTTP MCP and is deployed on Zeabur. The same runtime can also run on a VPS or Docker host.
+The actively maintained development and deployment branch is `zeabur`, currently at **v1.4.0-beta.17**. It runs as a Node.js 22+ / Express 5 service with Streamable HTTP MCP and is deployed on Zeabur. The same runtime can also run on a VPS or Docker host.
 
 ## Branches
 
-- `zeabur`: **active maintained branch** for development and current Zeabur deployment; currently v1.4.0-beta.16.
+- `zeabur`: **active maintained branch** for development and current Zeabur deployment; currently v1.4.0-beta.17.
 - `voice-v1.4-private-drama`: historical v1.4 beta.7 snapshot. It is not the active deployment branch; do not switch to it without comparing its history against `zeabur`.
 - `main`: repository default branch; it may not contain the latest maintained v1.4 work. Do not assume it is the deployment branch.
 
@@ -102,7 +102,7 @@ The generated playback URL expires after 10 minutes and is held in process memor
 5. The preview converts supported browser audio files to PCM WAV before uploading. The server accepts mono/stereo 16-bit PCM or 32-bit float WAV assets.
 6. After restricting `/mcp` access and explicitly enabling `MCP_SOUNDSCAPE_TOOLS_ENABLED=true`, call `list_sound_assets` in ChatGPT to discover asset IDs, then call `speak_with_soundscape`.
 
-The private HTTP token protects `/drama-preview`, `/drama/timeline.mjs`, `/recordings-library`, `/recordings`, `/speak`, `/panel`, `/events/latest` and `/assets`. Open `/recordings-library` in the same browser after completing Basic Auth to manage archived WAV recordings. It does **not** authenticate the MCP `/mcp` endpoint.
+The private HTTP token protects `/drama-preview`, `/drama/timeline.mjs`, `/recordings-library`, `/recordings`, `/speak`, `/panel`, `/events/latest` and `/assets`. Open `/recordings-library` in the same browser after completing Basic Auth to manage archived WAV recordings: rename each clip, add up to 12 tags, mark favorites, filter favorites and browse recordings grouped by date. These edits persist in the recording metadata. It does **not** authenticate the MCP `/mcp` endpoint.
 
 ## Environment variables
 

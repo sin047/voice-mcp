@@ -2,11 +2,11 @@
 
 A platform-neutral Node.js MCP server for ElevenLabs voice generation, expressive delivery and mixed voice + sound-effect playback.
 
-The actively maintained development and deployment branch is `zeabur`, currently at **v1.4.0-beta.18**. It runs as a Node.js 22+ / Express 5 service with Streamable HTTP MCP and is deployed on Zeabur. The same runtime can also run on a VPS or Docker host.
+The actively maintained development and deployment branch is `zeabur`, currently at **v1.4.0-beta.19**. It runs as a Node.js 22+ / Express 5 service with Streamable HTTP MCP and is deployed on Zeabur. The same runtime can also run on a VPS or Docker host.
 
 ## Branches
 
-- `zeabur`: **active maintained branch** for development and current Zeabur deployment; currently v1.4.0-beta.18.
+- `zeabur`: **active maintained branch** for development and current Zeabur deployment; currently v1.4.0-beta.19.
 - `voice-v1.4-private-drama`: historical v1.4 beta.7 snapshot. It is not the active deployment branch; do not switch to it without comparing its history against `zeabur`.
 - `main`: repository default branch; it may not contain the latest maintained v1.4 work. Do not assume it is the deployment branch.
 

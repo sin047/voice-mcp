@@ -15,7 +15,7 @@ export function parseByteRange(rangeHeader, totalLength) {
   const header = rangeHeader.trim();
   if (!/^bytes=/i.test(header)) return null;
 
-  const match = /^bytes=(\\d*)-(\\d*)$/i.exec(header);
+  const match = /^bytes=(\d*)-(\d*)$/i.exec(header);
   if (!match || header.includes(",")) {
     throw new RangeError("Unsatisfiable byte range");
   }

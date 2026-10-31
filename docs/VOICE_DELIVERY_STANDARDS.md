@@ -66,3 +66,11 @@ Safety against mechanical delivery:
 For a gradual emotional transition across a longer passage, split at a natural sentence boundary, change `emotion` one step at a time (for example `neutral → warm → tender`), and pass the immediately preceding `request_id` through `previous_request_ids` when the voice and model are unchanged. Each chunk remains independently generated, but request continuity helps preserve vocal consistency.
 
 The user-approved `breathy` default remains B2.1. The emotion field is an explicit steering control, not an automatic inference from the text; the calling assistant should choose it from the conversational context. For older MCP clients whose cached tool schema does not yet expose the `emotion` field, prefix the remaining `direction` text with `[emotion:warm]` (or another supported emotion); when using a soundscape, place it after the `[soundscape:...]` marker.
+
+### beta.24 verification
+
+- GitHub Actions regression and runtime smoke checks passed.
+- The deployed MCP accepted the backward-compatible `[emotion:warm]` direction marker from the existing cached client schema.
+- Live response metadata confirmed `emotion=neutral / breath_level=B1` and `emotion=warm / breath_level=B2.1`.
+- A following warm chunk successfully carried the preceding ElevenLabs `request_id`; the anti-repetition history omitted a second inhale where appropriate.
+- No changes were made to Rain v2, Close v4, Intimate v1.3, or the approved B2.1 baseline.

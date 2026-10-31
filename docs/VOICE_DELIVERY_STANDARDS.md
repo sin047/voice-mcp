@@ -46,7 +46,7 @@ Breathing tags are vocal-performance instructions for TTS, not separate Foley tr
 - `test/performance.test.mjs`: regression coverage for inhale-only B2.1 behavior.
 - `docs/SOUNDSCAPE_MIX_LEVELS.md`: environmental and Foley loudness standards.
 
-## Emotion-aware breathing profiles (beta.23)
+## Emotion-aware breathing profiles (beta.24)
 
 The optional MCP `emotion` field lets the caller steer both emotional delivery and breathing intensity. If omitted, existing `performance` behavior is unchanged.
 
@@ -65,4 +65,4 @@ Safety against mechanical delivery:
 
 For a gradual emotional transition across a longer passage, split at a natural sentence boundary, change `emotion` one step at a time (for example `neutral → warm → tender`), and pass the immediately preceding `request_id` through `previous_request_ids` when the voice and model are unchanged. Each chunk remains independently generated, but request continuity helps preserve vocal consistency.
 
-The user-approved `breathy` default remains B2.1. The emotion field is an explicit steering control, not an automatic inference from the text; the calling assistant should choose it from the conversational context.
+The user-approved `breathy` default remains B2.1. The emotion field is an explicit steering control, not an automatic inference from the text; the calling assistant should choose it from the conversational context. For older MCP clients whose cached tool schema does not yet expose the `emotion` field, prefix the remaining `direction` text with `[emotion:warm]` (or another supported emotion); when using a soundscape, place it after the `[soundscape:...]` marker.

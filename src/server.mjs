@@ -32,7 +32,7 @@ const MODEL_ID = process.env.ELEVENLABS_MODEL_ID || "eleven_v4";
 const OUTPUT_FORMAT = process.env.ELEVENLABS_OUTPUT_FORMAT || "mp3_44100_128";
 const PLAYER_URI = "ui://voice-mcp/player.html";
 const PLAYER_MIME = "text/html;profile=mcp-app";
-const VERSION = "1.4.0-beta.21";
+const VERSION = "1.4.0-beta.22";
 const MAX_CONTEXT_CHARS = 4000;
 const MAX_SPEAK_CHARS = 4000;
 const MAX_SOUND_SCAPE_TEXT_CHARS = 1200;
@@ -326,12 +326,39 @@ const BOT_NAME=${safeBot};
 const VERSION=${safeVersion};
 const audio=document.getElementById("audio"),text=document.getElementById("text"),state=document.getElementById("state");
 document.getElementById("name").textContent=BOT_NAME;
-function apply(data){
+let activeObjectUrl=null;
+async function apply(data){
   if(!data)return;
   if(data.error){state.textContent=data.error;return;}
   if(data.text)text.textContent=data.text;
-  if(data.audio_url){audio.src=data.audio_url;audio.load();state.textContent="Ready · tap play";}
-  else if(data.audio_base64){audio.src="data:"+(data.audio_mime_type||"audio/mpeg")+";base64,"+data.audio_base64;audio.load();state.textContent="Ready · tap play";}
+  if(data.audio_url){
+    state.textContent="Loading audio…";
+    try{
+      // Fetch the complete mixed WAV before playback. This avoids mobile WebKit
+      // stopping a long cross-origin media stream after an early range response.
+      const response=await fetch(data.audio_url,{method:"GET",cache:"no-store"});
+      if(!response.ok)throw new Error("Audio request failed ("+response.status+")");
+      const blob=await response.blob();
+      if(!blob.size)throw new Error("Audio response was empty");
+      const playable=blob.type?blob:new Blob([blob],{type:data.audio_mime_type||"audio/wav"});
+      const nextUrl=URL.createObjectURL(playable);
+      const previousUrl=activeObjectUrl;
+      activeObjectUrl=nextUrl;
+      audio.src=nextUrl;
+      audio.load();
+      if(previousUrl)URL.revokeObjectURL(previousUrl);
+      state.textContent="Ready · tap play";
+    }catch(error){
+      // Keep the original URL as a compatibility fallback if blob loading is blocked.
+      audio.src=data.audio_url;
+      audio.load();
+      state.textContent="Streaming audio · tap play";
+    }
+  }else if(data.audio_base64){
+    audio.src="data:"+(data.audio_mime_type||"audio/mpeg")+";base64,"+data.audio_base64;
+    audio.load();
+    state.textContent="Ready · tap play";
+  }
 }
 function send(method,params,id){
  const message={jsonrpc:"2.0",method,params:params||{}};

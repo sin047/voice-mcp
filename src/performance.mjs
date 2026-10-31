@@ -19,8 +19,7 @@ const LEGACY_STYLE_TAGS = {
 
 const BREATH_PATTERNS = {
   breathy: [
-    { id: "exhale", tag: "[exhales]" },
-    { id: "sigh", tag: "[sighs]" },
+    { id: "inhale", tag: "[inhales]" },
     { id: "none", tag: "" },
   ],
   expressive: [

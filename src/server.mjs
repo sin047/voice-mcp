@@ -32,7 +32,7 @@ const MODEL_ID = process.env.ELEVENLABS_MODEL_ID || "eleven_v4";
 const OUTPUT_FORMAT = process.env.ELEVENLABS_OUTPUT_FORMAT || "mp3_44100_128";
 const PLAYER_URI = "ui://voice-mcp/player.html";
 const PLAYER_MIME = "text/html;profile=mcp-app";
-const VERSION = "1.4.0-beta.22";
+const VERSION = "1.4.0-beta.23";
 const MAX_CONTEXT_CHARS = 4000;
 const MAX_SPEAK_CHARS = 4000;
 const MAX_SOUND_SCAPE_TEXT_CHARS = 1200;
@@ -637,7 +637,7 @@ function createServer() {
     "speak_with_soundscape",
     {
       title: `${BOT_NAME}'s Voice + Soundscape`,
-      description: `Generate ${BOT_NAME}'s spoken voice and mix it with sound effects from the private audio asset library. First call list_sound_assets to discover asset_id values. The final mix is returned as a short-lived playable audio URL in the inline player. Keep text under ${MAX_SOUND_SCAPE_TEXT_CHARS} characters and the finished mix under ${MAX_SOUND_SCAPE_SECONDS} seconds. Use only assets the user has uploaded and is authorized to use. Voice remains centered; mono effects support left/right pan and distance attenuation; stereo effects retain their stereo image. This server-side MCP mix is stereo panning, not browser HRTF.`,
+      description: `Generate ${BOT_NAME}'s spoken voice and mix it with sound effects from the private audio asset library. First call list_sound_assets to discover asset_id values. The final mix is returned as a short-lived playable audio URL in the inline player. Optional emotion uses the same adaptive B1/B2.1/experimental B3 breathing profiles as speak. Keep text under ${MAX_SOUND_SCAPE_TEXT_CHARS} characters and the finished mix under ${MAX_SOUND_SCAPE_SECONDS} seconds. Use only assets the user has uploaded and is authorized to use. Voice remains centered; mono effects support left/right pan and distance attenuation; stereo effects retain their stereo image. This server-side MCP mix is stereo panning, not browser HRTF.`,
       inputSchema: z.object({
         text: z.string().min(1).max(MAX_SOUND_SCAPE_TEXT_CHARS).describe("Text to speak (maximum 1200 characters; final audio is limited to 60 seconds)"),
         performance: z.enum(["auto", "natural", "soft", "close", "breathy", "expressive"]).optional(),

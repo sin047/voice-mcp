@@ -18,6 +18,7 @@ test("creates a restrained private drama cue sheet with local-only references", 
   assert.equal(timeline.mix.foleyBusGain, 0.9);
   assert.equal(timeline.mix.masterGain, 0.85);
   assert.equal(timeline.mix.duckingEnabled, true);
+  assert.equal(timeline.mix.ducking.foleyDepth, 0.35);
   assert.equal(timeline.mix.spatialMode, "stereo");
   assert.deepEqual(timeline.cues.map((cue) => cue.gain), [0.1, 0.22]);
   assert.equal(timeline.cues[0].loop, true);
@@ -93,6 +94,7 @@ test("validates mix buses, ducking and spatial modes", () => {
     masterGain: 0.8,
     duckingEnabled: false,
     duckingAmount: 0.3,
+    foleyDuckingDepth: 0.55,
     spatialMode: "hrtf",
   });
   assert.equal(timeline.mix.ambienceBusGain, 0.4);
@@ -100,11 +102,13 @@ test("validates mix buses, ducking and spatial modes", () => {
   assert.equal(timeline.mix.masterGain, 0.8);
   assert.equal(timeline.mix.duckingEnabled, false);
   assert.equal(timeline.mix.duckingAmount, 0.3);
+  assert.equal(timeline.mix.ducking.foleyDepth, 0.55);
   assert.equal(timeline.mix.spatialMode, "hrtf");
   assert.throws(() => createDramaTimeline({ voiceDurationSec: 5, ambienceBusGain: 1.1 }), /ambienceBusGain/);
   assert.throws(() => createDramaTimeline({ voiceDurationSec: 5, foleyBusGain: -0.1 }), /foleyBusGain/);
   assert.throws(() => createDramaTimeline({ voiceDurationSec: 5, masterGain: 2 }), /masterGain/);
   assert.throws(() => createDramaTimeline({ voiceDurationSec: 5, duckingAmount: 1.2 }), /duckingAmount/);
+  assert.throws(() => createDramaTimeline({ voiceDurationSec: 5, foleyDuckingDepth: 1.2 }), /foleyDuckingDepth/);
   assert.throws(() => createDramaTimeline({ voiceDurationSec: 5, spatialMode: "surround" }), /spatialMode/);
   assert.throws(() => createDramaTimeline({ voiceDurationSec: 5, cues: [{ fileId: "fx", kind: "foley", distanceMeters: 0.2 }] }), /distanceMeters/);
   assert.throws(() => createDramaTimeline({ voiceDurationSec: 5, cues: [{ fileId: "fx", kind: "foley", distanceMeters: 9 }] }), /distanceMeters/);

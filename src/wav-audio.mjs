@@ -224,7 +224,7 @@ function ambienceLoudnessBoost(channels) {
  * The following boost is applied with tanh soft limiting so transient spikes
  * do not clip even when the useful texture is quiet.
  */
-function foleyExcerptBoost(channels, startFrame, frames, loop) {
+function foleyExcerptBoost(channels, startFrame, frames, loop, targetRms = 0.1) {
   const sourceFrames = channels[0].length;
   const stride = Math.max(1, Math.floor(frames / 100000));
   let sumSquares = 0;
@@ -240,7 +240,7 @@ function foleyExcerptBoost(channels, startFrame, frames, loop) {
   }
   const rms = samples ? Math.sqrt(sumSquares / samples) : 0;
   if (rms < 0.000001) return 1;
-  return Math.max(1, Math.min(16, 0.10 / rms));
+  return Math.max(1, Math.min(20, targetRms / rms));
 }
 
 export function mixSoundscape({
@@ -351,7 +351,13 @@ export function mixSoundscape({
       ? ambienceLoudnessBoost(sourceChannels)
       : 1;
     const foleyBoost = cue.kind === "foley"
-      ? foleyExcerptBoost(sourceChannels, sourceOffsetFrames, cueFrames, cue.loop)
+      ? foleyExcerptBoost(
+        sourceChannels,
+        sourceOffsetFrames,
+        cueFrames,
+        cue.loop,
+        cue.normalizationTargetRms,
+      )
       : 1;
     const fadeInFrames = Math.round(cue.fadeInSec * TARGET_SAMPLE_RATE);
     const fadeOutFrames = Math.round(cue.fadeOutSec * TARGET_SAMPLE_RATE);

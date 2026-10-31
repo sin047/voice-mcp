@@ -2,20 +2,21 @@
 
 A platform-neutral Node.js MCP server for ElevenLabs voice generation, expressive delivery and mixed voice + sound-effect playback.
 
-The experimental runtime is designed to run on a VPS, Docker host or another Node-compatible platform. It does not depend on Zeabur APIs.
+The actively maintained development and deployment branch is `zeabur`, currently at **v1.4.0-beta.13**. It runs as a Node.js 22+ / Express 5 service with Streamable HTTP MCP and is deployed on Zeabur. The same runtime can also run on a VPS or Docker host.
 
 ## Branches
 
-- `zeabur`: existing stable v1.3.1 ChatGPT MCP deployment. This branch is not changed by the experimental work.
-- `voice-v1.4-private-drama`: experimental v1.4 audio engine, private sound library and soundscape MCP tools. Keep it separate until deployment and real-device acceptance tests pass.
+- `zeabur`: **active maintained branch** for development and current Zeabur deployment; currently v1.4.0-beta.13.
+- `voice-v1.4-private-drama`: historical v1.4 beta.7 snapshot. It is not the active deployment branch; do not switch to it without comparing its history against `zeabur`.
+- `main`: repository default branch; it may not contain the latest maintained v1.4 work. Do not assume it is the deployment branch.
 
 ## Use directly in ChatGPT desktop (Windows)
 
-This experimental branch can run entirely on your own PC. No Zeabur, VPS, public tunnel or OAuth is needed for this local setup.
+The maintained `zeabur` branch can also run entirely on your own PC for local testing. No Zeabur, VPS, public tunnel or OAuth is needed for this local-only setup.
 
 1. Clone this branch and install dependencies:
    ```powershell
-   git clone --branch voice-v1.4-private-drama https://github.com/sin047/voice-mcp.git
+   git clone --branch zeabur https://github.com/sin047/voice-mcp.git
    cd voice-mcp
    npm install
    Copy-Item .env.example .env
@@ -72,7 +73,7 @@ For the already-installed mobile `voice2-v1.3.1` app, soundscapes are backward-c
 - `[soundscape:close]` — subtle close-detail Foley
 - `[soundscape:intimate]` — layered adult/intimate Foley
 
-The marker is stripped before the direction reaches ElevenLabs. Omit the marker for the original voice-only MP3 path. Soundscape playback uses a temporary WAV URL and requires the curated assets plus `MCP_PUBLIC_BASE_URL`.
+The marker is stripped before the direction reaches ElevenLabs. Omit the marker for the original voice-only MP3 path. Soundscape playback uses a temporary WAV URL and requires the curated assets plus `MCP_PUBLIC_BASE_URL` or Zeabur's injected `ZEABUR_WEB_URL` fallback.
 
 ### `list_sound_assets`
 

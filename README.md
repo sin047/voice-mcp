@@ -2,13 +2,19 @@
 
 A platform-neutral Node.js MCP server for ElevenLabs voice generation, expressive delivery and mixed voice + sound-effect playback.
 
-The actively maintained development and deployment branch is `zeabur`, currently at **v1.4.0-beta.30**. It runs as a Node.js 22+ / Express 5 service with Streamable HTTP MCP and is deployed on Zeabur. The same runtime can also run on a VPS or Docker host.
+The actively maintained development and deployment branch is `zeabur`, currently at **v1.4.0-beta.31**. It runs as a Node.js 22+ / Express 5 service with Streamable HTTP MCP and is deployed on Zeabur. The same runtime can also run on a VPS or Docker host.
 
 
 
 ### Multitrack timeline (beta.29)
 
 The MCP tool `render_audio_timeline` accepts a total `duration_sec` and ordered `segments`. Each segment has `type` (`voice`, `foley`, `ambience`, or `gap`), `at_sec`, and `duration_sec`. Voice segments also require `text`; Foley/ambience segments require an uploaded `asset_id`. Voice is synthesized as separate chunks and placed at its timeline offset; effects can play through voice-free sections or after the final voice segment. Gap segments reserve explicit silent intervals. Maximum: 60 seconds, 16 segments total, and 12 effect cues per render. Use `list_sound_assets` to discover private asset IDs. The original `speak` and `speak_with_soundscape` tools remain available.
+
+### Natural voice chunk planner and alignment QA (beta.31)
+
+The MCP tool `plan_voice_chunks` divides long text at sentence and clause boundaries without making any ElevenLabs requests. Chunk text concatenates exactly to the original input; each chunk includes bounded `previous_text` / `next_text` context and code-point offsets. Generate chunks in order with `speak`, passing the immediately preceding `request_id` through `previous_request_ids`. Context is supplied to the model but is not repeated in spoken audio. Default target is 850 characters and the hard maximum is 1200 characters per chunk.
+
+The continuous timeline response also includes `alignment_audit`, a non-blocking check of provider character alignment completeness and timestamp ordering. This is an alignment-integrity diagnostic, **not ASR**: it cannot prove that every intended word was actually spoken in the rendered waveform. A future ASR-backed check would be a separate opt-in feature.
 
 ### Continuous voice timeline (beta.30)
 
@@ -18,7 +24,7 @@ Use `render_audio_timeline` when you intentionally need separately generated voi
 
 ## Branches
 
-- `zeabur`: **active maintained branch** for development and current Zeabur deployment; currently v1.4.0-beta.30.
+- `zeabur`: **active maintained branch** for development and current Zeabur deployment; currently v1.4.0-beta.31.
 - `voice-v1.4-private-drama`: historical v1.4 beta.7 snapshot. It is not the active deployment branch; do not switch to it without comparing its history against `zeabur`.
 - `main`: repository default branch; it may not contain the latest maintained v1.4 work. Do not assume it is the deployment branch.
 

@@ -41,7 +41,7 @@ Additional findings beyond the first article:
 
 Migration status:
 - The current `render_audio_timeline` synthesizes each `voice` segment independently. That enables voice-free intervals, but can introduce exactly the chunk-boundary discontinuity described in the article.
-- Next timeline improvement should support a continuous voice render with aligned cue offsets (or grouped contiguous voice spans) so Foley can be overlaid without forcing extra TTS chunk boundaries.
+- Implemented in beta.30 as `render_continuous_audio_timeline`: one TTS request, character-level alignment, and Foley/ambience overlays placed by exact `after_text` anchors or absolute `at_sec` offsets. The tool uses the inline audio player and exposes its capability through `/status`.
 - Add optional transcript QA as a diagnostic / warning, not as a hard gate for expressive or non-verbal audio.
 
 ### 3. `Saekisui/binaural-voice`
@@ -71,12 +71,13 @@ The original reference is MIT-licensed. It provides the initial MCP/TTS/player f
 
 ## Current branch assessment
 
-The `zeabur` branch currently contains:
+The `zeabur` branch currently contains (beta.30):
 - ElevenLabs synthesis with language/performance handling and previous/next text context.
 - Existing `speak` and `speak_with_soundscape` paths.
 - Private audio asset storage and soundscape mixing.
 - Independent `voiceSegments` and `totalDurationSec` support in the mixer.
-- `render_audio_timeline` with `voice`, `foley`, `ambience`, and `gap` segment types.
+- `render_audio_timeline` with `voice`, `foley`, `ambience`, and `gap` segment types, where voice chunks are synthesized separately.
+- `render_continuous_audio_timeline`, which synthesizes the full passage once and resolves Foley/ambience cue offsets using ElevenLabs character timestamps.
 
 Important caveat:
 - Independent voice segments are not yet equivalent to a single continuous TTS pass with timestamp-aligned overlays. The latter is the key lesson to carry forward from the second article and the binaural reference.

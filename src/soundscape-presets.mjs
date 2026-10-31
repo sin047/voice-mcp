@@ -258,8 +258,11 @@ export function buildSoundscapePresetCues(preset, assets = [], durationSec) {
       missingAssets.push(definition.assetName);
       continue;
     }
+    if (durationSec != null && (definitions.length !== 1 || definition.kind !== "foley")) {
+      throw new Error("Custom duration is supported only for single-action Foley presets");
+    }
     const { assetName, ...cue } = definition;
-    cues.push({ fileId: asset.id, ...cue, ...(durationSec == null || definitions.length !== 1 ? {} : { durationSec }) });
+    cues.push({ fileId: asset.id, ...cue, ...(durationSec == null ? {} : { durationSec }) });
   }
 
   return Object.freeze({

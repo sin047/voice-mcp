@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile, readdir, unlink, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, rename, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { decodePcmWav } from "./wav-audio.mjs";
 
@@ -108,6 +108,46 @@ export function createRecordingStore({
     return true;
   }
 
+  async function update(id, patch = {}) {
+    const record = await get(id);
+    if (!record) return null;
+    if (!patch || typeof patch !== "object" || Array.isArray(patch)) {
+      throw new Error("Recording metadata update must be an object");
+    }
+    const allowed = new Set(["title", "tags", "favorite"]);
+    for (const key of Object.keys(patch)) {
+      if (!allowed.has(key)) throw new Error("Unsupported recording metadata field: " + key);
+    }
+
+    const metadata = { ...record.metadata };
+    if (Object.hasOwn(patch, "title")) {
+      if (typeof patch.title !== "string") throw new Error("Recording title must be text");
+      metadata.title = safeText(patch.title, 120).trim();
+    }
+    if (Object.hasOwn(patch, "tags")) {
+      if (!Array.isArray(patch.tags) || patch.tags.length > 12 || patch.tags.some((tag) => typeof tag !== "string")) {
+        throw new Error("Recording tags must be an array of up to 12 text values");
+      }
+      metadata.tags = [...new Set(patch.tags.map((tag) => safeText(tag, 24).trim()).filter(Boolean))].slice(0, 12);
+    }
+    if (Object.hasOwn(patch, "favorite")) {
+      if (typeof patch.favorite !== "boolean") throw new Error("Recording favorite must be a boolean");
+      metadata.favorite = patch.favorite;
+    }
+    metadata.updatedAt = new Date().toISOString();
+
+    const jsonPath = path.join(root, id + ".json");
+    const tempPath = path.join(root, id + "." + randomUUID() + ".tmp");
+    try {
+      await writeFile(tempPath, JSON.stringify(metadata, null, 2), { flag: "wx", mode: 0o600 });
+      await rename(tempPath, jsonPath);
+    } catch (error) {
+      await unlink(tempPath).catch(() => {});
+      throw error;
+    }
+    return metadata;
+  }
+
   async function getUsage() {
     const records = await list();
     return {
@@ -119,5 +159,5 @@ export function createRecordingStore({
     };
   }
 
-  return Object.freeze({ list, save, get, remove, getUsage, directory: root });
+  return Object.freeze({ list, save, get, update, remove, getUsage, directory: root });
 }

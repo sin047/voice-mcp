@@ -82,8 +82,13 @@ test("all curated presets resolve to assets with the intended bus and timeline",
   assert.deepEqual(intimate.cues.map((cue) => cue.atSec), [0, 3, 6, 10, 14]);
   assert.deepEqual(
     intimate.cues.map((cue) => cue.gain),
-    [0.304, 0.274, 0.341, 0.322, 0.259],
-    "sequential Intimate cues must not use the quiet simultaneous-layer baseline",
+    [0.13, 0.274, 0.54, 0.54, 0.46],
+    "Intimate clothing returns to the prior level while quiet sequential cues use foreground levels",
+  );
+  assert.deepEqual(
+    intimate.cues.map((cue) => cue.normalizationTargetRms ?? null),
+    [null, null, 0.14, 0.14, 0.14],
+    "quiet rhythm, bed and finish excerpts receive the approved excerpt normalization target",
   );
 });
 

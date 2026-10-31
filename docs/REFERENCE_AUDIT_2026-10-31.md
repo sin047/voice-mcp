@@ -71,13 +71,15 @@ The original reference is MIT-licensed. It provides the initial MCP/TTS/player f
 
 ## Current branch assessment
 
-The `zeabur` branch currently contains (beta.30):
+The `zeabur` branch currently contains (beta.31):
 - ElevenLabs synthesis with language/performance handling and previous/next text context.
 - Existing `speak` and `speak_with_soundscape` paths.
 - Private audio asset storage and soundscape mixing.
 - Independent `voiceSegments` and `totalDurationSec` support in the mixer.
 - `render_audio_timeline` with `voice`, `foley`, `ambience`, and `gap` segment types, where voice chunks are synthesized separately.
 - `render_continuous_audio_timeline`, which synthesizes the full passage once and resolves Foley/ambience cue offsets using ElevenLabs character timestamps.
+- `plan_voice_chunks`, which plans natural sentence/clause chunks with exact source reconstruction and bounded previous/next context, without spending TTS credits.
+- `alignment_audit`, a non-blocking check of provider character alignment text/timestamp integrity. It is not ASR and cannot verify the audible waveform.
 
 Important caveat:
 - Independent voice segments are not yet equivalent to a single continuous TTS pass with timestamp-aligned overlays. The latter is the key lesson to carry forward from the second article and the binaural reference.

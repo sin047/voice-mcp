@@ -69,8 +69,8 @@ test("warm and tender emotions use the approved inhale-only B2.1 profile", () =>
   });
   assert.equal(inhale.breath_level, "B2.1");
   assert.equal(inhale.breath_event, "inhale");
-  assert.match(inhale.rendered_text, /\\[inhales\\]/);
-  assert.doesNotMatch(inhale.rendered_text, /\\[(exhales|sighs)\\]/);
+  assert.match(inhale.rendered_text, /\[inhales\]/);
+  assert.doesNotMatch(inhale.rendered_text, /\[(exhales|sighs)\]/);
 
   const quiet = createPerformancePlan(text, {
     performance: "natural",
@@ -92,8 +92,8 @@ test("experimental B3 emotions use a stronger inhale cue without explicit exhale
   assert.equal(plan.breath_level, "B3");
   assert.equal(plan.breath_event, "strong-inhale");
   assert.match(plan.direction, /more noticeable natural breathing/);
-  assert.match(plan.rendered_text, /\\[inhales\\]/);
-  assert.doesNotMatch(plan.rendered_text, /\\[(exhales|sighs|gasps)\\]/);
+  assert.match(plan.rendered_text, /\[inhales\]/);
+  assert.doesNotMatch(plan.rendered_text, /\[(exhales|sighs|gasps)\]/);
 });
 
 test("emotion direction is combined with an explicit voice direction", () => {

@@ -31,7 +31,7 @@ const MODEL_ID = process.env.ELEVENLABS_MODEL_ID || "eleven_v4";
 const OUTPUT_FORMAT = process.env.ELEVENLABS_OUTPUT_FORMAT || "mp3_44100_128";
 const PLAYER_URI = "ui://voice-mcp/player.html";
 const PLAYER_MIME = "text/html;profile=mcp-app";
-const VERSION = "1.4.0-beta.16";
+const VERSION = "1.4.0-beta.17";
 const MAX_CONTEXT_CHARS = 4000;
 const MAX_SPEAK_CHARS = 4000;
 const MAX_SOUND_SCAPE_TEXT_CHARS = 1200;
@@ -86,7 +86,7 @@ const recentPerformancePatterns = [];
 
 const cors = (_req, res, next) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET,POST,DELETE,OPTIONS");
+  res.setHeader("Access-Control-Allow-Methods", "GET,POST,PATCH,DELETE,OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, Accept, Mcp-Session-Id, Last-Event-ID, X-Asset-Name, X-Asset-Kind, X-Recording-Text, X-Recording-Performance, X-Recording-Language");
   if (_req.method === "OPTIONS") return res.status(204).end();
   next();
@@ -821,6 +821,18 @@ app.get("/recordings", async (_req, res) => {
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     return res.status(500).json({ error: message });
+  }
+});
+
+app.patch("/recordings/:id", express.json({ limit: "8kb" }), async (req, res) => {
+  try {
+    const metadata = await recordingStore.update(req.params.id, req.body);
+    if (!metadata) return res.status(404).json({ error: "Recording not found" });
+    res.setHeader("Cache-Control", "private, no-store, max-age=0");
+    return res.json({ recording: metadata });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return res.status(400).json({ error: message });
   }
 });
 

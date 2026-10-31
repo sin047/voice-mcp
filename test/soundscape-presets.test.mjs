@@ -62,6 +62,10 @@ test("all curated presets resolve to assets with the intended bus and timeline",
   const packagePreset = buildSoundscapePresetCues("package", assets);
   assert.equal(packagePreset.cues.length, 2);
   assert.deepEqual(packagePreset.cues.map((cue) => cue.atSec), [0, 2]);
+  assert.ok(packagePreset.cues[1].gain > packagePreset.cues[0].gain);
+  assert.equal(packagePreset.cues[1].normalizationTargetRms, 0.14);
+  assert.equal(packagePreset.cues[1].distanceMeters, 1);
+  assert.equal(packagePreset.cues[1].durationSec, 2.2);
 
   const close = buildSoundscapePresetCues("close", assets);
   assert.equal(close.cues.length, 2);

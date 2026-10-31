@@ -2,13 +2,26 @@
 
 A platform-neutral Node.js MCP server for ElevenLabs voice generation, expressive delivery and mixed voice + sound-effect playback.
 
-The actively maintained development and deployment branch is `zeabur`, currently at **v1.4.0-beta.31**. It runs as a Node.js 22+ / Express 5 service with Streamable HTTP MCP and is deployed on Zeabur. The same runtime can also run on a VPS or Docker host.
+The actively maintained development and deployment branch is `zeabur`, currently at **v1.4.0-beta.32**. It runs as a Node.js 22+ / Express 5 service with Streamable HTTP MCP and is deployed on Zeabur. The same runtime can also run on a VPS or Docker host.
 
 
 
 ### Multitrack timeline (beta.29)
 
 The MCP tool `render_audio_timeline` accepts a total `duration_sec` and ordered `segments`. Each segment has `type` (`voice`, `foley`, `ambience`, or `gap`), `at_sec`, and `duration_sec`. Voice segments also require `text`; Foley/ambience segments require an uploaded `asset_id`. Voice is synthesized as separate chunks and placed at its timeline offset; effects can play through voice-free sections or after the final voice segment. Gap segments reserve explicit silent intervals. Maximum: 60 seconds, 16 segments total, and 12 effect cues per render. Use `list_sound_assets` to discover private asset IDs. The original `speak` and `speak_with_soundscape` tools remain available.
+
+### Single-card long voice (beta.32)
+
+The MCP tool `speak_long` turns a long passage into **one playable audio item**, rather than returning one ChatGPT audio card per text chunk. It uses the same natural sentence/clause planner, synthesizes each chunk sequentially with the configured ElevenLabs voice/model/settings, passes forward the recent request IDs for continuity, and concatenates the returned 24 kHz mono PCM into one WAV. The MCP inline player receives one short-lived `audio_url`.
+
+- Input: up to 4000 characters; default target chunk size 850 characters; hard chunk limit 1200 characters.
+- Output: one WAV / one player card, up to 180 seconds.
+- `boundary_pause_ms`: optional 0–500 ms silence inserted between generated chunks; default 60 ms. Set to 0 for direct concatenation or increase slightly if sentence boundaries feel rushed.
+- Optional `previous_text` / `next_text`, performance, emotion, language and direction controls follow the same conventions as `speak`.
+- This first version is voice-only. It does not yet overlay Foley or ambience; keep using the existing soundscape tools for those workflows.
+- If a later chunk fails, the tool reports how many chunks completed; it does not return a partial recording.
+
+The original `speak`, `plan_voice_chunks`, `render_continuous_audio_timeline` and multitrack tools remain available. Use `speak_long` when a single long playback card is preferred; use `plan_voice_chunks` when you explicitly want separate clips for inspection.
 
 ### Natural voice chunk planner and alignment QA (beta.31)
 
@@ -24,7 +37,7 @@ Use `render_audio_timeline` when you intentionally need separately generated voi
 
 ## Branches
 
-- `zeabur`: **active maintained branch** for development and current Zeabur deployment; currently v1.4.0-beta.31.
+- `zeabur`: **active maintained branch** for development and current Zeabur deployment; currently v1.4.0-beta.32.
 - `voice-v1.4-private-drama`: historical v1.4 beta.7 snapshot. It is not the active deployment branch; do not switch to it without comparing its history against `zeabur`.
 - `main`: repository default branch; it may not contain the latest maintained v1.4 work. Do not assume it is the deployment branch.
 
@@ -78,6 +91,10 @@ Mount persistent storage at the configured `AUDIO_ASSET_DIR` (default `/app/data
 ## MCP tools
 
 The existing `speak` tool remains available. The private asset tools `list_sound_assets` and `speak_with_soundscape` are **disabled by default**. Set `MCP_SOUNDSCAPE_TOOLS_ENABLED=true` only after restricting `/mcp` through private ingress, a firewall/IP allowlist or another verified access layer. The direct-URL connector does not authenticate callers; do not expose private asset IDs through an unrestricted public endpoint.
+
+### `speak_long`
+
+Generate long text as one WAV recording and one inline player item. The server plans sentence-aware chunks, generates them sequentially, chains ElevenLabs request IDs, and joins PCM audio server-side. Up to 4000 characters / 180 seconds; adjustable boundary pause (default 60 ms). Voice-only in beta.32; soundscape overlays are not yet included.
 
 ### `speak`
 

@@ -18,7 +18,9 @@ import {
   createPerformancePlan,
   getVoiceIdForLanguage,
   normalizeDirection,
+  normalizeEmotion,
   normalizePerformance,
+  parseEmotionDirective,
   shouldApplyJapaneseNormalization,
   stripAudioTags,
 } from "./performance.mjs";
@@ -437,6 +439,9 @@ function createServer() {
     async ({ text, performance, emotion, language, direction, previous_text, next_text, previous_request_ids, include_alignment, style, raw_tags }) => {
       try {
         const directive = parseSoundscapeDirective(direction);
+        const emotionDirective = parseEmotionDirective(directive.voiceDirection);
+        const selectedEmotion = emotion ?? emotionDirective.emotion;
+        const voiceDirection = emotionDirective.direction;
         if (directive.preset) {
           const baseUrlValue = (process.env.MCP_PUBLIC_BASE_URL || process.env.ZEABUR_WEB_URL);
           if (!baseUrlValue) {
@@ -468,9 +473,9 @@ function createServer() {
 
           const result = await synthesize(text, {
             performance,
-            emotion,
+            emotion: selectedEmotion,
             language,
-            direction: directive.voiceDirection,
+            direction: voiceDirection,
             previousText: previous_text,
             nextText: next_text,
             previousRequestIds: previous_request_ids,
@@ -540,7 +545,7 @@ function createServer() {
                 distance_meters: cue.distanceMeters,
               })),
               performance: result.performance,
-              direction: result.performance?.direction || normalizeDirection(directive.voiceDirection) || null,
+              direction: result.performance?.direction || normalizeDirection(voiceDirection) || null,
               language: result.language,
               request_id: result.request_id,
               voice_settings: result.voice_settings,
@@ -561,9 +566,9 @@ function createServer() {
 
         const result = await synthesize(text, {
           performance,
-          emotion,
+          emotion: selectedEmotion,
           language,
-          direction: directive.voiceDirection,
+          direction: voiceDirection,
           previousText: previous_text,
           nextText: next_text,
           previousRequestIds: previous_request_ids,
@@ -579,7 +584,7 @@ function createServer() {
             audio_base64: result.audio_base64,
             audio_mime_type: "audio/mpeg",
             performance: result.performance,
-            direction: result.performance?.direction || normalizeDirection(directive.voiceDirection) || null,
+            direction: result.performance?.direction || normalizeDirection(voiceDirection) || null,
             language: result.language,
             request_id: result.request_id,
             voice_settings: result.voice_settings,
@@ -671,6 +676,9 @@ function createServer() {
     },
     async ({ text, performance, emotion, language, direction, cues, voice_gain, ambience_bus_gain, foley_bus_gain, master_gain, ducking_enabled, ducking_amount, save_recording }) => {
       try {
+        const emotionDirective = parseEmotionDirective(direction);
+        const selectedEmotion = emotion ?? emotionDirective.emotion;
+        const voiceDirection = emotionDirective.direction;
         const baseUrlValue = (process.env.MCP_PUBLIC_BASE_URL || process.env.ZEABUR_WEB_URL);
         if (!baseUrlValue) throw new Error("MCP_PUBLIC_BASE_URL must be configured before soundscape playback can be returned");
         const baseUrl = new URL(baseUrlValue);
@@ -691,9 +699,9 @@ function createServer() {
 
         const result = await synthesize(text, {
           performance,
-          emotion,
+          emotion: selectedEmotion,
           language,
-          direction,
+          direction: voiceDirection,
           outputFormat: "pcm_24000",
           recordEvent: false,
         });

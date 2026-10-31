@@ -2,7 +2,7 @@
 
 Last verified against source: 2026-10-31  
 Maintained branch: `zeabur`  
-Current source version: `1.4.0-beta.13`
+Current source version: `1.4.0-beta.15`
 
 This service is a **Node.js / Express application**, not the former Cloudflare Worker + Wrangler runtime.
 
@@ -108,8 +108,11 @@ After every code deployment:
 
 1. Confirm the latest GitHub Actions run for `zeabur` is successful.
 2. Confirm Zeabur reports the deployment as complete.
-3. Open `GET /status` and verify `status: "ok"` and `version: "1.4.0-beta.13"` (or the new expected version).
+3. Open `GET /status` and verify `status: "ok"` and `version: "1.4.0-beta.15"` (or the new expected version).
 4. Make one real call through the existing `voice2-v1.3.1` MCP connection.
 5. For soundscape playback, verify the expected private assets exist and that the returned temporary WAV URL plays.
 
 Do not treat a successful CI run as proof that the live Zeabur deployment succeeded.
+
+
+For a one-time persistence check, an authorized client may upload a WAV to `POST /recordings` using `Content-Type: audio/wav`. This endpoint is protected by the private HTTP token and stores the WAV with import metadata. It is intended for archive verification/import; it does not expose the MCP soundscape tools or bypass the disabled-by-default MCP security gate.

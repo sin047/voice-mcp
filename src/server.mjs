@@ -37,7 +37,7 @@ const MODEL_ID = process.env.ELEVENLABS_MODEL_ID || "eleven_v4";
 const OUTPUT_FORMAT = process.env.ELEVENLABS_OUTPUT_FORMAT || "mp3_44100_128";
 const PLAYER_URI = "ui://voice-mcp/player.html";
 const PLAYER_MIME = "text/html;profile=mcp-app";
-const VERSION = "1.4.0-beta.32";
+const VERSION = "1.4.0-beta.33";
 const MAX_CONTEXT_CHARS = 4000;
 const MAX_SPEAK_CHARS = 4000;
 const MAX_SOUND_SCAPE_TEXT_CHARS = 1200;
@@ -984,7 +984,7 @@ function createServer() {
 
   mcp.registerTool("render_continuous_audio_timeline", {
     title: `${BOT_NAME}'s Continuous Voice Timeline`,
-    description: `Synthesize one continuous voice passage exactly once, then overlay independently timed Foley and ambience. Use after_text on a cue to place it immediately after an exact phrase in the spoken text using ElevenLabs character timestamps; use at_sec for absolute timing. This avoids extra TTS chunk boundaries. Call list_sound_assets first. Text and finished audio are limited to ${MAX_SOUND_SCAPE_TEXT_CHARS} characters and ${MAX_SOUND_SCAPE_SECONDS} seconds.`,
+    description: `Synthesize one continuous voice passage exactly once, then overlay independently timed Foley and ambience. Use after_text on a cue to place it immediately after an exact phrase in the spoken text using ElevenLabs character timestamps; use at_sec for absolute timing. Optional timeline_duration_sec extends the finished WAV beyond the spoken voice, allowing a pure-Foley/ambience tail after speech ends. Effects may occupy silent intervals or continue after the voice; no additional TTS calls are made. This avoids extra TTS chunk boundaries. Call list_sound_assets first. Text and finished audio are limited to ${MAX_SOUND_SCAPE_TEXT_CHARS} characters and ${MAX_SOUND_SCAPE_SECONDS} seconds.`,
     inputSchema: z.object({
       text: z.string().min(1).max(MAX_SOUND_SCAPE_TEXT_CHARS),
       performance: z.enum(["auto", "natural", "soft", "close", "breathy", "expressive"]).optional(),
@@ -993,6 +993,7 @@ function createServer() {
       direction: z.string().max(180).optional(),
       previous_text: z.string().max(MAX_CONTEXT_CHARS).optional(),
       next_text: z.string().max(MAX_CONTEXT_CHARS).optional(),
+      timeline_duration_sec: z.number().min(0.1).max(MAX_SOUND_SCAPE_SECONDS).optional(),
       cues: z.array(z.object({
         asset_id: z.string().min(1).max(64),
         kind: z.enum(["foley", "ambience"]),
@@ -1050,6 +1051,13 @@ function createServer() {
       if (voicePcm.durationSec > MAX_SOUND_SCAPE_SECONDS) {
         throw new Error("Continuous voice exceeds the " + MAX_SOUND_SCAPE_SECONDS + " second limit; shorten the text");
       }
+      const timelineDurationSec = args.timeline_duration_sec ?? voicePcm.durationSec;
+      if (timelineDurationSec + 0.001 < voicePcm.durationSec) {
+        throw new Error("timeline_duration_sec cannot be shorter than the generated voice");
+      }
+      if (timelineDurationSec > MAX_SOUND_SCAPE_SECONDS) {
+        throw new Error("Timeline exceeds the " + MAX_SOUND_SCAPE_SECONDS + " second limit");
+      }
 
       const resolvedCues = args.cues.map((cue) => {
         const atSec = cue.after_text != null
@@ -1060,11 +1068,11 @@ function createServer() {
             occurrence: cue.occurrence ?? 1,
           })
           : cue.at_sec;
-        if (atSec >= voicePcm.durationSec - 0.01) {
-          throw new Error("Cue time must fall before the end of the generated voice");
+        if (atSec >= timelineDurationSec - 0.01) {
+          throw new Error("Cue time must fall before the end of timeline_duration_sec");
         }
-        if (cue.duration_sec != null && atSec + cue.duration_sec > voicePcm.durationSec + 0.001) {
-          throw new Error("Cue at " + atSec + "s extends beyond the generated voice duration");
+        if (cue.duration_sec != null && atSec + cue.duration_sec > timelineDurationSec + 0.001) {
+          throw new Error("Cue at " + atSec + "s extends beyond the timeline duration");
         }
         return {
           fileId: cue.asset_id,
@@ -1082,7 +1090,7 @@ function createServer() {
 
       const mix = mixSoundscape({
         voicePcm,
-        totalDurationSec: voicePcm.durationSec,
+        totalDurationSec: timelineDurationSec,
         assets: loadedAssets,
         cues: resolvedCues,
         voiceGain: args.voice_gain,
@@ -1142,6 +1150,8 @@ function createServer() {
           audio_url: new URL("/audio/" + audioId, baseUrl.origin).toString(),
           audio_mime_type: "audio/wav",
           duration_sec: mix.durationSec,
+          voice_duration_sec: voicePcm.durationSec,
+          timeline_duration_sec: timelineDurationSec,
           sample_rate: mix.sampleRate,
           channels: mix.channels,
           voice_generation_count: 1,

@@ -39,12 +39,13 @@ test("continuous voice timeline can carry a pure Foley tail after speech ends", 
 
   const decoded = decodePcmWav(mixed.buffer);
   assert.equal(mixed.durationSec, 1.5);
-  assert.equal(decoded.sampleRate, sampleRate);
+  assert.equal(decoded.sampleRate, 44100);
   assert.equal(decoded.channelCount, 2);
-  assert.equal(decoded.frameCount, Math.round(sampleRate * 1.5));
+  assert.equal(decoded.frameCount, Math.round(44100 * 1.5));
 
-  const tailStart = Math.round(sampleRate * 0.8);
-  const tailEnd = Math.round(sampleRate * 1.2);
+  const outputRate = decoded.sampleRate;
+  const tailStart = Math.round(outputRate * 0.8);
+  const tailEnd = Math.round(outputRate * 1.2);
   const tailPeak = Math.max(
     ...decoded.channels.map(channel =>
       channel.slice(tailStart, tailEnd).reduce((peak, value) => Math.max(peak, Math.abs(value)), 0)
@@ -52,7 +53,7 @@ test("continuous voice timeline can carry a pure Foley tail after speech ends", 
   );
   assert.ok(tailPeak > 0.01, "Foley should remain audible after the voice has ended");
 
-  const afterCue = Math.round(sampleRate * 1.3);
+  const afterCue = Math.round(outputRate * 1.3);
   const afterCuePeak = Math.max(
     ...decoded.channels.map(channel =>
       channel.slice(afterCue).reduce((peak, value) => Math.max(peak, Math.abs(value)), 0)

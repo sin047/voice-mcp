@@ -21,6 +21,7 @@ jobs:
       - name: Syntax check
         run: |
           node --check src/server.mjs
+          node --check src/audio-range.mjs
           node --check src/performance.mjs
           node --check src/drama-timeline.mjs
           node --check src/drama-preview.mjs

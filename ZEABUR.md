@@ -2,7 +2,7 @@
 
 Last verified against source: 2026-10-31  
 Maintained branch: `zeabur`  
-Current source version: `1.4.0-beta.15`
+Current source version: `1.4.0-beta.16`
 
 This service is a **Node.js / Express application**, not the former Cloudflare Worker + Wrangler runtime.
 
@@ -86,6 +86,7 @@ Usage counters and generated-audio cache are process-local. They are not shared 
 | `GET /status` | Health, version and feature status | Public |
 | `POST /mcp` | Streamable HTTP MCP endpoint | No OAuth/authentication currently |
 | `GET /drama-preview` | Private soundscape preview UI | Private HTTP token |
+| `GET /recordings-library` | Private recording archive UI | Private HTTP token |
 | `GET /speak`, `POST /speak` | Direct HTTP speech preview | Private HTTP token |
 | `GET /assets`, `POST /assets`, `DELETE /assets/:id` | Private WAV asset management | Private HTTP token |
 | `GET /audio/:id` | Temporary generated soundscape playback | Short-lived unguessable URL |
@@ -108,7 +109,7 @@ After every code deployment:
 
 1. Confirm the latest GitHub Actions run for `zeabur` is successful.
 2. Confirm Zeabur reports the deployment as complete.
-3. Open `GET /status` and verify `status: "ok"` and `version: "1.4.0-beta.15"` (or the new expected version).
+3. Open `GET /status` and verify `status: "ok"` and `version: "1.4.0-beta.16"` (or the new expected version).
 4. Make one real call through the existing `voice2-v1.3.1` MCP connection.
 5. For soundscape playback, verify the expected private assets exist and that the returned temporary WAV URL plays.
 

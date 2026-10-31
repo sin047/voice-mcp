@@ -4,7 +4,8 @@ import { createFixedWindowRateLimiter, createVoiceUsageGuard } from "./usage-gua
 import { createAudioAssetStore } from "./audio-assets.mjs";
 import { createRecordingStore } from "./recording-store.mjs";
 import { parseByteRange } from "./audio-range.mjs";
-import { decodeRawPcm16, mixSoundscape } from "./wav-audio.mjs";
+import { decodeRawPcm16, encodePcm16Wav, mixSoundscape } from "./wav-audio.mjs";
+import { joinPcm16Chunks } from "./voice-long-audio.mjs";
 import { resolveCueTimeAfterText } from "./alignment-cues.mjs";
 import { planVoiceChunks } from "./voice-chunker.mjs";
 import { auditCharacterAlignment } from "./alignment-audit.mjs";
@@ -36,11 +37,12 @@ const MODEL_ID = process.env.ELEVENLABS_MODEL_ID || "eleven_v4";
 const OUTPUT_FORMAT = process.env.ELEVENLABS_OUTPUT_FORMAT || "mp3_44100_128";
 const PLAYER_URI = "ui://voice-mcp/player.html";
 const PLAYER_MIME = "text/html;profile=mcp-app";
-const VERSION = "1.4.0-beta.31";
+const VERSION = "1.4.0-beta.32";
 const MAX_CONTEXT_CHARS = 4000;
 const MAX_SPEAK_CHARS = 4000;
 const MAX_SOUND_SCAPE_TEXT_CHARS = 1200;
 const MAX_SOUND_SCAPE_SECONDS = 60;
+const MAX_LONG_VOICE_SECONDS = 180;
 const SOUNDSCAPE_MCP_ENABLED = process.env.MCP_SOUNDSCAPE_TOOLS_ENABLED === "true";
 const audioAssetStore = createAudioAssetStore({
   directory: process.env.AUDIO_ASSET_DIR,
@@ -613,6 +615,157 @@ function createServer() {
       }
     },
   );
+
+  mcp.registerTool("speak_long", {
+    title: BOT_NAME + "'s Long Voice",
+    description: "Generate a long passage as ONE playable audio item. This tool plans natural sentence/clause chunks, synthesizes them sequentially with the same configured voice/model/settings, chains each returned ElevenLabs request_id into the next chunk, joins the PCM samples server-side, and returns one WAV audio_url for the inline player. It does not return one card per chunk. Use this instead of manually calling plan_voice_chunks and speak when the user wants a single long recording. Maximum 4000 input characters, 12 chunks and 180 seconds. No sound effects are added; use the existing soundscape tools for separate effect workflows. The small boundary_pause_ms gap is adjustable (default 60ms, range 0-500ms).",
+    inputSchema: z.object({
+      text: z.string().min(1).max(MAX_SPEAK_CHARS),
+      performance: z.enum(["auto", "natural", "soft", "close", "breathy", "expressive"]).optional(),
+      emotion: z.enum(["neutral", "calm", "warm", "tender", "curious", "excited", "nervous", "intense", "tired"]).optional(),
+      language: z.enum(["auto", "zh", "ja", "en", "ko"]).optional(),
+      direction: z.string().max(180).optional(),
+      previous_text: z.string().max(MAX_CONTEXT_CHARS).optional(),
+      next_text: z.string().max(MAX_CONTEXT_CHARS).optional(),
+      style: z.string().optional(),
+      raw_tags: z.boolean().optional(),
+      target_chars: z.number().int().min(100).max(1200).optional(),
+      max_chars: z.number().int().min(100).max(1200).optional(),
+      context_chars: z.number().int().min(0).max(400).optional(),
+      boundary_pause_ms: z.number().int().min(0).max(500).optional(),
+    }),
+    _meta: {
+      ui: { resourceUri: PLAYER_URI },
+      "ui/resourceUri": PLAYER_URI,
+    },
+  }, async (args) => {
+    let completedChunks = 0;
+    const requestIds = [];
+    try {
+      const baseUrlValue = process.env.MCP_PUBLIC_BASE_URL || process.env.ZEABUR_WEB_URL;
+      if (!baseUrlValue) throw new Error("MCP_PUBLIC_BASE_URL must be configured for long voice playback");
+      const baseUrl = new URL(baseUrlValue);
+      if (baseUrl.protocol !== "https:" && !["localhost", "127.0.0.1"].includes(baseUrl.hostname)) {
+        throw new Error("MCP_PUBLIC_BASE_URL must use HTTPS");
+      }
+      if (baseUrl.pathname !== "/" || baseUrl.search || baseUrl.hash) {
+        throw new Error("MCP_PUBLIC_BASE_URL must contain only the public origin");
+      }
+
+      const soundscapeDirective = parseSoundscapeDirective(args.direction);
+      if (soundscapeDirective.preset) {
+        throw new Error("speak_long currently creates voice-only audio. Use speak_with_soundscape for a single-clip soundscape.");
+      }
+      const emotionDirective = parseEmotionDirective(soundscapeDirective.voiceDirection);
+      const selectedEmotion = args.emotion ?? emotionDirective.emotion;
+      const voiceDirection = emotionDirective.direction;
+      const plan = planVoiceChunks(args.text, {
+        targetChars: args.target_chars,
+        maxChars: args.max_chars,
+        contextChars: args.context_chars,
+      });
+      if (plan.chunk_count > 12) throw new Error("Long voice is limited to 12 chunks");
+
+      const pcmChunks = [];
+      let lastResult = null;
+      for (const chunk of plan.chunks) {
+        let result;
+        try {
+          result = await synthesize(chunk.text, {
+            performance: args.performance,
+            emotion: selectedEmotion,
+            language: args.language,
+            direction: voiceDirection,
+            previousText: requestIds.length ? chunk.previous_text : (chunk.previous_text || args.previous_text),
+            nextText: chunk.next_text || args.next_text,
+            previousRequestIds: requestIds,
+            style: args.style,
+            rawTags: args.raw_tags,
+            outputFormat: "pcm_24000",
+            recordEvent: false,
+          });
+        } catch (error) {
+          const detail = error instanceof Error ? error.message : String(error);
+          throw new Error("Chunk " + (chunk.index + 1) + "/" + plan.chunk_count +
+            " failed after " + completedChunks + " completed chunks: " + detail);
+        }
+        if (!result.audio_base64) throw new Error("Chunk " + (chunk.index + 1) + " returned no PCM audio");
+        pcmChunks.push(Buffer.from(result.audio_base64, "base64"));
+        completedChunks += 1;
+        lastResult = result;
+        if (result.request_id) {
+          requestIds.push(result.request_id);
+          if (requestIds.length > 3) requestIds.shift();
+        }
+      }
+
+      const joined = joinPcm16Chunks(pcmChunks, {
+        sampleRate: 24000,
+        channels: 1,
+        boundaryPauseMs: args.boundary_pause_ms ?? 60,
+        maxDurationSec: MAX_LONG_VOICE_SECONDS,
+      });
+      const pcm = decodeRawPcm16(joined.buffer, { sampleRate: joined.sampleRate, channels: joined.channels });
+      const wavBuffer = encodePcm16Wav(pcm.channels, pcm.sampleRate);
+      if (wavBuffer.length > 16 * 1024 * 1024) {
+        throw new Error("Long voice WAV exceeds the 16 MB playback cache limit");
+      }
+
+      const now = Date.now();
+      for (const [id, item] of generatedAudioCache) {
+        if (item.expiresAt <= now) generatedAudioCache.delete(id);
+      }
+      while (
+        generatedAudioCache.size >= GENERATED_AUDIO_MAX_ITEMS ||
+        [...generatedAudioCache.values()].reduce((sum, item) => sum + item.buffer.length, 0) + wavBuffer.length > GENERATED_AUDIO_MAX_BYTES
+      ) {
+        const oldestId = generatedAudioCache.keys().next().value;
+        if (!oldestId) break;
+        generatedAudioCache.delete(oldestId);
+      }
+      const audioId = crypto.randomUUID();
+      generatedAudioCache.set(audioId, {
+        buffer: wavBuffer,
+        expiresAt: now + GENERATED_AUDIO_TTL_MS,
+      });
+      const audioUrl = new URL("/audio/" + audioId, baseUrl.origin).toString();
+
+      return {
+        content: [{
+          type: "text",
+          text: BOT_NAME + ": one long voice recording ready (" + plan.chunk_count + " chunks, " + joined.durationSec.toFixed(2) + "s)",
+        }],
+        structuredContent: {
+          text: args.text,
+          audio_url: audioUrl,
+          audio_mime_type: "audio/wav",
+          duration_sec: joined.durationSec,
+          sample_rate: joined.sampleRate,
+          channels: joined.channels,
+          chunk_count: plan.chunk_count,
+          chunk_character_counts: plan.chunks.map(chunk => chunk.character_count),
+          voice_generation_count: completedChunks,
+          request_ids: requestIds,
+          boundary_pause_ms: joined.boundaryPauseMs,
+          performance: lastResult?.performance || null,
+          language: lastResult?.language || null,
+          continuity_mode: "sequential_request_id_chain_single_wav",
+          expires_in_seconds: GENERATED_AUDIO_TTL_MS / 1000,
+        },
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return {
+        content: [{ type: "text", text: "Long voice generation failed: " + message }],
+        structuredContent: {
+          error: message,
+          completed_chunks: completedChunks,
+          request_ids: requestIds,
+        },
+        isError: true,
+      };
+    }
+  });
 
   mcp.registerTool("plan_voice_chunks", {
     title: `${BOT_NAME}'s Voice Chunk Planner`,
@@ -1334,6 +1487,8 @@ app.get("/status", (_req, res) => {
       character_alignment: true,
       continuous_voice_timeline: SOUNDSCAPE_MCP_ENABLED,
       voice_chunk_planning: true,
+      speak_long: true,
+      long_voice_max_seconds: MAX_LONG_VOICE_SECONDS,
       character_alignment_qa: SOUNDSCAPE_MCP_ENABLED,
       legacy_style_presets: true,
       inline_audio_tags: true,

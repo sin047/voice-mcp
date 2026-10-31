@@ -33,7 +33,7 @@ const MODEL_ID = process.env.ELEVENLABS_MODEL_ID || "eleven_v4";
 const OUTPUT_FORMAT = process.env.ELEVENLABS_OUTPUT_FORMAT || "mp3_44100_128";
 const PLAYER_URI = "ui://voice-mcp/player.html";
 const PLAYER_MIME = "text/html;profile=mcp-app";
-const VERSION = "1.4.0-beta.28";
+const VERSION = "1.4.0-beta.29";
 const MAX_CONTEXT_CHARS = 4000;
 const MAX_SPEAK_CHARS = 4000;
 const MAX_SOUND_SCAPE_TEXT_CHARS = 1200;
@@ -835,6 +835,7 @@ function createServer() {
       }
       const voiceItems = segments.filter(s => s.type === "voice");
       const effectItems = segments.filter(s => s.type === "foley" || s.type === "ambience");
+      if (effectItems.length > 12) throw new Error("A timeline can contain at most 12 Foley/ambience cues");
       if (!voiceItems.length && !effectItems.length) throw new Error("Timeline needs at least one voice or effect segment");
 
       const loadedAssets = new Map();

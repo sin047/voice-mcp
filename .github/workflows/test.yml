@@ -64,6 +64,7 @@ jobs:
             assert.equal(status.features.private_audio_asset_library, true);
             assert.equal(status.features.persistent_recording_archive, true);
             assert.equal(status.features.continuous_voice_timeline, true);
+            assert.equal(status.features.continuous_timeline_effect_tail, true);
             assert.equal(status.features.speak_long, true);
             assert.equal(status.features.long_voice_max_seconds, 180);
             assert.equal(status.features.speak_with_soundscape, true);

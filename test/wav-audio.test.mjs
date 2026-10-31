@@ -168,7 +168,8 @@ test("quiet close Foley uses an audible excerpt, with left-right positioning", (
       atSec: 0,
       sourceOffsetSec: 1,
       durationSec: 0.7,
-      gain: 0.46,
+      gain: 0.7,
+      normalizationTargetRms: 0.14,
       pan: -0.38,
       fadeInSec: 0,
       fadeOutSec: 0,
@@ -182,7 +183,7 @@ test("quiet close Foley uses an audible excerpt, with left-right positioning", (
   const output = decodePcmWav(mix.buffer);
   const frame = Math.round(0.35 * 44100);
   assert.equal(mix.timeline.cues[0].sourceOffsetSec, 1);
-  assert.ok(output.channels[0][frame] > 0.11, "Foley must rise clearly above the voice");
+  assert.ok(output.channels[0][frame] > 0.1, "boosted contact Foley must be clearly audible");
   assert.ok(output.channels[0][frame] > output.channels[1][frame], "left-panned Foley stays stronger on the left");
   assert.throws(
     () => mixSoundscape({

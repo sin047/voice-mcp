@@ -82,7 +82,7 @@ test("all curated presets resolve to assets with the intended bus and timeline",
   assert.deepEqual(intimate.cues.map((cue) => cue.atSec), [0, 3, 6, 10, 14]);
   assert.deepEqual(
     intimate.cues.map((cue) => cue.gain),
-    [0.13, 0.274, 0.54, 0.54, 0.46],
+    [0.13, 0.274, 0.6, 0.6, 0.46],
     "Intimate clothing returns to the prior level while quiet sequential cues use foreground levels",
   );
   assert.deepEqual(

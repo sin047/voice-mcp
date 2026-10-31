@@ -5,6 +5,7 @@ import { createAudioAssetStore } from "./audio-assets.mjs";
 import { createRecordingStore } from "./recording-store.mjs";
 import { parseByteRange } from "./audio-range.mjs";
 import { decodeRawPcm16, mixSoundscape } from "./wav-audio.mjs";
+import { resolveCueTimeAfterText } from "./alignment-cues.mjs";
 import { buildSoundscapePresetCues, parseSoundscapeDirective } from "./soundscape-presets.mjs";
 import process from "node:process";
 import { readFile } from "node:fs/promises";
@@ -33,7 +34,7 @@ const MODEL_ID = process.env.ELEVENLABS_MODEL_ID || "eleven_v4";
 const OUTPUT_FORMAT = process.env.ELEVENLABS_OUTPUT_FORMAT || "mp3_44100_128";
 const PLAYER_URI = "ui://voice-mcp/player.html";
 const PLAYER_MIME = "text/html;profile=mcp-app";
-const VERSION = "1.4.0-beta.29";
+const VERSION = "1.4.0-beta.30";
 const MAX_CONTEXT_CHARS = 4000;
 const MAX_SPEAK_CHARS = 4000;
 const MAX_SOUND_SCAPE_TEXT_CHARS = 1200;
@@ -791,6 +792,195 @@ function createServer() {
       }
     },
   );
+
+
+  mcp.registerTool("render_continuous_audio_timeline", {
+    title: `${BOT_NAME}'s Continuous Voice Timeline`,
+    description: `Synthesize one continuous voice passage exactly once, then overlay independently timed Foley and ambience. Use after_text on a cue to place it immediately after an exact phrase in the spoken text using ElevenLabs character timestamps; use at_sec for absolute timing. This avoids extra TTS chunk boundaries. Call list_sound_assets first. Text and finished audio are limited to ${MAX_SOUND_SCAPE_TEXT_CHARS} characters and ${MAX_SOUND_SCAPE_SECONDS} seconds.`,
+    inputSchema: z.object({
+      text: z.string().min(1).max(MAX_SOUND_SCAPE_TEXT_CHARS),
+      performance: z.enum(["auto", "natural", "soft", "close", "breathy", "expressive"]).optional(),
+      emotion: z.enum(["neutral", "calm", "warm", "tender", "curious", "excited", "nervous", "intense", "tired"]).optional(),
+      language: z.enum(["auto", "zh", "ja", "en", "ko"]).optional(),
+      direction: z.string().max(180).optional(),
+      previous_text: z.string().max(MAX_CONTEXT_CHARS).optional(),
+      next_text: z.string().max(MAX_CONTEXT_CHARS).optional(),
+      cues: z.array(z.object({
+        asset_id: z.string().min(1).max(64),
+        kind: z.enum(["foley", "ambience"]),
+        at_sec: z.number().min(0).max(MAX_SOUND_SCAPE_SECONDS).optional(),
+        after_text: z.string().min(1).max(160).optional(),
+        occurrence: z.number().int().min(1).max(10).optional(),
+        gain: z.number().min(0).max(0.7).optional(),
+        pan: z.number().min(-1).max(1).optional(),
+        distance_meters: z.number().min(0.5).max(8).optional(),
+        fade_in_sec: z.number().min(0).max(10).optional(),
+        fade_out_sec: z.number().min(0).max(10).optional(),
+        duration_sec: z.number().min(0.01).max(MAX_SOUND_SCAPE_SECONDS).optional(),
+        loop: z.boolean().optional(),
+      })).min(1).max(12),
+      voice_gain: z.number().min(0).max(1).optional(),
+      ambience_bus_gain: z.number().min(0).max(1).optional(),
+      foley_bus_gain: z.number().min(0).max(1).optional(),
+      master_gain: z.number().min(0).max(1).optional(),
+      ducking_enabled: z.boolean().optional(),
+      ducking_amount: z.number().min(0).max(1).optional(),
+      save_recording: z.boolean().optional(),
+    }),
+  }, async (args) => {
+    try {
+      const loadedAssets = new Map();
+      for (const cue of args.cues) {
+        if ((cue.at_sec == null) === (cue.after_text == null)) {
+          throw new Error("Each cue must provide exactly one of at_sec or after_text");
+        }
+        if (loadedAssets.has(cue.asset_id)) continue;
+        const stored = await audioAssetStore.get(cue.asset_id);
+        if (!stored) throw new Error("Sound asset not found: " + cue.asset_id);
+        loadedAssets.set(cue.asset_id, stored.buffer);
+      }
+
+      const result = await synthesize(args.text, {
+        performance: args.performance,
+        emotion: args.emotion,
+        language: args.language,
+        direction: args.direction,
+        previousText: args.previous_text,
+        nextText: args.next_text,
+        includeAlignment: true,
+        outputFormat: "pcm_24000",
+        recordEvent: false,
+      });
+      const voicePcm = decodeRawPcm16(Buffer.from(result.audio_base64, "base64"), {
+        sampleRate: 24000,
+        channels: 1,
+      });
+      if (voicePcm.durationSec > MAX_SOUND_SCAPE_SECONDS) {
+        throw new Error("Continuous voice exceeds the " + MAX_SOUND_SCAPE_SECONDS + " second limit; shorten the text");
+      }
+
+      const resolvedCues = args.cues.map((cue) => {
+        const atSec = cue.after_text != null
+          ? resolveCueTimeAfterText({
+            alignment: result.alignment,
+            normalizedAlignment: result.normalized_alignment,
+            afterText: cue.after_text,
+            occurrence: cue.occurrence ?? 1,
+          })
+          : cue.at_sec;
+        if (atSec >= voicePcm.durationSec - 0.01) {
+          throw new Error("Cue time must fall before the end of the generated voice");
+        }
+        if (cue.duration_sec != null && atSec + cue.duration_sec > voicePcm.durationSec + 0.001) {
+          throw new Error("Cue at " + atSec + "s extends beyond the generated voice duration");
+        }
+        return {
+          fileId: cue.asset_id,
+          kind: cue.kind,
+          atSec,
+          durationSec: cue.duration_sec,
+          gain: cue.gain,
+          pan: cue.pan,
+          distanceMeters: cue.distance_meters,
+          fadeInSec: cue.fade_in_sec,
+          fadeOutSec: cue.fade_out_sec,
+          loop: cue.loop,
+        };
+      });
+
+      const mix = mixSoundscape({
+        voicePcm,
+        totalDurationSec: voicePcm.durationSec,
+        assets: loadedAssets,
+        cues: resolvedCues,
+        voiceGain: args.voice_gain,
+        ambienceBusGain: args.ambience_bus_gain,
+        foleyBusGain: args.foley_bus_gain,
+        masterGain: args.master_gain,
+        duckingEnabled: args.ducking_enabled,
+        duckingAmount: args.ducking_amount,
+      });
+      if (mix.buffer.length > 16 * 1024 * 1024) {
+        throw new Error("Mixed audio exceeds the 16 MB playback cache limit");
+      }
+
+      const baseUrlValue = process.env.MCP_PUBLIC_BASE_URL || process.env.ZEABUR_WEB_URL;
+      if (!baseUrlValue) throw new Error("MCP_PUBLIC_BASE_URL must be configured");
+      const baseUrl = new URL(baseUrlValue);
+      if (baseUrl.protocol !== "https:" && !["localhost", "127.0.0.1"].includes(baseUrl.hostname)) {
+        throw new Error("MCP_PUBLIC_BASE_URL must use HTTPS");
+      }
+      if (baseUrl.pathname !== "/" || baseUrl.search || baseUrl.hash) {
+        throw new Error("MCP_PUBLIC_BASE_URL must contain only the public origin");
+      }
+
+      const now = Date.now();
+      for (const [id, item] of generatedAudioCache) {
+        if (item.expiresAt <= now) generatedAudioCache.delete(id);
+      }
+      while (generatedAudioCache.size >= GENERATED_AUDIO_MAX_ITEMS ||
+        [...generatedAudioCache.values()].reduce((sum, item) => sum + item.buffer.length, 0) + mix.buffer.length > GENERATED_AUDIO_MAX_BYTES) {
+        const oldestId = generatedAudioCache.keys().next().value;
+        if (!oldestId) break;
+        generatedAudioCache.delete(oldestId);
+      }
+      const audioId = crypto.randomUUID();
+      generatedAudioCache.set(audioId, {
+        buffer: mix.buffer,
+        expiresAt: now + GENERATED_AUDIO_TTL_MS,
+      });
+      const recording = args.save_recording ? await recordingStore.save({
+        buffer: mix.buffer,
+        text: args.text,
+        performance: result.performance?.mode || args.performance || "natural",
+        language: result.language || args.language || "auto",
+        source: "render_continuous_audio_timeline",
+        cues: mix.timeline.cues.map((cue) => ({
+          asset_id: cue.fileId,
+          kind: cue.kind,
+          at_sec: cue.atSec,
+          duration_sec: cue.durationSec,
+        })),
+      }) : null;
+
+      return {
+        content: [{ type: "text", text: BOT_NAME + ": continuous voice timeline ready (" + mix.durationSec.toFixed(2) + "s)" }],
+        structuredContent: {
+          text: args.text,
+          audio_url: new URL("/audio/" + audioId, baseUrl.origin).toString(),
+          audio_mime_type: "audio/wav",
+          duration_sec: mix.durationSec,
+          sample_rate: mix.sampleRate,
+          channels: mix.channels,
+          voice_generation_count: 1,
+          voice_request_id: result.request_id,
+          performance: result.performance,
+          language: result.language,
+          alignment_cues: resolvedCues.map((cue, index) => ({
+            asset_id: cue.fileId,
+            kind: cue.kind,
+            at_sec: cue.atSec,
+            anchor_text: args.cues[index].after_text || null,
+          })),
+          effects_segments: mix.timeline.cues.map((cue) => ({
+            asset_id: cue.fileId,
+            kind: cue.kind,
+            at_sec: cue.atSec,
+            duration_sec: cue.durationSec,
+          })),
+          limiter_gain: Number(mix.limiterGain.toFixed(4)),
+          ...(recording ? { recording_id: recording.id, recording_saved: true } : { recording_saved: false }),
+        },
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return {
+        content: [{ type: "text", text: "Continuous timeline render failed: " + message }],
+        structuredContent: { error: message },
+        isError: true,
+      };
+    }
+  });
 
   mcp.registerTool("render_audio_timeline", {
     title: `${BOT_NAME}'s Audio Timeline`,

@@ -253,6 +253,7 @@ export function mixSoundscape({
   masterGain = 0.85,
   duckingEnabled = true,
   duckingAmount = 0.75,
+  foleyDuckingDepth = 0.35,
 } = {}) {
   const voice = voicePcm?.channels
     ? voicePcm
@@ -286,6 +287,7 @@ export function mixSoundscape({
     masterGain,
     duckingEnabled,
     duckingAmount,
+    foleyDuckingDepth,
     spatialMode: "stereo",
     cues: trimmedCues,
   });

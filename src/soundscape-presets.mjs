@@ -228,14 +228,19 @@ export function parseSoundscapeDirective(direction) {
       "Unknown soundscape preset. Supported presets: " + [...SUPPORTED_PRESETS].join(", "),
     );
   }
+  const durationSec = match[2] == null ? undefined : Number(match[2]);
+  if (durationSec != null && (!Number.isFinite(durationSec) || durationSec < 0.1 || durationSec > 60)) {
+    throw new Error("Soundscape duration must be between 0.1 and 60 seconds");
+  }
   const voiceDirection = direction.slice(match[0].length).trim();
   return Object.freeze({
     preset,
+    durationSec,
     voiceDirection: voiceDirection || undefined,
   });
 }
 
-export function buildSoundscapePresetCues(preset, assets = []) {
+export function buildSoundscapePresetCues(preset, assets = [], durationSec) {
   if (!SUPPORTED_PRESETS.has(preset)) {
     throw new Error("Unsupported soundscape preset: " + String(preset));
   }
@@ -254,7 +259,7 @@ export function buildSoundscapePresetCues(preset, assets = []) {
       continue;
     }
     const { assetName, ...cue } = definition;
-    cues.push({ fileId: asset.id, ...cue });
+    cues.push({ fileId: asset.id, ...cue, ...(durationSec == null || definitions.length !== 1 ? {} : { durationSec }) });
   }
 
   return Object.freeze({

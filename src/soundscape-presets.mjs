@@ -140,6 +140,77 @@ const PRESETS = Object.freeze({
       durationSec: 1.4,
     },
   ],
+  // Single-action presets: exactly one fixed Foley asset per call, with a longer audible window.
+  clothing: [
+    {
+      assetName: "衣物摩擦",
+      kind: "foley",
+      atSec: 0,
+      sourceOffsetSec: 12,
+      gain: soundscapeGain("contact", 2.25),
+      normalizationTargetRms: 0.14,
+      pan: -0.38,
+      distanceMeters: 1,
+      fadeInSec: 0.15,
+      fadeOutSec: 0.7,
+      durationSec: 6,
+    },
+  ],
+  lubricant: [
+    {
+      assetName: "润滑液涂抹",
+      kind: "foley",
+      atSec: 0,
+      gain: soundscapeGain("detail", -4.5),
+      pan: 0.16,
+      distanceMeters: 0.9,
+      fadeInSec: 0.2,
+      fadeOutSec: 0.7,
+      durationSec: 6,
+    },
+  ],
+  rhythm: [
+    {
+      assetName: "连续节奏",
+      kind: "foley",
+      atSec: 0,
+      gain: soundscapeGain("contact", 0.92),
+      normalizationTargetRms: 0.14,
+      pan: -0.1,
+      distanceMeters: 1.1,
+      fadeInSec: 0.35,
+      fadeOutSec: 0.9,
+      durationSec: 8,
+    },
+  ],
+  bed: [
+    {
+      assetName: "床铺物件声",
+      kind: "foley",
+      atSec: 0,
+      gain: soundscapeGain("contact", 0.92),
+      normalizationTargetRms: 0.14,
+      pan: 0.12,
+      distanceMeters: 1.2,
+      fadeInSec: 0.35,
+      fadeOutSec: 0.9,
+      durationSec: 8,
+    },
+  ],
+  finish: [
+    {
+      assetName: "收尾音效",
+      kind: "foley",
+      atSec: 0,
+      gain: soundscapeGain("detail"),
+      normalizationTargetRms: 0.14,
+      pan: 0,
+      distanceMeters: 1,
+      fadeInSec: 0.12,
+      fadeOutSec: 0.65,
+      durationSec: 4,
+    },
+  ],
 });
 
 const SUPPORTED_PRESETS = new Set(Object.keys(PRESETS));

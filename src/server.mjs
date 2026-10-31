@@ -614,6 +614,39 @@ function createServer() {
     },
   );
 
+  mcp.registerTool("plan_voice_chunks", {
+    title: `${BOT_NAME}'s Voice Chunk Planner`,
+    description: `Plan long speech into natural sentence/clause chunks without synthesizing audio. The returned chunk texts concatenate exactly to the input. For each chunk call speak in order; pass the immediately preceding request_id as previous_request_ids and pass previous_text/next_text from the plan as context. Context is not repeated in the spoken audio. This tool does not spend ElevenLabs credits.`,
+    inputSchema: z.object({
+      text: z.string().min(1).max(MAX_SPEAK_CHARS),
+      target_chars: z.number().int().min(100).max(1200).optional(),
+      max_chars: z.number().int().min(100).max(1200).optional(),
+      context_chars: z.number().int().min(0).max(400).optional(),
+    }),
+  }, async (args) => {
+    try {
+      const plan = planVoiceChunks(args.text, {
+        targetChars: args.target_chars,
+        maxChars: args.max_chars,
+        contextChars: args.context_chars,
+      });
+      return {
+        content: [{
+          type: "text",
+          text: `${BOT_NAME}: planned ${plan.chunk_count} voice chunks (${plan.character_count} characters); exact reconstruction: ${plan.reconstruction_exact}`,
+        }],
+        structuredContent: plan,
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return {
+        content: [{ type: "text", text: "Voice chunk planning failed: " + message }],
+        structuredContent: { error: message },
+        isError: true,
+      };
+    }
+  });
+
   if (SOUNDSCAPE_MCP_ENABLED) {
   mcp.registerTool(
     "list_sound_assets",
@@ -795,39 +828,6 @@ function createServer() {
     },
   );
 
-
-  mcp.registerTool("plan_voice_chunks", {
-    title: `${BOT_NAME}'s Voice Chunk Planner`,
-    description: `Plan long speech into natural sentence/clause chunks without synthesizing audio. The returned chunk texts concatenate exactly to the input. For each chunk call speak in order; pass the immediately preceding request_id as previous_request_ids and pass previous_text/next_text from the plan as context. Context is not repeated in the spoken audio. This tool does not spend ElevenLabs credits.`,
-    inputSchema: z.object({
-      text: z.string().min(1).max(MAX_SPEAK_CHARS),
-      target_chars: z.number().int().min(100).max(1200).optional(),
-      max_chars: z.number().int().min(100).max(1200).optional(),
-      context_chars: z.number().int().min(0).max(400).optional(),
-    }),
-  }, async (args) => {
-    try {
-      const plan = planVoiceChunks(args.text, {
-        targetChars: args.target_chars,
-        maxChars: args.max_chars,
-        contextChars: args.context_chars,
-      });
-      return {
-        content: [{
-          type: "text",
-          text: `${BOT_NAME}: planned ${plan.chunk_count} voice chunks (${plan.character_count} characters); exact reconstruction: ${plan.reconstruction_exact}`,
-        }],
-        structuredContent: plan,
-      };
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      return {
-        content: [{ type: "text", text: "Voice chunk planning failed: " + message }],
-        structuredContent: { error: message },
-        isError: true,
-      };
-    }
-  });
 
   mcp.registerTool("render_continuous_audio_timeline", {
     title: `${BOT_NAME}'s Continuous Voice Timeline`,

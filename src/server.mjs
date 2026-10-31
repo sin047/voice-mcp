@@ -6,6 +6,8 @@ import { createRecordingStore } from "./recording-store.mjs";
 import { parseByteRange } from "./audio-range.mjs";
 import { decodeRawPcm16, mixSoundscape } from "./wav-audio.mjs";
 import { resolveCueTimeAfterText } from "./alignment-cues.mjs";
+import { planVoiceChunks } from "./voice-chunker.mjs";
+import { auditCharacterAlignment } from "./alignment-audit.mjs";
 import { buildSoundscapePresetCues, parseSoundscapeDirective } from "./soundscape-presets.mjs";
 import process from "node:process";
 import { readFile } from "node:fs/promises";
@@ -34,7 +36,7 @@ const MODEL_ID = process.env.ELEVENLABS_MODEL_ID || "eleven_v4";
 const OUTPUT_FORMAT = process.env.ELEVENLABS_OUTPUT_FORMAT || "mp3_44100_128";
 const PLAYER_URI = "ui://voice-mcp/player.html";
 const PLAYER_MIME = "text/html;profile=mcp-app";
-const VERSION = "1.4.0-beta.30";
+const VERSION = "1.4.0-beta.31";
 const MAX_CONTEXT_CHARS = 4000;
 const MAX_SPEAK_CHARS = 4000;
 const MAX_SOUND_SCAPE_TEXT_CHARS = 1200;
@@ -794,6 +796,39 @@ function createServer() {
   );
 
 
+  mcp.registerTool("plan_voice_chunks", {
+    title: `${BOT_NAME}'s Voice Chunk Planner`,
+    description: `Plan long speech into natural sentence/clause chunks without synthesizing audio. The returned chunk texts concatenate exactly to the input. For each chunk call speak in order; pass the immediately preceding request_id as previous_request_ids and pass previous_text/next_text from the plan as context. Context is not repeated in the spoken audio. This tool does not spend ElevenLabs credits.`,
+    inputSchema: z.object({
+      text: z.string().min(1).max(MAX_SPEAK_CHARS),
+      target_chars: z.number().int().min(100).max(1200).optional(),
+      max_chars: z.number().int().min(100).max(1200).optional(),
+      context_chars: z.number().int().min(0).max(400).optional(),
+    }),
+  }, async (args) => {
+    try {
+      const plan = planVoiceChunks(args.text, {
+        targetChars: args.target_chars,
+        maxChars: args.max_chars,
+        contextChars: args.context_chars,
+      });
+      return {
+        content: [{
+          type: "text",
+          text: `${BOT_NAME}: planned ${plan.chunk_count} voice chunks (${plan.character_count} characters); exact reconstruction: ${plan.reconstruction_exact}`,
+        }],
+        structuredContent: plan,
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return {
+        content: [{ type: "text", text: "Voice chunk planning failed: " + message }],
+        structuredContent: { error: message },
+        isError: true,
+      };
+    }
+  });
+
   mcp.registerTool("render_continuous_audio_timeline", {
     title: `${BOT_NAME}'s Continuous Voice Timeline`,
     description: `Synthesize one continuous voice passage exactly once, then overlay independently timed Foley and ambience. Use after_text on a cue to place it immediately after an exact phrase in the spoken text using ElevenLabs character timestamps; use at_sec for absolute timing. This avoids extra TTS chunk boundaries. Call list_sound_assets first. Text and finished audio are limited to ${MAX_SOUND_SCAPE_TEXT_CHARS} characters and ${MAX_SOUND_SCAPE_SECONDS} seconds.`,
@@ -960,6 +995,7 @@ function createServer() {
           voice_request_id: result.request_id,
           performance: result.performance,
           language: result.language,
+          alignment_audit: auditCharacterAlignment({ expectedText: result.final_text, alignment: result.alignment, normalizedAlignment: result.normalized_alignment }),
           alignment_cues: resolvedCues.map((cue, index) => ({
             asset_id: cue.fileId,
             kind: cue.kind,
@@ -1297,6 +1333,8 @@ app.get("/status", (_req, res) => {
       soundscape_max_seconds: MAX_SOUND_SCAPE_SECONDS,
       character_alignment: true,
       continuous_voice_timeline: SOUNDSCAPE_MCP_ENABLED,
+      voice_chunk_planning: true,
+      character_alignment_qa: SOUNDSCAPE_MCP_ENABLED,
       legacy_style_presets: true,
       inline_audio_tags: true,
     },

@@ -93,6 +93,8 @@ Generate speech and mix it with up to 12 uploaded ambience/Foley assets. The too
 
 The generated playback URL expires after 10 minutes and is held in process memory; a server restart invalidates it. The URL is an unguessable, temporary bearer link.
 
+Both `speak` and `speak_with_soundscape` attach the same MCP App audio player. Voice-only output is passed as an audio data URL; mixed soundscape output is loaded from its short-lived HTTPS playback URL. The player uses the current MCP Apps `ui/initialize` handshake (`2026-01-26`) and native browser audio controls. Hosts without MCP Apps still receive the normal text/structured tool result. After changing MCP tool UI metadata, refresh the custom MCP app in ChatGPT so the host re-reads the tool definitions.
+
 ## Private sound library
 
 1. Configure `PRIVATE_DRAMA_ACCESS_TOKEN` with a random secret of at least 32 characters.

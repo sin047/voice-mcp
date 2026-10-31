@@ -155,7 +155,7 @@ function normalizeContext(value, fieldName) {
 }
 
 
-function buildText(text, style, rawTags, direction, performance) {
+function buildText(text, style, rawTags, direction, performance, emotion) {
   const supportsTags = ["eleven_v3", "eleven_v3_conversational", "eleven_v4", "eleven_v4_turbo"].includes(MODEL_ID);
   if (!supportsTags) {
     const requestedMode = normalizePerformance(performance);
@@ -173,7 +173,7 @@ function buildText(text, style, rawTags, direction, performance) {
     };
   }
 
-  const plan = createPerformancePlan(text, { performance, direction, style, rawTags, recentPatterns: recentPerformancePatterns });
+  const plan = createPerformancePlan(text, { performance, direction, style, rawTags, emotion, recentPatterns: recentPerformancePatterns });
   const tag = plan.direction ? `[${plan.direction}]` : plan.legacy_tag;
   const finalText = tag ? `${tag} ${plan.rendered_text}` : plan.rendered_text;
 
@@ -193,6 +193,7 @@ async function synthesize(text, options = {}) {
     rawTags,
     direction,
     performance,
+    emotion,
     language,
     previousText,
     nextText,
@@ -210,7 +211,7 @@ async function synthesize(text, options = {}) {
   if (!apiKey) throw new Error("ELEVENLABS_API_KEY is not configured");
   if (!voiceId) throw new Error("ELEVENLABS_VOICE_ID is not configured");
 
-  const built = buildText(text, style, rawTags, direction, performance);
+  const built = buildText(text, style, rawTags, direction, performance, emotion);
   const finalText = built.finalText;
   const performancePlan = built.plan;
   if (!stripAudioTags(finalText)) throw new Error("No speakable text");
@@ -414,10 +415,11 @@ function createServer() {
     "speak",
     {
       title: `${BOT_NAME}'s Voice`,
-      description: `Make ${BOT_NAME} speak with the configured ElevenLabs voice. Use natural for everyday speech; soft/close for quieter delivery; breathy/expressive only when explicitly requested. Natural is intentionally untagged. Use language=auto unless the language is ambiguous. For adjacent chunks of the SAME voice and model, pass the request_id returned by the immediately preceding call in previous_request_ids (max 3) to improve continuity; otherwise use previous_text / next_text. The tool returns a request_id for the next contiguous chunk. direction is an advanced override. To add a soundscape while keeping this same tool, prefix direction with one marker: [soundscape:rain], [soundscape:desk], [soundscape:package], [soundscape:close], or [soundscape:intimate]. The marker is removed before voice synthesis. Omit it for ordinary voice-only playback. Soundscape playback requires the matching private WAV assets to be uploaded on the server and MCP_PUBLIC_BASE_URL to be configured.`,
+      description: `Make ${BOT_NAME} speak with the configured ElevenLabs voice. Use natural for everyday speech; soft/close for quieter delivery; breathy/expressive only when explicitly requested. Natural is intentionally untagged. Use language=auto unless the language is ambiguous. For adjacent chunks of the SAME voice and model, pass the request_id returned by the immediately preceding call in previous_request_ids (max 3) to improve continuity; otherwise use previous_text / next_text. The tool returns a request_id for the next contiguous chunk. Optional emotion selects adaptive breathing: neutral/calm/curious/tired=B1, warm/tender=B2.1, and excited/nervous/intense=experimental inhale-only B3. For gradual emotional shifts, change emotion across adjacent chunks and pass the immediately previous request_id for continuity. direction is an advanced override. To add a soundscape while keeping this same tool, prefix direction with one marker: [soundscape:rain], [soundscape:desk], [soundscape:package], [soundscape:close], or [soundscape:intimate]. The marker is removed before voice synthesis. Omit it for ordinary voice-only playback. Soundscape playback requires the matching private WAV assets to be uploaded on the server and MCP_PUBLIC_BASE_URL to be configured.`,
       inputSchema: z.object({
         text: z.string().min(1).max(MAX_SPEAK_CHARS).describe("Text to speak (maximum 4000 characters)"),
         performance: z.enum(["auto", "natural", "soft", "close", "breathy", "expressive"]).optional().describe("High-level delivery mode. Prefer natural for everyday speech. Use breathy/expressive only when context explicitly calls for stronger breath/performance. Defaults to auto/natural."),
+        emotion: z.enum(["neutral", "calm", "warm", "tender", "curious", "excited", "nervous", "intense", "tired"]).optional().describe("Optional emotional direction with adaptive breathing: neutral/calm/curious/tired=B1 subtle; warm/tender=B2.1 natural inhale; excited/nervous/intense=experimental B3 stronger inhale-only. Omit to preserve existing performance behavior."),
         language: z.enum(["auto", "zh", "ja", "en", "ko"]).optional().describe("Language override. Auto-detects Japanese kana, Korean Hangul, Chinese Han characters and English; set explicitly for kanji-only Japanese or ambiguous mixed text."),
         direction: z.string().max(180).optional().describe("Advanced voice direction. For optional ambience/effects, prefix with [soundscape:rain], [soundscape:desk], [soundscape:package], [soundscape:close], or [soundscape:intimate]; the marker is not spoken."),
         previous_text: z.string().max(MAX_CONTEXT_CHARS).optional().describe("Plain text immediately before this chunk. Used only as prosody context and not spoken again."),
@@ -432,7 +434,7 @@ function createServer() {
         "ui/resourceUri": PLAYER_URI,
       },
     },
-    async ({ text, performance, language, direction, previous_text, next_text, previous_request_ids, include_alignment, style, raw_tags }) => {
+    async ({ text, performance, emotion, language, direction, previous_text, next_text, previous_request_ids, include_alignment, style, raw_tags }) => {
       try {
         const directive = parseSoundscapeDirective(direction);
         if (directive.preset) {
@@ -466,6 +468,7 @@ function createServer() {
 
           const result = await synthesize(text, {
             performance,
+            emotion,
             language,
             direction: directive.voiceDirection,
             previousText: previous_text,
@@ -558,6 +561,7 @@ function createServer() {
 
         const result = await synthesize(text, {
           performance,
+          emotion,
           language,
           direction: directive.voiceDirection,
           previousText: previous_text,
@@ -637,6 +641,7 @@ function createServer() {
       inputSchema: z.object({
         text: z.string().min(1).max(MAX_SOUND_SCAPE_TEXT_CHARS).describe("Text to speak (maximum 1200 characters; final audio is limited to 60 seconds)"),
         performance: z.enum(["auto", "natural", "soft", "close", "breathy", "expressive"]).optional(),
+        emotion: z.enum(["neutral", "calm", "warm", "tender", "curious", "excited", "nervous", "intense", "tired"]).optional(),
         language: z.enum(["auto", "zh", "ja", "en", "ko"]).optional(),
         direction: z.string().max(180).optional(),
         cues: z.array(z.object({
@@ -664,7 +669,7 @@ function createServer() {
         "ui/resourceUri": PLAYER_URI,
       },
     },
-    async ({ text, performance, language, direction, cues, voice_gain, ambience_bus_gain, foley_bus_gain, master_gain, ducking_enabled, ducking_amount, save_recording }) => {
+    async ({ text, performance, emotion, language, direction, cues, voice_gain, ambience_bus_gain, foley_bus_gain, master_gain, ducking_enabled, ducking_amount, save_recording }) => {
       try {
         const baseUrlValue = (process.env.MCP_PUBLIC_BASE_URL || process.env.ZEABUR_WEB_URL);
         if (!baseUrlValue) throw new Error("MCP_PUBLIC_BASE_URL must be configured before soundscape playback can be returned");
@@ -686,6 +691,7 @@ function createServer() {
 
         const result = await synthesize(text, {
           performance,
+          emotion,
           language,
           direction,
           outputFormat: "pcm_24000",

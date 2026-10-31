@@ -96,7 +96,7 @@ export function planVoiceChunks(text, options = {}) {
 
   let offset = 0;
   const chunks = planned.map((parts, index) => {
-    const chunkText = parts.join("");
+    const chunkText = parts.flat().join("");
     const length = codePoints(chunkText).length;
     const start = offset;
     const end = start + length;

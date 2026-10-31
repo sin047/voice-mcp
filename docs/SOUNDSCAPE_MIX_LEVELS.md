@@ -85,3 +85,9 @@
 - 用户反馈 beta.26 的 10 秒润滑液试听中人声存在感太强。仅对 `lubricant` preset 做 A/B 微调：voiceGain 0.86（此前 0.96），foleyBusGain 0.95（此前 0.90），duckingAmount 0.68（此前 0.78），foleyDuckingDepth 0.20（此前 0.35）。
 - 润滑液素材本身的 cue gain、目标时长、source offset、pan、distance、fade 均不变。其他预设（尤其已通过的 clothing、rhythm）混音参数不变。
 - 验收目标：音效比 beta.26 更靠前，人声略退后但仍清晰可辨；若出现遮盖，回退或小幅修正。
+
+## beta.28 · 独立人声 / Foley 时间轴引擎
+- `mixSoundscape` 新增 `voiceSegments` 与 `totalDurationSec`。可在一个总时长内放置多个独立人声片段，并在片段之间保留纯 Foley / ambience 区间。
+- 音效不再被最后一段人声的结束时间截断；可在无人声区间继续播放，ducking 参考整条时间轴上的实际人声采样。
+- 原 `voicePcm` 调用保持兼容，既有 `speak`、beta.27 的 Lubricant 平衡、已验收 Clothing / Rhythm 参数均不变。
+- 本次完成的是混音引擎层与回归测试；尚未新增面向 MCP 用户的时间轴编排工具。下一步在 CI 通过后，新增可提交 `voice` / `foley` / `ambience` / `gap` 片段的 timeline MCP tool。

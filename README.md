@@ -2,11 +2,11 @@
 
 A platform-neutral Node.js MCP server for ElevenLabs voice generation, expressive delivery and mixed voice + sound-effect playback.
 
-The actively maintained development and deployment branch is `zeabur`, currently at **v1.4.0-beta.24**. It runs as a Node.js 22+ / Express 5 service with Streamable HTTP MCP and is deployed on Zeabur. The same runtime can also run on a VPS or Docker host.
+The actively maintained development and deployment branch is `zeabur`, currently at **v1.4.0-beta.25**. It runs as a Node.js 22+ / Express 5 service with Streamable HTTP MCP and is deployed on Zeabur. The same runtime can also run on a VPS or Docker host.
 
 ## Branches
 
-- `zeabur`: **active maintained branch** for development and current Zeabur deployment; currently v1.4.0-beta.24.
+- `zeabur`: **active maintained branch** for development and current Zeabur deployment; currently v1.4.0-beta.25.
 - `voice-v1.4-private-drama`: historical v1.4 beta.7 snapshot. It is not the active deployment branch; do not switch to it without comparing its history against `zeabur`.
 - `main`: repository default branch; it may not contain the latest maintained v1.4 work. Do not assume it is the deployment branch.
 
@@ -71,7 +71,14 @@ For the already-installed mobile `voice2-v1.3.1` app, soundscapes are backward-c
 - `[soundscape:desk]` — keyboard ambience
 - `[soundscape:package]` — packaging / unboxing Foley
 - `[soundscape:close]` — subtle close-detail Foley
-- `[soundscape:intimate]` — layered adult/intimate Foley
+- `[soundscape:intimate]` — legacy multi-cue sequence; retained for comparison, not recommended for new tests
+- `[soundscape:clothing]` — one fixed clothing-rub cue, longer excerpt
+- `[soundscape:lubricant]` — one fixed application/detail cue, longer excerpt
+- `[soundscape:rhythm]` — one fixed continuous-rhythm cue, up to 8 seconds
+- `[soundscape:bed]` — one fixed bed/object cue, up to 8 seconds
+- `[soundscape:finish]` — one fixed ending-detail cue, up to 4 seconds
+
+The new action markers each play exactly one Foley asset per call; they do not stack multiple action sounds. Requested duration is capped by the available source audio and the generated voice length, so longer playback requires a sufficiently long uploaded WAV. For natural transitions, end one action before starting the next instead of layering them.
 
 The marker is stripped before the direction reaches ElevenLabs. Omit the marker for the original voice-only MP3 path. Soundscape playback uses a temporary WAV URL and requires the curated assets plus `MCP_PUBLIC_BASE_URL` or Zeabur's injected `ZEABUR_WEB_URL` fallback.
 

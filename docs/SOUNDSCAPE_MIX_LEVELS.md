@@ -28,7 +28,7 @@
 - **Package 包装撕开**：用户确认清楚，保持原有 `action` 默认值。
 - **Package 盒子开封**：用户反馈不够清楚；本轮单独提高至 `action +2 dB`（cue gain 约 `0.252`），响度补偿目标 RMS `0.14`，距离由 `1.3 m` 调至 `1 m`，片段延长至 `2.2 s`；待再次试听确认。
 - **Intimate v1.2（已被 v1.3 替代）**：beta.18 试听反馈为连续节奏、床铺物件声、收尾音效仍不清楚，衣物摩擦略响且人声稍被遮盖。衣物摩擦恢复此前 `layered +0.7 dB = 0.13`；润滑液涂抹保持 `0.274`；连续节奏与床铺物件声提高到 `contact = 0.54`，收尾提高到 `detail = 0.46`，三条单独设 excerpt normalization RMS `0.14`。beta.19/20 的人声优先混音设为 `voiceGain=1.0`、`foleyBusGain=0.82`、`duckingAmount=0.9`、`foleyDuckingDepth=0.55`；试听反馈为人声太突出、节奏和床铺声仍偏小。
-- **Intimate v1.3（beta.21，待试听）**：只提高连续节奏与床铺物件声至 `contact +0.92 dB ≈ 0.60`，两条 excerpt normalization 仍为 RMS `0.14`；其他三条 cue 不动。混音回到中间平衡：`voiceGain=0.96`、`foleyBusGain=0.86`、`duckingAmount=0.84`、`foleyDuckingDepth=0.45`。目标是让节奏和床铺细节比 v1.2 更容易辨认，同时避免人声过度前置；Rain v2、Close v4、B2.1 不变。
+- **Intimate v1.3（beta.21，试听通过）**：只提高连续节奏与床铺物件声至 `contact +0.92 dB ≈ 0.60`，两条 excerpt normalization 仍为 RMS `0.14`；其他三条 cue 不动。混音回到中间平衡：`voiceGain=0.96`、`foleyBusGain=0.86`、`duckingAmount=0.84`、`foleyDuckingDepth=0.45`。用户反馈：连续节奏与床铺物件声能听见，整体融合感可以；作为当前 Intimate 候选标准保留，不再额外加大。Rain v2、Close v4、B2.1 不变。
 - **Breathy 人声表现（B2.1，已验收）**：使用现有 `voice2-v1.3.1` 的 `performance: "breathy"`。仅在中长语音已有自然停顿处加入明显但自然的 `[inhales]`；不主动插入显式 `[exhales]` 或 `[sighs]`，句尾自然收气，不额外追加一声呼气。短语音或没有自然停顿时不强行加入呼吸，也不要求每句话都出现吸气。保持近讲、温暖、克制的青年音，避免突然拔高音调。更强的 B3 仍是实验级，不得替代 B2.1 成为默认。人声呼吸由 TTS 表现产生，不应伪装成额外 Foley 素材。
 - **Expressive 模式注意**：代码中的 `expressive` 仍有独立的 sigh / exhale 实验分支；这不属于已验收的 B2.1 breathy 标准。除非单独试听并验收，不要把它描述成 breathy 默认表现。
 - **Approach** 目前为未来素材预留的级别，现有预设没有独立的动态靠近音效，不要把仅调高音量误称为实现了移动音源。
@@ -51,4 +51,4 @@
 
 > 注意：gain 不等于「相对于人声的百分比」，也不等于最终播放文件的 LUFS；未来增加自动音量匹配时，应单独进行耳机验收。
 
-- **beta.22 播放稳定性修复（待线上试听）**：纯 TTS 约 15 秒可完整播放，但 Intimate 混音音频在约 6 秒后整段停止。已将 MCP 播放器的远程音频加载改为先 `fetch()` 完整 WAV、校验非空后转成 Blob URL 再交给 `<audio>` 播放，避免移动端 WebKit 对远程 WAV Range/流式读取时中途停止；fetch 失败时保留原 URL 兼容回退。此改动不改变任何声音增益、cue 时间线或 B2.1 参数。
+- **beta.22 播放稳定性修复（试听通过）**：纯 TTS 约 15 秒可完整播放，Intimate 混音音频此前约 6 秒后整段停止。MCP 播放器现先 `fetch()` 完整 WAV、校验非空后转成 Blob URL 再交给 `<audio>` 播放，fetch 失败时保留原 URL 兼容回退。用户确认混音音频现可完整播放至结尾。此改动不改变任何声音增益、cue 时间线或 B2.1 参数。

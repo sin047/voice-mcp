@@ -80,6 +80,11 @@ test("all curated presets resolve to assets with the intended bus and timeline",
   const intimate = buildSoundscapePresetCues("intimate", assets);
   assert.equal(intimate.cues.length, 5);
   assert.deepEqual(intimate.cues.map((cue) => cue.atSec), [0, 3, 6, 10, 14]);
+  assert.deepEqual(
+    intimate.cues.map((cue) => cue.gain),
+    [0.304, 0.274, 0.341, 0.322, 0.259],
+    "sequential Intimate cues must not use the quiet simultaneous-layer baseline",
+  );
 });
 
 test("soundscape preset reports missing assets without returning incomplete cues silently", () => {

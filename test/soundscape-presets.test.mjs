@@ -46,7 +46,7 @@ test("soundscape directive rejects unknown preset names", () => {
 });
 
 test("all curated presets resolve to assets with the intended bus and timeline", () => {
-  assert.deepEqual(listSoundscapePresets(), ["rain", "desk", "package", "close", "intimate"]);
+  assert.deepEqual(listSoundscapePresets(), ["rain", "desk", "package", "close", "intimate", "clothing", "lubricant", "rhythm", "bed", "finish"]);
 
   const rain = buildSoundscapePresetCues("rain", assets);
   assert.deepEqual(rain.missingAssets, []);
@@ -90,6 +90,20 @@ test("all curated presets resolve to assets with the intended bus and timeline",
     [null, null, 0.14, 0.14, 0.14],
     "quiet rhythm, bed and finish excerpts receive the approved excerpt normalization target",
   );
+
+  for (const name of ["clothing", "lubricant", "rhythm", "bed", "finish"]) {
+    const single = buildSoundscapePresetCues(name, assets);
+    assert.equal(single.cues.length, 1, name + " must contain exactly one fixed Foley cue");
+    assert.equal(single.cues[0].kind, "foley");
+    assert.equal(single.cues[0].atSec, 0, name + " starts at the beginning of its action segment");
+    assert.deepEqual(single.missingAssets, []);
+  }
+  assert.equal(buildSoundscapePresetCues("clothing", assets).cues[0].durationSec, 6);
+  assert.equal(buildSoundscapePresetCues("clothing", assets).cues[0].sourceOffsetSec, 12);
+  assert.equal(buildSoundscapePresetCues("lubricant", assets).cues[0].durationSec, 6);
+  assert.equal(buildSoundscapePresetCues("rhythm", assets).cues[0].durationSec, 8);
+  assert.equal(buildSoundscapePresetCues("bed", assets).cues[0].durationSec, 8);
+  assert.equal(buildSoundscapePresetCues("finish", assets).cues[0].durationSec, 4);
 });
 
 test("soundscape preset reports missing assets without returning incomplete cues silently", () => {

@@ -5,6 +5,7 @@ import {
   createPerformancePlan,
   detectLanguage,
   getVoiceIdForLanguage,
+  normalizeEmotion,
   shouldApplyJapaneseNormalization,
   stripAudioTags,
 } from "../src/performance.mjs";
@@ -47,6 +48,75 @@ test("breathy mode uses a natural inhale or no tag, never a marked exhale", () =
   });
   assert.equal(quiet.breath_event, "none");
   assert.equal(quiet.rendered_text, text);
+});
+
+test("emotion profiles map neutral delivery to subtle B1 without a forced inhale", () => {
+  const text = "今日はゆっくり話そう。急がなくても大丈夫だから、落ち着いて聞いていてね。";
+  const plan = createPerformancePlan(text, { performance: "natural", emotion: "neutral" });
+  assert.equal(plan.emotion, "neutral");
+  assert.equal(plan.breath_level, "B1");
+  assert.equal(plan.breath_event, null);
+  assert.equal(plan.rendered_text, text);
+  assert.match(plan.direction, /subtle natural breathing/);
+});
+
+test("warm and tender emotions use the approved inhale-only B2.1 profile", () => {
+  const text = "今日はゆっくり話そう。急がなくても大丈夫だから、落ち着いて聞いていてね。";
+  const inhale = createPerformancePlan(text, {
+    performance: "natural",
+    emotion: "warm",
+    recentPatterns: ["none"],
+  });
+  assert.equal(inhale.breath_level, "B2.1");
+  assert.equal(inhale.breath_event, "inhale");
+  assert.match(inhale.rendered_text, /\\[inhales\\]/);
+  assert.doesNotMatch(inhale.rendered_text, /\\[(exhales|sighs)\\]/);
+
+  const quiet = createPerformancePlan(text, {
+    performance: "natural",
+    emotion: "tender",
+    recentPatterns: ["inhale"],
+  });
+  assert.equal(quiet.breath_level, "B2.1");
+  assert.equal(quiet.breath_event, "none");
+  assert.equal(quiet.rendered_text, text);
+});
+
+test("experimental B3 emotions use a stronger inhale cue without explicit exhales", () => {
+  const text = "少し緊張しているけれど、ちゃんと伝えたいことがあるんだ。ゆっくり聞いてね。";
+  const plan = createPerformancePlan(text, {
+    performance: "natural",
+    emotion: "excited",
+    recentPatterns: ["none"],
+  });
+  assert.equal(plan.breath_level, "B3");
+  assert.equal(plan.breath_event, "strong-inhale");
+  assert.match(plan.direction, /more noticeable natural breathing/);
+  assert.match(plan.rendered_text, /\\[inhales\\]/);
+  assert.doesNotMatch(plan.rendered_text, /\\[(exhales|sighs|gasps)\\]/);
+});
+
+test("emotion direction is combined with an explicit voice direction", () => {
+  const plan = createPerformancePlan(
+    "今日はゆっくり話そう。急がなくても大丈夫だから、落ち着いて聞いていてね。",
+    {
+      performance: "natural",
+      emotion: "warm",
+      direction: "close-mic, youthful voice",
+    },
+  );
+  assert.match(plan.direction, /^warm, gentle, emotionally present delivery/);
+  assert.match(plan.direction, /close-mic, youthful voice/);
+});
+
+test("emotion validation rejects unknown profiles and short phrases stay unforced", () => {
+  assert.equal(normalizeEmotion(undefined), undefined);
+  assert.equal(normalizeEmotion(" WARM "), "warm");
+  assert.throws(() => normalizeEmotion("angry"), /Unsupported emotion/);
+  const short = createPerformancePlan("嗯。", { performance: "natural", emotion: "excited" });
+  assert.equal(short.breath_level, "B3");
+  assert.equal(short.breath_event, null);
+  assert.equal(short.rendered_text, "嗯。");
 });
 
 test("no pause means no invented breath at the beginning", () => {

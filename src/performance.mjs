@@ -125,6 +125,18 @@ export function normalizeEmotion(value) {
   return emotion;
 }
 
+export function parseEmotionDirective(direction) {
+  if (typeof direction !== "string") {
+    return Object.freeze({ emotion: undefined, direction });
+  }
+  const match = direction.match(/^\\s*\\[emotion:([a-z-]+)\\]\\s*/i);
+  if (!match) return Object.freeze({ emotion: undefined, direction });
+  return Object.freeze({
+    emotion: normalizeEmotion(match[1]),
+    direction: direction.slice(match[0].length).trim() || undefined,
+  });
+}
+
 export function speakableCharCount(text) {
   return stripAudioTags(String(text ?? ""))
     .replace(/[\s\p{P}\p{S}]/gu, "")

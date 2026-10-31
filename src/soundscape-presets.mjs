@@ -235,7 +235,7 @@ export function parseSoundscapeDirective(direction) {
   const voiceDirection = direction.slice(match[0].length).trim();
   return Object.freeze({
     preset,
-    durationSec,
+    ...(durationSec == null ? {} : { durationSec }),
     voiceDirection: voiceDirection || undefined,
   });
 }

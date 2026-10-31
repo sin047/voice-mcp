@@ -190,6 +190,7 @@ jobs:
             const continuous = tools.find((tool) => tool.name === "render_continuous_audio_timeline");
             assert.ok(continuous.description.includes("character timestamps"));
             assert.ok(continuous.inputSchema.properties.cues.items.properties.after_text);
+            assert.equal(continuous._meta.ui.resourceUri, "ui://voice-mcp/player.html");
             const timeline = tools.find((tool) => tool.name === "render_audio_timeline");
             assert.deepEqual(timeline.inputSchema.properties.segments.items.properties.type.enum, ["voice", "foley", "ambience", "gap"]);
             const speak = tools.find((tool) => tool.name === "speak");

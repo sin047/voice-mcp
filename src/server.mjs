@@ -332,18 +332,36 @@ function apply(data){
   if(data.audio_url){audio.src=data.audio_url;audio.load();state.textContent="Ready · tap play";}
   else if(data.audio_base64){audio.src="data:"+(data.audio_mime_type||"audio/mpeg")+";base64,"+data.audio_base64;audio.load();state.textContent="Ready · tap play";}
 }
+function send(method,params,id){
+ const message={jsonrpc:"2.0",method,params:params||{}};
+ if(id!==undefined)message.id=id;
+ window.parent.postMessage(message,"*");
+}
+let initialized=false;
 window.addEventListener("message",(event)=>{
+ if(event.source!==window.parent||event.data?.jsonrpc!=="2.0")return;
  const msg=event.data;
- if(msg?.method==="ui/notifications/tool-result") apply(msg.params?.structuredContent);
- if(msg?.structuredContent) apply(msg.structuredContent);
+ if(msg.id===1){
+   if(msg.result?.protocolVersion){
+     initialized=true;
+     send("ui/notifications/initialized",{});
+   }else if(msg.error){
+     state.textContent="Player initialization failed.";
+   }
+   return;
+ }
+ if(!initialized)return;
+ if(msg.method==="ui/notifications/tool-result")apply(msg.params?.structuredContent);
 });
 audio.addEventListener("play",()=>{state.textContent="Playing";});
 audio.addEventListener("pause",()=>{if(!audio.ended&&audio.currentTime>0)state.textContent="Paused";});
 audio.addEventListener("ended",()=>{state.textContent="Finished";});
 audio.addEventListener("error",()=>{state.textContent="Audio could not be loaded. Please try again.";});
-function send(method,params,id){const m={jsonrpc:"2.0",method,params:params||{}};if(id!==undefined)m.id=id;window.parent.postMessage(m,"*")}
-send("ui/initialize",{name:"voice-mcp",version:VERSION},1);
-setTimeout(()=>send("ui/notifications/initialized",{}),50);
+send("ui/initialize",{
+ protocolVersion:"2026-01-26",
+ appInfo:{name:"voice-mcp",version:VERSION},
+ appCapabilities:{availableDisplayModes:["inline"]}
+},1);
 </script>
 </body>
 </html>`;
@@ -352,7 +370,7 @@ function createServer() {
   const mcp = new McpServer({ name: "voice-mcp", version: VERSION });
 
   mcp.server.registerCapabilities({
-    extensions: { "io.modelcontextprotocol/ui": {} },
+    extensions: { "io.modelcontextprotocol/ui": { mimeTypes: [PLAYER_MIME] } },
   });
 
   mcp.resource(

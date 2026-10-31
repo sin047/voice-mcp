@@ -74,3 +74,9 @@
 - **连续节奏（rhythm）**：用户试听确认「可以」，作为首条单动作 Foley 试听通过。保留当前单 cue、目标 8 秒、gain 与淡入淡出设置；暂不再调整响度或时间参数。
 - 下一条建议验收衣物摩擦（clothing），继续一次只测一条素材。
 - **衣物摩擦（clothing）**：用户试听确认清晰、连续，有布料移动感，且不会盖过人声。标记为试听通过；保留 beta.25 当前参数（6 秒目标片段、sourceOffsetSec 12、gain 0.70、RMS 0.14、pan -0.38、distance 1 m）。
+
+### beta.26 · 单动作 Foley 自由时长
+- 所有单动作标记支持可选秒数：`[soundscape:clothing:10]`、`[soundscape:rhythm:12]`；有效范围 0.1–60 秒。省略秒数时仍使用 beta.25 默认时长。
+- 每次只覆盖该 cue 的 `durationSec`，不改变素材、source offset、gain、RMS normalization、pan、distance 或 fades。
+- 最终可听长度仍受源 WAV 从 sourceOffset 开始的剩余长度、生成语音长度约束；不足时自动截短，不循环、不变速、不拉伸。
+- 此版本只增加调用级时长覆盖，不改动已通过的 Rhythm 与 Clothing 混音参数；Lubricant 等待试听验收。

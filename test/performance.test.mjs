@@ -6,6 +6,7 @@ import {
   detectLanguage,
   getVoiceIdForLanguage,
   normalizeEmotion,
+  parseEmotionDirective,
   shouldApplyJapaneseNormalization,
   stripAudioTags,
 } from "../src/performance.mjs";
@@ -107,6 +108,22 @@ test("emotion direction is combined with an explicit voice direction", () => {
   );
   assert.match(plan.direction, /^warm, gentle, emotionally present delivery/);
   assert.match(plan.direction, /close-mic, youthful voice/);
+});
+
+test("emotion markers remain usable by MCP clients with an older tool schema", () => {
+  assert.deepEqual(parseEmotionDirective("[emotion:warm] close-mic, youthful voice"), {
+    emotion: "warm",
+    direction: "close-mic, youthful voice",
+  });
+  assert.deepEqual(parseEmotionDirective("close-mic, youthful voice"), {
+    emotion: undefined,
+    direction: "close-mic, youthful voice",
+  });
+  assert.deepEqual(parseEmotionDirective(undefined), {
+    emotion: undefined,
+    direction: undefined,
+  });
+  assert.throws(() => parseEmotionDirective("[emotion:angry] close-mic"), /Unsupported emotion/);
 });
 
 test("emotion validation rejects unknown profiles and short phrases stay unforced", () => {

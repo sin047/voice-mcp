@@ -38,7 +38,7 @@ jobs:
         shell: bash
         run: |
           TEST_ACCESS_TOKEN="ci-only-private-drama-token-0123456789abcdef"
-          PRIVATE_DRAMA_ACCESS_TOKEN="$TEST_ACCESS_TOKEN" MCP_PUBLIC_BASE_URL="https://voice.example.test" AUDIO_ASSET_DIR="/tmp/voice-mcp-assets" RECORDING_DIR="/tmp/voice-mcp-recordings" MCP_SOUNDSCAPE_TOOLS_ENABLED=true MCP_MAX_REQUESTS_PER_MINUTE=2 HOST=127.0.0.1 PORT=8765 node src/server.mjs > /tmp/voice-mcp.log 2>&1 &
+          PRIVATE_DRAMA_ACCESS_TOKEN="$TEST_ACCESS_TOKEN" MCP_PUBLIC_BASE_URL="https://voice.example.test" AUDIO_ASSET_DIR="/tmp/voice-mcp-assets" RECORDING_DIR="/tmp/voice-mcp-recordings" MCP_SOUNDSCAPE_TOOLS_ENABLED=true MCP_MAX_REQUESTS_PER_MINUTE=3 HOST=127.0.0.1 PORT=8765 node src/server.mjs > /tmp/voice-mcp.log 2>&1 &
           SERVER_PID=$!
           trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
           for attempt in {1..20}; do
@@ -60,6 +60,8 @@ jobs:
             assert.equal(status.features.persistent_recording_archive, true);
             assert.equal(status.features.speak_with_soundscape, true);
             assert.equal(status.features.soundscape_mcp_enabled, true);
+            const ui = status.features.mcp_apps_audio_player;
+            assert.equal(ui, true);
           '
           curl -fsS -X POST http://127.0.0.1:8765/mcp \
             -H "Content-Type: application/json" \
@@ -71,10 +73,15 @@ jobs:
             -H "Accept: application/json, text/event-stream" \
             -d '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}' \
             > /tmp/mcp-tools.json
+          curl -fsS -X POST http://127.0.0.1:8765/mcp \
+            -H "Content-Type: application/json" \
+            -H "Accept: application/json, text/event-stream" \
+            -d '{"jsonrpc":"2.0","id":3,"method":"resources/read","params":{"uri":"ui://voice-mcp/player.html"}}' \
+            > /tmp/mcp-player.json
           MCP_THROTTLED=$(curl -s -o /tmp/mcp-throttled.json -w '%{http_code}' -X POST http://127.0.0.1:8765/mcp \
             -H "Content-Type: application/json" \
             -H "Accept: application/json, text/event-stream" \
-            -d '{"jsonrpc":"2.0","id":3,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"voice-mcp-ci","version":"1.0.0"}}}')
+            -d '{"jsonrpc":"2.0","id":4,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"voice-mcp-ci","version":"1.0.0"}}}')
           test "$MCP_THROTTLED" = "429"
           ASSETS_UNAUTH=$(curl -s -o /tmp/assets-unauthorized.json -w '%{http_code}' http://127.0.0.1:8765/assets)
           test "$ASSETS_UNAUTH" = "401"
@@ -175,4 +182,15 @@ jobs:
             assert.ok(names.includes("speak"));
             assert.ok(names.includes("list_sound_assets"));
             assert.ok(names.includes("speak_with_soundscape"));
+            const speak = tools.find((tool) => tool.name === "speak");
+            const soundscape = tools.find((tool) => tool.name === "speak_with_soundscape");
+            assert.equal(speak._meta.ui.resourceUri, "ui://voice-mcp/player.html");
+            assert.equal(soundscape._meta.ui.resourceUri, "ui://voice-mcp/player.html");
+            const caps = JSON.parse(fs.readFileSync("/tmp/mcp-initialize.json", "utf8")).result.capabilities;
+            assert.deepEqual(caps.extensions["io.modelcontextprotocol/ui"].mimeTypes, ["text/html;profile=mcp-app"]);
+            const resource = JSON.parse(fs.readFileSync("/tmp/mcp-player.json", "utf8")).result.contents[0];
+            assert.equal(resource.mimeType, "text/html;profile=mcp-app");
+            assert.match(resource.text, /appInfo/);
+            assert.match(resource.text, /protocolVersion:"2026-01-26"/);
+            assert.match(resource.text, /audio id="audio" controls/);
           '

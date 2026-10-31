@@ -24,6 +24,7 @@ jobs:
           node --check src/performance.mjs
           node --check src/drama-timeline.mjs
           node --check src/drama-preview.mjs
+          node --check src/recordings-preview.mjs
           node --check src/http-auth.mjs
           node --check src/usage-guard.mjs
           node --check src/audio-assets.mjs
@@ -51,7 +52,7 @@ jobs:
             import assert from "node:assert/strict";
             const status = JSON.parse(fs.readFileSync("/tmp/voice-status.json", "utf8"));
             assert.equal(status.status, "ok");
-            assert.equal(status.version, "1.4.0-beta.15");
+            assert.equal(status.version, "1.4.0-beta.16");
             assert.equal(status.features.request_id_continuity, true);
             assert.equal(status.features.language_auto_detection, true);
             assert.equal(status.features.local_drama_preview, true);
@@ -107,6 +108,12 @@ jobs:
             assert.equal(payload.recordings.length, 0);
             assert.equal(payload.usage.recordingCount, 0);
           '
+          RECORDINGS_PAGE_UNAUTH=$(curl -s -o /tmp/recordings-page-unauthorized.json -w '%{http_code}' http://127.0.0.1:8765/recordings-library)
+          test "$RECORDINGS_PAGE_UNAUTH" = "401"
+          curl -fsS -u "voice-mcp:$TEST_ACCESS_TOKEN" http://127.0.0.1:8765/recordings-library -o /tmp/recordings-page.html
+          grep -q 'Shin · Recordings' /tmp/recordings-page.html
+          grep -q '下载 WAV' /tmp/recordings-page.html
+          grep -q '删除' /tmp/recordings-page.html
           PREVIEW_UNAUTH=$(curl -s -o /tmp/drama-unauthorized.json -w '%{http_code}' http://127.0.0.1:8765/drama-preview)
           test "$PREVIEW_UNAUTH" = "401"
           curl -fsS -u "voice-mcp:$TEST_ACCESS_TOKEN" http://127.0.0.1:8765/drama-preview -o /tmp/drama-preview.html

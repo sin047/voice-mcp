@@ -214,7 +214,7 @@ const PRESETS = Object.freeze({
 });
 
 const SUPPORTED_PRESETS = new Set(Object.keys(PRESETS));
-const DIRECTIVE = /^\s*\[soundscape:([a-z-]+)\]\s*/i;
+const DIRECTIVE = /^\s*\[soundscape:([a-z-]+)(?::(\d+(?:\.\d+)?))?\]\s*/i;
 
 export function parseSoundscapeDirective(direction) {
   if (typeof direction !== "string") {

@@ -31,7 +31,7 @@ const MODEL_ID = process.env.ELEVENLABS_MODEL_ID || "eleven_v4";
 const OUTPUT_FORMAT = process.env.ELEVENLABS_OUTPUT_FORMAT || "mp3_44100_128";
 const PLAYER_URI = "ui://voice-mcp/player.html";
 const PLAYER_MIME = "text/html;profile=mcp-app";
-const VERSION = "1.4.0-beta.18";
+const VERSION = "1.4.0-beta.19";
 const MAX_CONTEXT_CHARS = 4000;
 const MAX_SPEAK_CHARS = 4000;
 const MAX_SOUND_SCAPE_TEXT_CHARS = 1200;
@@ -453,16 +453,18 @@ function createServer() {
             sampleRate: 24000,
             channels: 1,
           });
+          const isIntimate = directive.preset === "intimate";
           const mix = mixSoundscape({
             voicePcm,
             assets: loadedAssets,
             cues: preset.cues,
-            voiceGain: 0.96,
+            voiceGain: isIntimate ? 1.0 : 0.96,
             ambienceBusGain: 0.82,
-            foleyBusGain: 0.9,
+            foleyBusGain: isIntimate ? 0.82 : 0.9,
             masterGain: 0.9,
             duckingEnabled: true,
-            duckingAmount: 0.78,
+            duckingAmount: isIntimate ? 0.9 : 0.78,
+            foleyDuckingDepth: isIntimate ? 0.55 : 0.35,
           });
 
           if (mix.buffer.length > 16 * 1024 * 1024) {

@@ -64,6 +64,7 @@ button.remove{padding:7px 14px;font-size:12px}
 <div class="row">
 <div><label for="ambienceBusGain">环境音总线（0–1）</label><input id="ambienceBusGain" type="number" min="0" max="1" step="0.05" value="0.82"></div>
 <div><label for="foleyBusGain">动作音效总线（0–1）</label><input id="foleyBusGain" type="number" min="0" max="1" step="0.05" value="0.9"></div>
+<div><label for="breathBusGain">呼吸总线（0–1）</label><input id="breathBusGain" type="number" min="0" max="1" step="0.05" value="0.58"></div>
 <div><label for="masterGain">总输出（0–1）</label><input id="masterGain" type="number" min="0" max="1" step="0.05" value="0.85"></div>
 </div>
 <div class="row">
@@ -153,6 +154,7 @@ async function saveAsset(item, button) {
         "Content-Type": "audio/wav",
         "X-Asset-Name": encodeURIComponent(item.file.name),
         "X-Asset-Kind": item.kind,
+        ...(item.kind === "breath" ? { "X-Asset-Breath-Type": item.breathType || "inhale" } : {}),
       },
       cache: "no-store",
       body: wav,
@@ -197,7 +199,7 @@ async function loadAssetLibrary() {
       const row = document.createElement("div");
       row.className = "assetrow";
       const label = document.createElement("span");
-      label.textContent = asset.name + " · " + asset.kind + " · " + asset.durationSec + "s · " + asset.id;
+      label.textContent = asset.name + " · " + asset.kind + (asset.breathType ? "/" + asset.breathType : "") + " · " + asset.durationSec + "s · " + asset.id;
       const remove = document.createElement("button");
       remove.className = "remove";
       remove.textContent = "删除";
@@ -253,20 +255,35 @@ function renderCues() {
     const typeWrap = document.createElement("div");
     const typeLabel = document.createElement("label"); typeLabel.textContent = "类型";
     const type = document.createElement("select");
-    [["foley","动作 / foley"],["ambience","环境 / ambience"]].forEach(([value,title]) => {
+    [["foley","动作 / foley"],["ambience","环境 / ambience"],["breath","呼吸 / breath"]].forEach(([value,title]) => {
       const option = document.createElement("option"); option.value=value; option.textContent=title; type.append(option);
     });
     type.value = item.kind;
+    type.disabled = Boolean(item.assetId);
     type.onchange = () => {
       item.kind = type.value;
-      item.gain = item.kind === "ambience" ? 0.1 : 0.22;
-      item.fadeInSec = item.kind === "ambience" ? 0.7 : 0.03;
-      item.fadeOutSec = item.kind === "ambience" ? 0.7 : 0.07;
+      item.gain = item.kind === "ambience" ? 0.1 : item.kind === "breath" ? 0.14 : 0.22;
+      item.fadeInSec = item.kind === "ambience" ? 0.7 : item.kind === "breath" ? 0.025 : 0.03;
+      item.fadeOutSec = item.kind === "ambience" ? 0.7 : item.kind === "breath" ? 0.045 : 0.07;
       item.loop = item.kind === "ambience";
+      if (item.kind === "breath" && !item.breathType) item.breathType = "inhale";
       renderCues();
     };
     typeWrap.append(typeLabel,type);
     row.append(typeWrap);
+    if (item.kind === "breath") {
+      const breathWrap = document.createElement("div");
+      const breathLabel = document.createElement("label"); breathLabel.textContent = "呼吸方向";
+      const breathType = document.createElement("select");
+      [["inhale","吸气 / inhale"],["exhale","呼气 / exhale"]].forEach(([value,title]) => {
+        const option = document.createElement("option"); option.value=value; option.textContent=title; breathType.append(option);
+      });
+      breathType.value = item.breathType || "inhale";
+      breathType.disabled = Boolean(item.assetId);
+      breathType.onchange = () => { item.breathType = breathType.value; };
+      breathWrap.append(breathLabel,breathType);
+      row.append(breathWrap);
+    }
     row.append(makeNumber("开始时间 / 秒", item.atSec,0,180,0.1,(v) => {item.atSec=v;}));
     row.append(makeNumber("音量 / 0–0.7", item.gain,0,0.7,0.01,(v) => {item.gain=v;}));
     row.append(makeNumber("左右声像 / -1…1", item.pan,-1,1,0.1,(v) => {item.pan=v;}));
@@ -277,7 +294,7 @@ function renderCues() {
     const loopLabel = document.createElement("label"); loopLabel.textContent = "循环";
     const loop = document.createElement("input"); loop.type = "checkbox";
     loop.checked = item.loop;
-    loop.disabled = item.kind !== "ambience";
+    loop.disabled = item.kind !== "ambience" || Boolean(item.assetId);
     loop.onchange = () => { item.loop=loop.checked; };
     loopWrap.append(loopLabel,loop);
     row.append(loopWrap);
@@ -292,6 +309,7 @@ $("fx").addEventListener("change",(event) => {
       file,
       fileId: "local_" + nextId++,
       kind: "foley",
+      breathType: "inhale",
       atSec: 0,
       gain: 0.22,
       pan: 0,
@@ -352,6 +370,7 @@ async function getBuffers(ctx) {
     voiceGain: Number($("voiceLevel").value),
     ambienceBusGain: Number($("ambienceBusGain").value),
     foleyBusGain: Number($("foleyBusGain").value),
+    breathBusGain: Number($("breathBusGain").value),
     masterGain: Number($("masterGain").value),
     duckingEnabled: $("duckingEnabled").checked,
     duckingAmount: Number($("duckingAmount").value),
@@ -473,8 +492,10 @@ function schedule(ctx, bundle, start) {
 
   const ambienceBus = ctx.createGain();
   const foleyBus = ctx.createGain();
+  const breathBus = ctx.createGain();
   ambienceBus.connect(compressor);
   foleyBus.connect(compressor);
+  breathBus.connect(compressor);
 
   const ducking = mixSettings.ducking;
   scheduleVoiceDucking(
@@ -485,6 +506,10 @@ function schedule(ctx, bundle, start) {
     foleyBus, bundle.voice, start, mixSettings.foleyBusGain,
     mixSettings.duckingEnabled, mixSettings.duckingAmount * ducking.foleyDepth, ducking
   );
+  scheduleVoiceDucking(
+    breathBus, bundle.voice, start, mixSettings.breathBusGain,
+    mixSettings.duckingEnabled, mixSettings.duckingAmount * ducking.breathDepth, ducking
+  );
 
   // Keep the voice centered and in the foreground.
   attachNode(ctx, bundle.voice, start, duration, bundle.timeline.voice.gain, 0, 0.015, 0.12, false, compressor, "stereo");
@@ -492,7 +517,7 @@ function schedule(ctx, bundle, start) {
   bundle.tracks.forEach(({ cue, buffer }) => {
     const remaining = duration - cue.atSec;
     const length = Math.min(remaining, cue.durationSec ?? (cue.loop ? remaining : buffer.duration));
-    const bus = cue.kind === "ambience" ? ambienceBus : foleyBus;
+    const bus = cue.kind === "ambience" ? ambienceBus : cue.kind === "breath" ? breathBus : foleyBus;
     attachNode(
       ctx, buffer, start + cue.atSec, length, cue.gain, cue.pan,
       cue.fadeInSec, cue.fadeOutSec, cue.loop, bus, mixSettings.spatialMode, cue.distanceMeters

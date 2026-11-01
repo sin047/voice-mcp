@@ -7,7 +7,7 @@ import { parseByteRange } from "./audio-range.mjs";
 import { decodeRawPcm16, encodePcm16Wav, mixSoundscape } from "./wav-audio.mjs";
 import { joinPcm16Chunks } from "./voice-long-audio.mjs";
 import { resolveCueTimeAfterText } from "./alignment-cues.mjs";
-import { planFoleyCues, sequenceFoleyCues } from "./foley-cue-planner.mjs";
+import { planFoleyCues, resolveFoleyTimelineDuration, sequenceFoleyCues } from "./foley-cue-planner.mjs";
 import { planVoiceChunks } from "./voice-chunker.mjs";
 import { auditCharacterAlignment } from "./alignment-audit.mjs";
 import { buildSoundscapePresetCues, parseSoundscapeDirective } from "./soundscape-presets.mjs";
@@ -1110,17 +1110,13 @@ function createServer() {
       if (voicePcm.durationSec > MAX_SOUND_SCAPE_SECONDS) {
         throw new Error("Continuous voice exceeds the " + MAX_SOUND_SCAPE_SECONDS + " second limit; shorten the text");
       }
-      if (args.timeline_duration_sec != null && args.tail_duration_sec != null) {
-        throw new Error("Use either timeline_duration_sec or tail_duration_sec, not both");
-      }
-      const timelineDurationSec = args.timeline_duration_sec ??
-        (voicePcm.durationSec + (args.tail_duration_sec ?? 0));
-      if (timelineDurationSec + 0.001 < voicePcm.durationSec) {
-        throw new Error("timeline_duration_sec cannot be shorter than the generated voice");
-      }
-      if (timelineDurationSec > MAX_SOUND_SCAPE_SECONDS) {
-        throw new Error("Timeline exceeds the " + MAX_SOUND_SCAPE_SECONDS + " second limit");
-      }
+      const timelinePlan = resolveFoleyTimelineDuration({
+        voiceDurationSec: voicePcm.durationSec,
+        timelineDurationSec: args.timeline_duration_sec,
+        tailDurationSec: args.tail_duration_sec,
+        maxDurationSec: MAX_SOUND_SCAPE_SECONDS,
+      });
+      const timelineDurationSec = timelinePlan.durationSec;
 
       const resolvedCues = args.cues.map((cue) => {
         const atSec = cue.after_text != null
@@ -1224,7 +1220,9 @@ function createServer() {
           duration_sec: mix.durationSec,
           voice_duration_sec: voicePcm.durationSec,
           timeline_duration_sec: timelineDurationSec,
-          tail_duration_sec: Math.max(0, Number((timelineDurationSec - voicePcm.durationSec).toFixed(3))),
+          tail_duration_sec: Number(timelinePlan.tailDurationSec.toFixed(3)),
+          requested_tail_duration_sec: timelinePlan.requestedTailDurationSec,
+          tail_duration_clamped: timelinePlan.tailClamped,
           sequence_foley: args.sequence_foley === true,
           foley_sequence_adjustments: sequenceAdjustments,
           sample_rate: mix.sampleRate,

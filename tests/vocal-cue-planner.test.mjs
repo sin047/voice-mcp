@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { planVocalCues, VOCAL_CUE_TYPES } from "../src/vocal-cue-planner.mjs";
+import { getVocalCueCatalog, planVocalCues, VOCAL_CUE_TYPES } from "../src/vocal-cue-planner.mjs";
 
 test("places a close whisper tag on its own line before an exact phrase", () => {
   const text = "我停了一下。然后靠近你。";
@@ -160,4 +160,35 @@ test("warns when too many tags are stacked on one phrase", () => {
     ],
   });
   assert.equal(plan.warnings.length, 1);
+});
+
+
+test("exposes the five distinct voice and sound categories without mixing TTS and Foley", () => {
+  const catalog = getVocalCueCatalog({
+    foleyActions: [
+      { action: "clothing_rustle", label_zh: "衣物摩擦", asset_name: "衣物摩擦", availability: "requires_matching_uploaded_asset" },
+    ],
+  });
+  assert.equal(catalog.estimated_tts_calls, 0);
+  assert.deepEqual(catalog.categories.map((category) => category.id), [
+    "breath", "voice_state", "mouth_contact", "physical_action", "ending_transition",
+  ]);
+  assert.equal(catalog.categories[0].items.find((item) => item.id === "heavy_ragged_breathing").validation_status, "approved_preferred");
+  assert.equal(catalog.categories[1].items.find((item) => item.id === "breathless_husky_whisper").validation_status, "approved_spoken_delivery");
+  assert.equal(catalog.categories[3].tool, "plan_foley_cues");
+  assert.equal(catalog.categories[3].items[0].asset_name, "衣物摩擦");
+  const afterglow = catalog.categories[4].items[0];
+  assert.equal(afterglow.id, "afterglow");
+  assert.equal(afterglow.is_tts_tag, false);
+  assert.equal(afterglow.tag, null);
+  assert.equal(VOCAL_CUE_TYPES.includes("afterglow"), false);
+});
+
+test("returns per-cue listening status in an explicit vocal plan", () => {
+  const plan = planVocalCues({
+    text: "让我缓一会儿。",
+    cues: [{ cue: "heavy_ragged_breathing", anchor_text: "让我缓一会儿" }],
+  });
+  assert.equal(plan.cues[0].validation_status, "approved_preferred");
+  assert.match(plan.cues[0].recommended_use, /喘息/);
 });

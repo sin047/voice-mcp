@@ -1,23 +1,179 @@
 const CUE_DEFINITIONS = Object.freeze({
-  soft_inhale: Object.freeze({ family: "breath", label_zh: "轻颤吸气", tag: "soft shuddering inhale" }),
-  heavy_ragged_breathing: Object.freeze({ family: "breath", label_zh: "急促粗重喘息", tag: "heavy ragged breathing" }),
-  ragged_exhale: Object.freeze({ family: "breath", label_zh: "粗重呼气", tag: "ragged exhale" }),
-  warm_exhale: Object.freeze({ family: "breath", label_zh: "温热呼气", tag: "warm exhale" }),
-  close_whisper: Object.freeze({ family: "voice", label_zh: "贴近耳边低语", tag: "intense close-up whisper against ear" }),
-  husky_low_whisper: Object.freeze({ family: "voice", label_zh: "沙哑低声耳语", tag: "husky low whisper" }),
-  breathless_husky_whisper: Object.freeze({ family: "voice", label_zh: "气息不稳的沙哑低语", tag: "breathless husky whisper" }),
-  gentle_growl: Object.freeze({ family: "voice", label_zh: "轻柔喉音", tag: "gentle possessive growl" }),
-  deep_wet_kiss: Object.freeze({ family: "mouth", label_zh: "深吻", tag: "deep, messy wet kiss" }),
-  wet_licking: Object.freeze({ family: "mouth", label_zh: "湿润舔舐", tag: "deep, messy wet licking" }),
-  wet_sucking: Object.freeze({ family: "mouth", label_zh: "湿润吮吸", tag: "wet sucking" }),
-  wet_squelch: Object.freeze({ family: "mouth", label_zh: "湿润挤压声", tag: "wet squelch" }),
-  sticky_parting: Object.freeze({ family: "mouth", label_zh: "湿黏分离声", tag: "sticky wet parting" }),
-  swallowing_hard: Object.freeze({ family: "mouth", label_zh: "用力吞咽", tag: "swallowing hard" }),
-  lower_lip_suck: Object.freeze({ family: "mouth", label_zh: "下唇轻吮", tag: "soft suck on the lower lip" }),
-  neck_bite: Object.freeze({ family: "mouth", label_zh: "颈部轻咬", tag: "firm bite on the neck" }),
+  soft_inhale: Object.freeze({
+    family: "breath", category: "breath", label_zh: "轻颤吸气",
+    tag: "soft shuddering inhale",
+    validation_status: "positive_combined_audition",
+    recommended_use: "需要轻微、向内的颤抖吸气时；目前只通过组合试听。",
+  }),
+  heavy_ragged_breathing: Object.freeze({
+    family: "breath", category: "breath", label_zh: "急促粗重喘息",
+    tag: "heavy ragged breathing",
+    validation_status: "approved_preferred",
+    recommended_use: "喘息本身是前景、需要持续粗重呼吸时；目前首选呼吸提示。",
+  }),
+  ragged_exhale: Object.freeze({
+    family: "breath", category: "breath", label_zh: "粗重呼气",
+    tag: "ragged exhale",
+    validation_status: "approved_complement",
+    recommended_use: "需要短促、明显的呼气释放时；作为喘息的补充而非每句必加。",
+  }),
+  warm_exhale: Object.freeze({
+    family: "breath", category: "breath", label_zh: "温热呼气",
+    tag: "warm exhale",
+    validation_status: "not_preferred_after_audition",
+    recommended_use: "目前不作为句末独立音效；已试听的句末位置显得突兀。",
+  }),
+  close_whisper: Object.freeze({
+    family: "voice", category: "voice_state", label_zh: "贴近耳边低语",
+    tag: "intense close-up whisper against ear",
+    validation_status: "positive_combined_audition",
+    recommended_use: "台词需要明显贴近、耳语式表达时；目前通过组合试听。",
+  }),
+  husky_low_whisper: Object.freeze({
+    family: "voice", category: "voice_state", label_zh: "沙哑低声耳语",
+    tag: "husky low whisper",
+    validation_status: "reference_candidate_unverified",
+    recommended_use: "候选低声沙哑表达；尚未在当前声音上单独试听。",
+  }),
+  breathless_husky_whisper: Object.freeze({
+    family: "voice", category: "voice_state", label_zh: "气息不稳的沙哑低语",
+    tag: "breathless husky whisper",
+    validation_status: "approved_spoken_delivery",
+    recommended_use: "台词本身需要带喘息感、略沙哑的说话状态；不是非语言喘息。",
+  }),
+  gentle_growl: Object.freeze({
+    family: "voice", category: "voice_state", label_zh: "轻柔喉音",
+    tag: "gentle possessive growl",
+    validation_status: "reference_candidate_unverified",
+    recommended_use: "候选喉音表达；尚未在当前声音上试听。",
+  }),
+  deep_wet_kiss: Object.freeze({
+    family: "mouth", category: "mouth_contact", label_zh: "深吻",
+    tag: "deep, messy wet kiss",
+    validation_status: "reference_candidate_unverified",
+    recommended_use: "候选口腔/接触表现；先小批试听，不与多个同类标签堆叠。",
+  }),
+  wet_licking: Object.freeze({
+    family: "mouth", category: "mouth_contact", label_zh: "湿润舔舐",
+    tag: "deep, messy wet licking",
+    validation_status: "reference_candidate_unverified",
+    recommended_use: "候选口腔/接触表现；先确认当前声音是否自然实现。",
+  }),
+  wet_sucking: Object.freeze({
+    family: "mouth", category: "mouth_contact", label_zh: "湿润吮吸",
+    tag: "wet sucking",
+    validation_status: "reference_candidate_unverified",
+    recommended_use: "候选口腔/接触表现；先确认当前声音是否自然实现。",
+  }),
+  wet_squelch: Object.freeze({
+    family: "mouth", category: "mouth_contact", label_zh: "湿润挤压声",
+    tag: "wet squelch",
+    validation_status: "reference_candidate_unverified",
+    recommended_use: "候选声音提示，不等同于独立 Foley 音频素材。",
+  }),
+  sticky_parting: Object.freeze({
+    family: "mouth", category: "mouth_contact", label_zh: "湿黏分离声",
+    tag: "sticky wet parting",
+    validation_status: "reference_candidate_unverified",
+    recommended_use: "候选口腔/接触表现；尚未在当前声音上试听。",
+  }),
+  swallowing_hard: Object.freeze({
+    family: "mouth", category: "mouth_contact", label_zh: "用力吞咽",
+    tag: "swallowing hard",
+    validation_status: "reference_candidate_unverified",
+    recommended_use: "候选吞咽表现；尚未在当前声音上试听。",
+  }),
+  lower_lip_suck: Object.freeze({
+    family: "mouth", category: "mouth_contact", label_zh: "下唇轻吮",
+    tag: "soft suck on the lower lip",
+    validation_status: "reference_candidate_unverified",
+    recommended_use: "候选口腔/接触表现；尚未在当前声音上试听。",
+  }),
+  neck_bite: Object.freeze({
+    family: "mouth", category: "mouth_contact", label_zh: "颈部轻咬",
+    tag: "firm bite on the neck",
+    validation_status: "reference_candidate_unverified",
+    recommended_use: "候选接触表现；尚未在当前声音上试听。",
+  }),
 });
 
 export const VOCAL_CUE_TYPES = Object.freeze(Object.keys(CUE_DEFINITIONS));
+
+const VOCAL_CATEGORY_GROUPS = Object.freeze([
+  Object.freeze({ id: "breath", label_zh: "呼吸", family: "breath", description: "吸气、持续喘息和呼气等非语言呼吸表现。" }),
+  Object.freeze({ id: "voice_state", label_zh: "说话状态", family: "voice", description: "影响台词本身的距离感、气息感、沙哑度或喉音表现。" }),
+  Object.freeze({ id: "mouth_contact", label_zh: "口腔与接触声音", family: "mouth", description: "参考图中的亲吻、舔舐、吮吸、吞咽等 TTS 表现候选。" }),
+]);
+
+export function getVocalCueCatalog({ foleyActions = [] } = {}) {
+  const actionItems = Array.isArray(foleyActions)
+    ? foleyActions.map((item) => Object.freeze({ ...item }))
+    : [];
+  const vocalCategories = VOCAL_CATEGORY_GROUPS.map((category) => Object.freeze({
+    id: category.id,
+    label_zh: category.label_zh,
+    kind: "tts_vocal_cue",
+    tool: "plan_vocal_cues",
+    description: category.description,
+    items: Object.freeze(Object.entries(CUE_DEFINITIONS)
+      .filter(([, definition]) => definition.family === category.family)
+      .map(([id, definition]) => Object.freeze({
+        id,
+        family: definition.family,
+        category: definition.category,
+        label_zh: definition.label_zh,
+        tag: definition.tag,
+        validation_status: definition.validation_status,
+        recommended_use: definition.recommended_use,
+      }))),
+  }));
+
+  const categories = [
+    ...vocalCategories,
+    Object.freeze({
+      id: "physical_action",
+      label_zh: "动作音效",
+      kind: "separate_audio_asset",
+      tool: "plan_foley_cues",
+      description: "独立 Foley 音频素材；每个明确选择的动作对应一个主要素材，不由 TTS 标签代替。",
+      items: Object.freeze(actionItems),
+    }),
+    Object.freeze({
+      id: "ending_transition",
+      label_zh: "余韵过渡",
+      kind: "arrangement_pattern",
+      tool: "plan_vocal_cues",
+      description: "段落级编排概念，不是新的 TTS 标签，也不会自动生成音频。",
+      items: Object.freeze([Object.freeze({
+        id: "afterglow",
+        label_zh: "Afterglow / 余韵放缓",
+        is_tts_tag: false,
+        tag: null,
+        validation_status: "arrangement_guidance_only",
+        recommended_use: "让强度逐步放缓：如场景需要，可保留一段已认可的喘息，再过渡到带气息的台词，最后回到不加标签的放松收尾。",
+        sequence: Object.freeze([
+          Object.freeze({ phase: "breathing_if_needed", cue: "heavy_ragged_breathing", optional: true }),
+          Object.freeze({ phase: "breath_inflected_dialogue_if_needed", cue: "breathless_husky_whisper", optional: true }),
+          Object.freeze({ phase: "relaxed_closing_line", cue: null, instruction: "最后一句默认不加表演标签。" }),
+          Object.freeze({ phase: "natural_settle", cue: null, instruction: "保留自然停顿；不默认追加 warm_exhale。" }),
+        ]),
+      })]),
+    }),
+  ];
+
+  return Object.freeze({
+    plan_only: true,
+    estimated_tts_calls: 0,
+    category_count: categories.length,
+    categories: Object.freeze(categories),
+    notes: Object.freeze([
+      "Five categories keep TTS vocal cues, separate Foley assets, and ending arrangements distinct.",
+      "Afterglow is an arrangement pattern, not a TTS tag.",
+      "Validation status is voice- and placement-specific; unverified candidates need listening tests.",
+      "Listing this catalogue makes no ElevenLabs request.",
+    ]),
+  });
+}
 
 const TRAILING_PUNCTUATION = new Set([
   "，", "。", "！", "？", "、", "；", "：", ",", ".", "!", "?", ";", ":",
@@ -194,6 +350,7 @@ export function planVocalCues({ text, cues } = {}) {
     plannedCues.push(Object.freeze({
       cue: request.cue,
       family: definition.family,
+      category: definition.category,
       label_zh: definition.label_zh,
       tag: "[" + definition.tag + "]",
       anchor_text: anchorText,
@@ -204,7 +361,8 @@ export function planVocalCues({ text, cues } = {}) {
       start,
       end,
       line: text.slice(0, start).split("\n").length,
-      validation_status: "reference_candidate_unverified",
+      validation_status: definition.validation_status,
+      recommended_use: definition.recommended_use,
     }));
   }
 
@@ -232,7 +390,7 @@ export function planVocalCues({ text, cues } = {}) {
     render_tool: "render_continuous_audio_timeline",
     cues: Object.freeze(plannedCues),
     warnings: Object.freeze(warnings),
-    tag_validation: "Reference-derived candidates; not yet auditioned against the current Shin Voice.",
+    tag_validation: "Per-cue listening status is included; validation is specific to the current voice and tested placement.",
     notes: Object.freeze([
       "Only explicitly selected cues are rendered; no keyword inference is performed.",
       "Line layout places tags on their own line; inline layout keeps tags and optional vocalizations beside the anchored text.",

@@ -1,6 +1,6 @@
 # Shin Voice — Vocal Cue Playbook
 
-Status: practical guide for the beta.38 `plan_vocal_cues` planner. This document records reference-derived prompt wording and current listening decisions; it is not a provider compatibility guarantee.
+Status: practical guide for the beta.38 `plan_vocal_cues` planner and beta.39 five-category catalogue. This document records reference-derived prompt wording and current listening decisions; it is not a provider compatibility guarantee.
 
 ## 1. Is “Afterglow” in the supplied reference?
 
@@ -143,3 +143,20 @@ Do not:
 - Standalone ending test: `warm exhale` after the final line — user found it abrupt and preferred the previous version.
 
 All decisions are specific to the current voice and the tested text placements. Keep the voice, model, B2.1 settings, and approved Foley mix parameters unchanged unless a separate controlled test is requested.
+
+
+## 8. Live five-category catalogue
+
+Use the read-only MCP tool `list_vocal_cues` to inspect the current registry before planning. It returns five categories:
+
+| Category | What belongs here | Tool |
+|---|---|---|
+| 呼吸 | Inhale, sustained breathing, exhale | `plan_vocal_cues` |
+| 说话状态 | Close whisper, husky or breathless spoken delivery | `plan_vocal_cues` |
+| 口腔与接触声音 | Kiss, lick, suction, swallowing and related reference prompts | `plan_vocal_cues` |
+| 动作音效 | Uploaded physical-action audio assets | `plan_foley_cues` |
+| 余韵过渡 | Arrangement patterns such as Afterglow | No standalone cue; compose explicitly |
+
+The catalogue includes a per-cue listening status and recommended use. It is read-only and makes zero TTS calls. Foley entries show action/asset names but do not expose or change the approved mix parameters.
+
+Afterglow remains an arrangement pattern. Its optional sequence is: keep a breathing cue only if the scene calls for it, transition to breath-inflected dialogue if appropriate, let the final line return to untagged relaxed speech, then preserve a natural pause. It must never be emitted as `[Afterglow]`.

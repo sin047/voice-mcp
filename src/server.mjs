@@ -7,9 +7,9 @@ import { parseByteRange } from "./audio-range.mjs";
 import { decodeRawPcm16, encodePcm16Wav, mixSoundscape } from "./wav-audio.mjs";
 import { joinPcm16Chunks } from "./voice-long-audio.mjs";
 import { resolveCueTimeAfterText } from "./alignment-cues.mjs";
-import { planFoleyCues, resolveFoleyTimelineDuration, sequenceFoleyCues } from "./foley-cue-planner.mjs";
+import { getFoleyActionCatalog, planFoleyCues, resolveFoleyTimelineDuration, sequenceFoleyCues } from "./foley-cue-planner.mjs";
 import { analyzeBreathSegments, repositionOpeningBreaths } from "./breath-engine.mjs";
-import { planVocalCues } from "./vocal-cue-planner.mjs";
+import { getVocalCueCatalog, planVocalCues } from "./vocal-cue-planner.mjs";
 import { planVoiceChunks } from "./voice-chunker.mjs";
 import { auditCharacterAlignment } from "./alignment-audit.mjs";
 import { buildSoundscapePresetCues, parseSoundscapeDirective } from "./soundscape-presets.mjs";
@@ -40,7 +40,7 @@ const MODEL_ID = process.env.ELEVENLABS_MODEL_ID || "eleven_v4";
 const OUTPUT_FORMAT = process.env.ELEVENLABS_OUTPUT_FORMAT || "mp3_44100_128";
 const PLAYER_URI = "ui://voice-mcp/player.html";
 const PLAYER_MIME = "text/html;profile=mcp-app";
-const VERSION = "1.4.0-beta.38";
+const VERSION = "1.4.0-beta.39";
 const MAX_CONTEXT_CHARS = 4000;
 const MAX_SPEAK_CHARS = 4000;
 const MAX_SOUND_SCAPE_TEXT_CHARS = 1200;
@@ -884,6 +884,38 @@ function createServer() {
   );
 
   mcp.registerTool(
+    "list_vocal_cues",
+    {
+      title: "List vocal and sound cue catalogue",
+      description: "List five distinct categories: breathing, spoken delivery, mouth/contact TTS cues, separate physical-action Foley assets, and ending transitions. Includes per-cue listening status and intended use. This read-only catalogue tool does NOT call ElevenLabs or consume TTS credits. Afterglow is an arrangement pattern, not a TTS tag. Use plan_vocal_cues for explicit TTS tags and plan_foley_cues for uploaded action audio.",
+      inputSchema: z.object({}),
+    },
+    async () => {
+      try {
+        const catalog = getVocalCueCatalog({ foleyActions: getFoleyActionCatalog() });
+        const summary = catalog.categories.map((category) => {
+          const entries = category.items.map((item) => {
+            if (item.tag) return "- " + (item.id || item.action) + ": [" + item.tag + "] — " + item.validation_status;
+            if (item.asset_name) return "- " + item.action + ": " + item.asset_name + " — " + item.availability;
+            return "- " + item.id + ": " + item.label_zh + " — " + item.validation_status;
+          }).join("\n");
+          return category.label_zh + " (" + category.id + ")\n" + entries;
+        }).join("\n\n");
+        return {
+          content: [{ type: "text", text: summary }],
+          structuredContent: catalog,
+        };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        return {
+          content: [{ type: "text", text: "Could not list vocal cues: " + message }],
+          isError: true,
+        };
+      }
+    },
+  );
+
+  mcp.registerTool(
     "plan_vocal_cues",
     {
       title: "Plan vocal performance cues",
@@ -1665,6 +1697,7 @@ app.get("/status", (_req, res) => {
       continuous_timeline_effect_tail: SOUNDSCAPE_MCP_ENABLED,
       foley_cue_planner: SOUNDSCAPE_MCP_ENABLED,
       vocal_cue_planner: SOUNDSCAPE_MCP_ENABLED,
+      vocal_cue_catalog: SOUNDSCAPE_MCP_ENABLED,
       voice_chunk_planning: true,
       speak_long: true,
       long_voice_max_seconds: MAX_LONG_VOICE_SECONDS,

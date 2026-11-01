@@ -1,6 +1,6 @@
 # Vocal Performance Engine
 
-Status: Phase 1 planner implemented in beta.38; no synthesis integration yet
+Status: Phase 1 planner implemented in beta.38; five-category cue catalogue and validation registry added in beta.39; no synthesis integration yet
 
 ## Purpose
 
@@ -39,9 +39,23 @@ A TTS tag such as [wet squelch] is not a playable Foley asset. A Foley asset doe
 
 These are candidate prompts based on the supplied reference, not a claim that every tag is officially supported or will sound natural on this voice. Validate them in small batches and retain only audible improvements.
 
+## Five-category cue catalogue
+
+The read-only MCP tool is `list_vocal_cues`. It returns five separate categories:
+
+1. `breath` — inhale, breathing and exhale performance cues.
+2. `voice_state` — delivery applied to spoken dialogue, such as close whisper or breathless husky whisper.
+3. `mouth_contact` — reference-derived mouth/contact TTS prompts; these remain unverified until auditioned.
+4. `physical_action` — separate uploaded Foley assets, planned with `plan_foley_cues`.
+5. `ending_transition` — arrangement guidance such as Afterglow; not a TTS tag and not an automatic audio effect.
+
+Each TTS cue carries a voice-specific `validation_status` and a short `recommended_use`. The catalogue reports the already auditioned distinctions without upgrading untested prompts. Foley entries expose action and asset names only; approved gain, pan, source-offset and fade parameters stay in the Foley planner.
+
+Listing the catalogue is read-only and has `estimated_tts_calls: 0`. No new environment variable is required.
+
 ## Planner contract
 
-MCP tool: plan_vocal_cues
+MCP tools: list_vocal_cues (read-only catalogue) and plan_vocal_cues
 
 Input:
 - text: exact text to speak (1–1200 characters)

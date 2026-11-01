@@ -48,6 +48,10 @@ The mode remains opt-in until a real listening test confirms that its placement 
 
 `render_continuous_audio_timeline` now accepts `tail_duration_sec`, which extends the WAV by that many seconds beyond the actual generated voice duration. This is easier to use than guessing an absolute `timeline_duration_sec` before TTS. The two duration options are mutually exclusive. The cue schema also exposes `source_offset_sec` and `normalization_target_rms` so the planner can preserve the approved excerpts and normalization targets. If voice plus requested tail would exceed the 60-second cap, the tail is shortened to the available remainder and the result reports both requested and applied tail durations.
 
+### Vocal cue catalogue and validation status (beta.39)
+
+The read-only MCP tool `list_vocal_cues` exposes five distinct categories: breathing, spoken delivery, mouth/contact TTS cues, physical-action Foley assets, and ending transitions. Each vocal cue includes its current listening status and recommended use. **Afterglow is an arrangement pattern, not a literal TTS tag.** Listing the catalogue makes no ElevenLabs request. The Foley catalogue exposes action names only; approved gain, pan and fade settings remain internal.
+
 ### Vocal cue planner (beta.38)
 
 Practical usage, validated cue roles, line/inline examples, and the Afterglow distinction: [Vocal Cue Playbook](./docs/VOCAL_CUE_PLAYBOOK.md).
@@ -68,7 +72,7 @@ Use `render_audio_timeline` when you intentionally need separately generated voi
 
 ## Branches
 
-- `zeabur`: **active maintained branch** for development and current Zeabur deployment; currently v1.4.0-beta.38.
+- `zeabur`: **active maintained branch** for development and current Zeabur deployment; currently v1.4.0-beta.39.
 - `voice-v1.4-private-drama`: historical v1.4 beta.7 snapshot. It is not the active deployment branch; do not switch to it without comparing its history against `zeabur`.
 - `main`: repository default branch; it may not contain the latest maintained v1.4 work. Do not assume it is the deployment branch.
 

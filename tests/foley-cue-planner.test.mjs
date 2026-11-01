@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { planFoleyCues, resolveFoleyTimelineDuration, sequenceFoleyCues } from "../src/foley-cue-planner.mjs";
+import { getFoleyActionCatalog, planFoleyCues, resolveFoleyTimelineDuration, sequenceFoleyCues } from "../src/foley-cue-planner.mjs";
 
 const assets = [
   { id: "fx_clothing", name: "03_衣物摩擦_双耳.wav", kind: "foley", durationSec: 33.901 },
@@ -195,4 +195,14 @@ test("includes actual tab, carriage return, and newline characters in trailing a
     });
     assert.equal(plan.cues[0].after_text, "我把盒子打开" + suffix);
   }
+});
+
+
+test("exposes Foley action names without leaking approved mix parameters", () => {
+  const catalog = getFoleyActionCatalog();
+  assert.equal(catalog.length, 8);
+  assert.equal(catalog.find((item) => item.action === "clothing_rustle").label_zh, "衣物摩擦");
+  assert.ok(catalog.every((item) => item.availability === "requires_matching_uploaded_asset"));
+  assert.ok(catalog.every((item) => !Object.hasOwn(item, "gain")));
+  assert.ok(catalog.every((item) => !Object.hasOwn(item, "pan")));
 });

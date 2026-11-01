@@ -93,6 +93,15 @@ const ACTIONS = Object.freeze({
   }),
 });
 
+export function getFoleyActionCatalog() {
+  return Object.freeze(FOLEY_ACTION_TYPES.map((action) => Object.freeze({
+    action,
+    label_zh: ACTIONS[action].assetName,
+    asset_name: ACTIONS[action].assetName,
+    availability: "requires_matching_uploaded_asset",
+  })));
+}
+
 function findOccurrence(text, anchor, occurrence) {
   let from = 0;
   let index = -1;

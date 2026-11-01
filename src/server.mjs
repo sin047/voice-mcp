@@ -1091,6 +1091,15 @@ function createServer() {
     },
   }, async (args) => {
     try {
+      if (!args.cues.length && !args.breath_engine?.enabled) {
+        throw new Error("Provide at least one manual cue or enable breath_engine");
+      }
+      const breathAssets = args.breath_engine?.enabled
+        ? (await audioAssetStore.list()).filter((asset) => asset.kind === "breath")
+        : [];
+      if (args.breath_engine?.enabled && !breathAssets.length) {
+        throw new Error("Upload at least one inhale or exhale WAV asset before enabling breath_engine");
+      }
       const loadedAssets = new Map();
       const assetMetadata = new Map();
       for (const cue of args.cues) {
@@ -1164,7 +1173,6 @@ function createServer() {
 
       let breathEngineReport = null;
       if (args.breath_engine?.enabled) {
-        const breathAssets = (await audioAssetStore.list()).filter((asset) => asset.kind === "breath");
         const occupiedCues = resolvedCues.map((cue) => {
           const metadata = assetMetadata.get(cue.fileId);
           const remaining = Math.max(0, timelineDurationSec - cue.atSec);

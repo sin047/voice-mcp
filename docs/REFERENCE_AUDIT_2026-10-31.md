@@ -71,7 +71,7 @@ The original reference is MIT-licensed. It provides the initial MCP/TTS/player f
 
 ## Current branch assessment
 
-The `zeabur` branch currently contains (beta.34):
+The `zeabur` branch currently contains (beta.35):
 - ElevenLabs synthesis with language/performance handling and previous/next text context.
 - Existing `speak` and `speak_with_soundscape` paths.
 - Private audio asset storage and soundscape mixing.
@@ -83,6 +83,7 @@ The `zeabur` branch currently contains (beta.34):
 - `speak_long`, which plans long text, synthesizes chunks sequentially with a rolling request-ID chain, joins 24 kHz mono PCM server-side, and returns one WAV URL / one inline player card (up to 180 seconds). The inter-chunk silence is adjustable; this first version is voice-only.
 - `plan_foley_cues`, a deterministic no-TTS planner that maps exact spoken-text anchors to the approved private Foley assets and cue levels. It verifies anchor order and asset availability, then returns one fixed sound per action.
 - `render_continuous_audio_timeline` supports `tail_duration_sec` (relative to actual generated voice duration), `sequence_foley` (trims each action sound before the next begins), and cue source-offset / normalization controls.
+- Beta.35 makes Foley anchors punctuation-aware and prefers the provider alignment stream that exactly matches the final spoken text, reducing false alignment mismatch warnings and keeping end-of-sentence cues aligned after punctuation.
 
 Important caveats:
 - `speak_long` creates one playback file/card, but the speech is still synthesized in multiple TTS requests. Request-ID continuity may reduce prosody changes but cannot guarantee the result sounds identical to one uninterrupted TTS pass. Listen testing is required.
@@ -90,7 +91,7 @@ Important caveats:
 
 ## Recommended sequence
 
-1. Deploy beta.34 and verify `plan_foley_cues` appears in the MCP tool list. Its planning call must report zero TTS requests.
+1. Deploy beta.35 and verify `plan_foley_cues` appears in the MCP tool list. Its planning call must report zero TTS requests.
 2. Use one consolidated listening test to assess exact-anchor timing, sequential Foley trimming, and a short pure-sound tail. Keep the existing approved voice / Foley levels fixed; assess timing and fades only.
 3. Add optional ASR-backed repetition / omission diagnostics as a separate opt-in, with non-blocking handling for breaths and non-verbal audio.
 4. Define a spatial cue contract (position, distance, start time, movement duration, interpolation, silence behavior).

@@ -69,10 +69,21 @@ test("tender breathy delivery keeps the inhale direction within the provider pro
     emotion: "tender",
     recentPatterns: ["none"],
   });
-  assert.equal(plan.direction, "tender, quiet inward nasal inhale, no outward huff");
+  assert.equal(plan.direction, "tender soft inward inhale");
   assert.equal(plan.breath_event, "inhale");
   assert.match(plan.rendered_text, /\\[inhales\\]/);
   assert.doesNotMatch(plan.direction, /breath-led|exhale|huffing/i);
+});
+
+test("long tender breathy lines retain the full anti-huff inhale direction", () => {
+  const text = "我本来想告诉你一件事，可是看见你以后，又突然忘记了要说什么。";
+  const plan = createPerformancePlan(text, {
+    performance: "breathy",
+    emotion: "tender",
+    recentPatterns: ["none"],
+  });
+  assert.equal(plan.direction, "tender, quiet inward nasal inhale, no outward huff");
+  assert.ok(plan.rendered_text.includes("[inhales]"));
 });
 
 test("emotion profiles map neutral delivery to subtle B1 without a forced inhale", () => {

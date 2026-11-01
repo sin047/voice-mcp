@@ -187,6 +187,15 @@ function findNaturalPause(text) {
   return candidates[0]?.at;
 }
 
+function breathyDirectionForText(text, emotion) {
+  const chars = speakableCharCount(text);
+  if (chars < 12) return "soft inhale";
+  if (chars < 24) return emotion === "tender" ? "tender soft inward inhale" : "soft inward inhale";
+  return emotion === "tender"
+    ? "tender, quiet inward nasal inhale, no outward huff"
+    : "quiet inward nasal inhale, no outward huff";
+}
+
 function chooseBreathPattern(mode, text, history) {
   if (speakableCharCount(text) < 18) return null;
   if (findNaturalPause(text) === undefined) return null;
@@ -273,11 +282,13 @@ export function createPerformancePlan(text, options = {}) {
 
   let selectedDirection = explicitDirection;
   if (!selectedDirection && !legacyTag && mode !== "natural") {
-    selectedDirection = PERFORMANCE_DIRECTIONS[mode];
+    selectedDirection = mode === "breathy"
+      ? breathyDirectionForText(baseText, emotion)
+      : PERFORMANCE_DIRECTIONS[mode];
   }
   if (emotionProfile) {
     if (mode === "breathy" && emotion === "tender" && !explicitDirection) {
-      selectedDirection = "tender, quiet inward nasal inhale, no outward huff";
+      selectedDirection = breathyDirectionForText(baseText, emotion);
     } else {
       selectedDirection = mergeDirectionPrefix(emotionProfile.direction, selectedDirection);
     }

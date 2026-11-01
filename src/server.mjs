@@ -1123,6 +1123,7 @@ function createServer() {
           ? resolveCueTimeAfterText({
             alignment: result.alignment,
             normalizedAlignment: result.normalized_alignment,
+            expectedText: stripAudioTags(result.final_text),
             afterText: cue.after_text,
             occurrence: cue.occurrence ?? 1,
           })

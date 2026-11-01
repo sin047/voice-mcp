@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { planFoleyCues, sequenceFoleyCues } from "../src/foley-cue-planner.mjs";
+import { planFoleyCues, resolveFoleyTimelineDuration, sequenceFoleyCues } from "../src/foley-cue-planner.mjs";
 
 const assets = [
   { id: "fx_clothing", name: "03_衣物摩擦_双耳.wav", kind: "foley", durationSec: 33.901 },
@@ -133,4 +133,35 @@ test("rejects Foley cues whose source offset leaves no usable audio", () => {
   const cues = [{ fileId: "fx_short", kind: "foley", atSec: 0, sourceOffsetSec: 2, durationSec: 1 }];
   const metadata = new Map([["fx_short", { durationSec: 2.05 }]]);
   assert.throws(() => sequenceFoleyCues(cues, metadata, 5), /too short/);
+});
+
+test("resolves a relative pure-audio tail from the actual voice duration", () => {
+  const plan = resolveFoleyTimelineDuration({
+    voiceDurationSec: 18.25,
+    tailDurationSec: 3,
+    maxDurationSec: 60,
+  });
+  assert.equal(plan.durationSec, 21.25);
+  assert.equal(plan.tailDurationSec, 3);
+  assert.equal(plan.tailClamped, false);
+});
+
+test("caps a requested pure-audio tail at the maximum WAV duration", () => {
+  const plan = resolveFoleyTimelineDuration({
+    voiceDurationSec: 59,
+    tailDurationSec: 5,
+    maxDurationSec: 60,
+  });
+  assert.equal(plan.durationSec, 60);
+  assert.equal(plan.tailDurationSec, 1);
+  assert.equal(plan.requestedTailDurationSec, 5);
+  assert.equal(plan.tailClamped, true);
+});
+
+test("rejects conflicting absolute and relative timeline durations", () => {
+  assert.throws(() => resolveFoleyTimelineDuration({
+    voiceDurationSec: 10,
+    timelineDurationSec: 12,
+    tailDurationSec: 2,
+  }), /either timelineDurationSec or tailDurationSec/);
 });

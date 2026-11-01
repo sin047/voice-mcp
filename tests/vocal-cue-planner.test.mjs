@@ -23,6 +23,19 @@ test("keeps a tag and explicit vocalization inline on the same line", () => {
   assert.equal(plan.rendered_text, "嗯，[soft shuddering inhale] はっ 过来。");
 });
 
+test("adds inline spacing on both sides of an after-cue without separating punctuation", () => {
+  const plan = planVocalCues({
+    text: "靠近你。然后停下。",
+    cues: [{
+      cue: "soft_inhale",
+      anchor_text: "靠近你",
+      placement: "after",
+      layout: "inline",
+    }],
+  });
+  assert.equal(plan.rendered_text, "靠近你 [soft shuddering inhale]。然后停下。");
+});
+
 test("places an after-cue after closing punctuation and before the next phrase", () => {
   const plan = planVocalCues({
     text: "我停了一下。继续。",

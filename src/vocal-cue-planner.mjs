@@ -68,10 +68,12 @@ function renderInsertion(text, group, newline) {
 
   const previous = group.position > 0 ? text[group.position - 1] : undefined;
   const next = group.position < text.length ? text[group.position] : undefined;
-  const hasAdjacentWhitespace = (previous !== undefined && /\s/u.test(previous)) ||
-    (next !== undefined && /\s/u.test(next));
-  const separator = hasAdjacentWhitespace ? "" : " ";
-  return group.placement === "before" ? tokens + separator : separator + tokens;
+  const needsSpaceAfter = next !== undefined && !/\s/u.test(next) && !TRAILING_PUNCTUATION.has(next);
+  if (group.placement === "before") {
+    return tokens + (needsSpaceAfter ? " " : "");
+  }
+  const needsSpaceBefore = previous !== undefined && !/\s/u.test(previous);
+  return (needsSpaceBefore ? " " : "") + tokens + (needsSpaceAfter ? " " : "");
 }
 
 /**
@@ -172,10 +174,11 @@ export function planVocalCues({ text, cues } = {}) {
     }
 
     const existingMode = insertionModes.get(position);
-    if (existingMode && existingMode !== layout) {
-      throw new Error("Cues at the same text position must use the same layout");
+    if (existingMode && (existingMode.layout !== layout ||
+        (layout === "inline" && existingMode.placement !== placement))) {
+      throw new Error("Cues at the same text position must use a consistent layout and placement");
     }
-    insertionModes.set(position, layout);
+    if (!existingMode) insertionModes.set(position, { layout, placement });
 
     const token = "[" + definition.tag + "]" + (vocalization ? " " + vocalization : "");
     const groupKey = position + ":" + layout;

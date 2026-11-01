@@ -98,8 +98,8 @@ test("rejects missing and out-of-order exact anchors", () => {
   assert.throws(() => planVocalCues({
     text: "先靠近，再低语。",
     cues: [
-      { cue: "close_whisper", anchor_text: "低语" },
-      { cue: "soft_inhale", anchor_text: "先靠近" },
+      { cue: "close_whisper", anchor_text: "低语", layout: "inline" },
+      { cue: "soft_inhale", anchor_text: "先靠近", layout: "inline" },
     ],
   }), /spoken-text order/);
 });

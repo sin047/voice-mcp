@@ -59,7 +59,7 @@ test("breathy direction requests a quiet inward inhale rather than an outward hu
   });
   assert.equal(plan.direction, "quiet inward nasal inhale, no outward huff");
   assert.equal(plan.breath_event, "inhale");
-  assert.match(plan.rendered_text, /\\[inhales\\]/);
+  assert.ok(plan.rendered_text.includes("[inhales]"));
 });
 
 test("tender breathy delivery keeps the inhale direction within the provider prompt budget", () => {
@@ -71,7 +71,7 @@ test("tender breathy delivery keeps the inhale direction within the provider pro
   });
   assert.equal(plan.direction, "tender soft inward inhale");
   assert.equal(plan.breath_event, "inhale");
-  assert.match(plan.rendered_text, /\\[inhales\\]/);
+  assert.ok(plan.rendered_text.includes("[inhales]"));
   assert.doesNotMatch(plan.direction, /breath-led|exhale|huffing/i);
 });
 

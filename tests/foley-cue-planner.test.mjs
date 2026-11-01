@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { planFoleyCues } from "../src/foley-cue-planner.mjs";
+import { planFoleyCues, sequenceFoleyCues } from "../src/foley-cue-planner.mjs";
 
 const assets = [
   { id: "fx_clothing", name: "03_衣物摩擦_双耳.wav", kind: "foley", durationSec: 33.901 },
@@ -53,7 +53,7 @@ test("uses exact occurrence and requires anchors in spoken-text order", () => {
     actions: [{ action: "package_open", after_text: "停一下", occurrence: 2 }],
     assets,
   });
-  assert.equal(plan.cues[0].anchor_start, 6);
+  assert.equal(plan.anchor_order[0].start, 6);
 
   assert.throws(() => planFoleyCues({
     text: "先打开盒子，再撕开包装。",
@@ -97,4 +97,40 @@ test("requires a final text anchor for a pure-audio tail", () => {
     assets,
     pureAudioTailSec: 2,
   }), /last Foley anchor must be at the end/);
+});
+
+test("trims one Foley action before the next cue and preserves ambience", () => {
+  const cues = [
+    { fileId: "fx_clothing", kind: "foley", atSec: 1, durationSec: 6, fadeInSec: 0.15, fadeOutSec: 0.7 },
+    { fileId: "fx_rain", kind: "ambience", atSec: 0, durationSec: 12, fadeInSec: 1, fadeOutSec: 1 },
+    { fileId: "fx_box", kind: "foley", atSec: 4, durationSec: 2, fadeInSec: 0.06, fadeOutSec: 0.4 },
+  ];
+  const metadata = new Map([
+    ["fx_clothing", { durationSec: 33.9 }],
+    ["fx_box", { durationSec: 10.4 }],
+  ]);
+  const result = sequenceFoleyCues(cues, metadata, 15);
+  assert.equal(result.cues[0].durationSec, 3);
+  assert.equal(result.cues[1].durationSec, 12);
+  assert.equal(result.cues[2].durationSec, 2);
+  assert.equal(result.adjustments.length, 1);
+  assert.equal(result.adjustments[0].asset_id, "fx_clothing");
+});
+
+test("rejects Foley actions whose resolved starts are too close", () => {
+  const cues = [
+    { fileId: "fx_clothing", kind: "foley", atSec: 2, durationSec: 4 },
+    { fileId: "fx_box", kind: "foley", atSec: 2.05, durationSec: 2 },
+  ];
+  const metadata = new Map([
+    ["fx_clothing", { durationSec: 33.9 }],
+    ["fx_box", { durationSec: 10.4 }],
+  ]);
+  assert.throws(() => sequenceFoleyCues(cues, metadata, 15), /too close together/);
+});
+
+test("rejects Foley cues whose source offset leaves no usable audio", () => {
+  const cues = [{ fileId: "fx_short", kind: "foley", atSec: 0, sourceOffsetSec: 2, durationSec: 1 }];
+  const metadata = new Map([["fx_short", { durationSec: 2.05 }]]);
+  assert.throws(() => sequenceFoleyCues(cues, metadata, 5), /too short/);
 });

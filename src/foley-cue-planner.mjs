@@ -207,8 +207,7 @@ export function planFoleyCues({
   }
 
   if (pureAudioTailSec > 0) {
-    const lastCue = cues[cues.length - 1];
-    const remainingText = text.slice(lastCue.anchor_end).trim();
+    const remainingText = text.slice(previousAnchorEnd).trim();
     if (remainingText && !/^[，。！？、；：,.!?…'"”’）】》」』]*$/u.test(remainingText)) {
       throw new Error("For a pure-audio tail, the last Foley anchor must be at the end of the spoken text");
     }

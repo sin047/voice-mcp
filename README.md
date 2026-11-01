@@ -137,12 +137,12 @@ List the WAV assets that have been explicitly uploaded to this server's private 
 
 ### `speak_with_soundscape`
 
-Generate speech and mix it with up to 12 uploaded ambience/Foley assets. The tool returns a short-lived audio URL which the inline MCP player can play.
+Generate speech and mix it with up to 12 uploaded ambience, Foley, or breath assets. The tool returns a short-lived audio URL which the inline MCP player can play.
 
 - Voice remains centered.
 - Mono effects support timing, gain, left/right pan and distance attenuation.
 - Stereo effects retain their recorded stereo image.
-- Ambience and Foley have independent buses.
+- Ambience, Foley, and breath have independent buses.
 - Voice-priority ducking gently lowers effects while speech is present.
 - Output is a stereo WAV, limited to 60 seconds.
 - The server-side mix uses stereo panning, not browser HRTF.

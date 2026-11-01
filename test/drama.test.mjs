@@ -16,9 +16,11 @@ test("creates a restrained private drama cue sheet with local-only references", 
   assert.equal(timeline.voice.gain, 0.9);
   assert.equal(timeline.mix.ambienceBusGain, 0.82);
   assert.equal(timeline.mix.foleyBusGain, 0.9);
+  assert.equal(timeline.mix.breathBusGain, 0.58);
   assert.equal(timeline.mix.masterGain, 0.85);
   assert.equal(timeline.mix.duckingEnabled, true);
   assert.equal(timeline.mix.ducking.foleyDepth, 0.35);
+  assert.equal(timeline.mix.ducking.breathDepth, 0.05);
   assert.equal(timeline.mix.spatialMode, "stereo");
   assert.deepEqual(timeline.cues.map((cue) => cue.gain), [0.1, 0.22]);
   assert.equal(timeline.cues[0].loop, true);
@@ -108,6 +110,7 @@ test("validates mix buses, ducking and spatial modes", () => {
   assert.equal(timeline.mix.spatialMode, "hrtf");
   assert.throws(() => createDramaTimeline({ voiceDurationSec: 5, ambienceBusGain: 1.1 }), /ambienceBusGain/);
   assert.throws(() => createDramaTimeline({ voiceDurationSec: 5, foleyBusGain: -0.1 }), /foleyBusGain/);
+  assert.throws(() => createDramaTimeline({ voiceDurationSec: 5, breathBusGain: 1.1 }), /breathBusGain/);
   assert.throws(() => createDramaTimeline({ voiceDurationSec: 5, masterGain: 2 }), /masterGain/);
   assert.throws(() => createDramaTimeline({ voiceDurationSec: 5, duckingAmount: 1.2 }), /duckingAmount/);
   assert.throws(() => createDramaTimeline({ voiceDurationSec: 5, foleyDuckingDepth: 1.2 }), /foleyDuckingDepth/);
@@ -142,6 +145,8 @@ test("local preview has a player, multitrack cue editing, optional TTS and WAV e
   }
   assert.ok(html.includes("本机"));
   assert.ok(html.includes("ElevenLabs"));
+  assert.ok(html.includes("呼吸 / breath"));
+  assert.ok(html.includes("呼吸方向"));
 });
 
 test("embedded preview JS has valid browser module syntax", () => {
@@ -150,4 +155,18 @@ test("embedded preview JS has valid browser module syntax", () => {
   assert.ok(script);
   const source = script[1].replace(/import \{ createDramaTimeline, createVoiceDuckingEnvelope \} from "\/drama\/timeline\.mjs";/, "");
   assert.doesNotThrow(() => new Function(source));
+});
+
+test("breath cues use a restrained dedicated bus and inhale/exhale defaults", () => {
+  const timeline = createDramaTimeline({
+    voiceDurationSec: 4,
+    cues: [{ fileId: "inhale_01", kind: "breath", atSec: 1 }],
+  });
+  assert.equal(timeline.mix.breathBusGain, 0.58);
+  assert.equal(timeline.cues[0].gain, 0.14);
+  assert.equal(timeline.cues[0].normalizationTargetRms, 0.04);
+  assert.equal(timeline.cues[0].fadeInSec, 0.025);
+  assert.equal(timeline.cues[0].fadeOutSec, 0.045);
+  assert.equal(timeline.cues[0].loop, false);
+  assert.ok(DRAMA_TIMELINE_LIMITS.effectKinds.includes("breath"));
 });

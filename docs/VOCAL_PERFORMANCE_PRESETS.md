@@ -58,7 +58,7 @@ Input:
 
 ```json
 {
-  "text": "等我缓一口气。再听我说。",
+  "text": "等我缓一口气。\n再听我说。",
   "preset": "breathing_to_dialogue",
   "anchors": [
     { "slot": "breathing", "anchor_text": "等我缓一口气" },
@@ -70,8 +70,8 @@ Input:
 Planned text:
 
 ```text
-等我缓一口气。
 [heavy ragged breathing]
+等我缓一口气。
 [breathless husky whisper] 再听我说。
 ```
 

@@ -56,7 +56,7 @@ const PRESETS = Object.freeze({
     validation_note: "两个组成标签分别已有正向试听反馈，但这个组合顺序尚未单独试听。",
     min_cue_slots: 2,
     slots: Object.freeze([
-      Object.freeze({ id: "breathing", label_zh: "非语言喘息", cue: "heavy_ragged_breathing", required: true, placement: "after", layout: "line" }),
+      Object.freeze({ id: "breathing", label_zh: "非语言喘息", cue: "heavy_ragged_breathing", required: true, placement: "before", layout: "line" }),
       Object.freeze({ id: "dialogue", label_zh: "带喘息的台词", cue: "breathless_husky_whisper", required: true, placement: "before", layout: "inline" }),
     ]),
   }),
@@ -67,7 +67,7 @@ const PRESETS = Object.freeze({
     validation_note: "这是段落编排指导，不是 TTS 标签或独立音效；完整序列尚未作为整体试听。",
     min_cue_slots: 1,
     slots: Object.freeze([
-      Object.freeze({ id: "breathing", label_zh: "余韵中的喘息", cue: "heavy_ragged_breathing", required: false, placement: "after", layout: "line" }),
+      Object.freeze({ id: "breathing", label_zh: "余韵中的喘息", cue: "heavy_ragged_breathing", required: false, placement: "before", layout: "line" }),
       Object.freeze({ id: "breathless_dialogue", label_zh: "仍带气息的台词", cue: "breathless_husky_whisper", required: false, placement: "before", layout: "inline" }),
       Object.freeze({ id: "closing_line", label_zh: "放松收尾台词", cue: null, required: true, placement: null, layout: null, instruction: "收尾台词保持不加表演标签。" }),
     ]),

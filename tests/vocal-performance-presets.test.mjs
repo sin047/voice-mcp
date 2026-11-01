@@ -65,7 +65,7 @@ test("plans breathless husky whisper as a spoken-line state, not a breath clip",
 
 test("plans the breathing-to-dialogue sequence and flags the untested combination", () => {
   const plan = planVocalPreset({
-    text: "等我缓一口气。再听我说。",
+    text: "等我缓一口气。\n再听我说。",
     preset: "breathing_to_dialogue",
     anchors: [
       { slot: "breathing", anchor_text: "等我缓一口气" },
@@ -73,13 +73,13 @@ test("plans the breathing-to-dialogue sequence and flags the untested combinatio
     ],
   });
   assert.equal(plan.preset_validation_status, "composition_not_yet_auditioned");
-  assert.equal(plan.rendered_text, "等我缓一口气。\n[heavy ragged breathing]\n[breathless husky whisper] 再听我说。");
+  assert.equal(plan.rendered_text, "[heavy ragged breathing]\n等我缓一口气。\n[breathless husky whisper] 再听我说。");
   assert.equal(plan.warnings.length, 1);
 });
 
 test("keeps the Afterglow closing line untagged and does not append warm_exhale", () => {
   const plan = planVocalPreset({
-    text: "先让我缓一会儿。我还在喘。现在好多了。",
+    text: "先让我缓一会儿。\n我还在喘。\n现在好多了。",
     preset: "afterglow",
     anchors: [
       { slot: "breathing", anchor_text: "先让我缓一会儿" },
@@ -90,7 +90,7 @@ test("keeps the Afterglow closing line untagged and does not append warm_exhale"
   assert.equal(plan.preset_validation_status, "arrangement_guidance_only");
   assert.equal(
     plan.rendered_text,
-    "先让我缓一会儿。\n[heavy ragged breathing]\n[breathless husky whisper] 我还在喘。现在好多了。",
+    "[heavy ragged breathing]\n先让我缓一会儿。\n[breathless husky whisper] 我还在喘。\n现在好多了。",
   );
   assert.equal(plan.slots.at(-1).is_untagged, true);
   assert.equal(plan.slots.at(-1).tag, null);
@@ -99,7 +99,7 @@ test("keeps the Afterglow closing line untagged and does not append warm_exhale"
 
 test("allows a lighter Afterglow variant with one optional cue and an untagged closing line", () => {
   const plan = planVocalPreset({
-    text: "我还在喘。现在好多了。",
+    text: "我还在喘。\n现在好多了。",
     preset: "afterglow",
     anchors: [
       { slot: "breathless_dialogue", anchor_text: "我还在喘" },

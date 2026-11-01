@@ -194,7 +194,7 @@ test("caps terminal cue tail extension at configured service limits", () => {
     cueDurationSec: 16,
     allowTailExtension: true,
     terminalAnchor: true,
-  }), /maximum timeline duration/);
+  }), /maximum pure-audio tail/);
 });
 
 

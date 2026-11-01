@@ -2,7 +2,7 @@
 
 A platform-neutral Node.js MCP server for ElevenLabs voice generation, expressive delivery and mixed voice + sound-effect playback.
 
-The actively maintained development and deployment branch is `zeabur`, currently at **v1.4.0-beta.44**. It runs as a Node.js 22+ / Express 5 service with Streamable HTTP MCP and is deployed on Zeabur. The same runtime can also run on a VPS or Docker host.
+The actively maintained development and deployment branch is `zeabur`, currently at **v1.4.0-beta.45**. It runs as a Node.js 22+ / Express 5 service with Streamable HTTP MCP and is deployed on Zeabur. The same runtime can also run on a VPS or Docker host.
 
 
 
@@ -72,7 +72,7 @@ Use `render_audio_timeline` when you intentionally need separately generated voi
 
 ## Branches
 
-- `zeabur`: **active maintained branch** for development and current Zeabur deployment; currently v1.4.0-beta.44.
+- `zeabur`: **active maintained branch** for development and current Zeabur deployment; currently v1.4.0-beta.45.
 - `voice-v1.4-private-drama`: historical v1.4 beta.7 snapshot. It is not the active deployment branch; do not switch to it without comparing its history against `zeabur`.
 - `main`: repository default branch; it may not contain the latest maintained v1.4 work. Do not assume it is the deployment branch.
 
@@ -174,7 +174,7 @@ Both `speak` and `speak_with_soundscape` attach the same MCP App audio player. V
 
 ### Vocal performance presets (beta.40)
 
-The MCP tools `list_vocal_presets` and `plan_vocal_preset` provide reusable, deterministic vocal-performance arrangements. The initial registry includes close-soft, sustained heavy breathing, breathless dialogue, ragged exhale, breathing-to-dialogue, and Afterglow. Preset planning requires exact text anchors and makes zero ElevenLabs calls. Unverified mouth/contact prompts are excluded from automatic presets; Afterglow remains an arrangement pattern with an untagged closing line. To render planner output, pass `rendered_text` to `render_continuous_audio_timeline` with `raw_tags: true`; Foley cues are optional for voice-only rendering. The beta.44 Scene Director composes ordered vocal beats, exact aligned pauses, optional rain/desk ambience and explicit Foley actions into one render request. See the Scene Director guide in docs/SCENE_DIRECTOR.md. See [Vocal Performance Presets](./docs/VOCAL_PERFORMANCE_PRESETS.md).
+The MCP tools `list_vocal_presets` and `plan_vocal_preset` provide reusable, deterministic vocal-performance arrangements. The initial registry includes close-soft, sustained heavy breathing, breathless dialogue, ragged exhale, breathing-to-dialogue, and Afterglow. Preset planning requires exact text anchors and makes zero ElevenLabs calls. Unverified mouth/contact prompts are excluded from automatic presets; Afterglow remains an arrangement pattern with an untagged closing line. To render planner output, pass `rendered_text` to `render_continuous_audio_timeline` with `raw_tags: true`; Foley cues are optional for voice-only rendering. The beta.45 Scene Director composes ordered vocal beats, exact aligned pauses, optional rain/desk ambience and explicit Foley actions into one render request. See the Scene Director guide in docs/SCENE_DIRECTOR.md. See [Vocal Performance Presets](./docs/VOCAL_PERFORMANCE_PRESETS.md).
 
 ## Private sound library
 

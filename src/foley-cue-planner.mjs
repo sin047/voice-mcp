@@ -313,6 +313,64 @@ export function planFoleyCues({
 }
 
 /**
+ * Extend a requested pure-audio tail only when a terminal, text-anchored Foley
+ * cue needs a little more room than the current timeline provides.
+ */
+export function resolveTerminalFoleyCueTimeline({
+  timelineDurationSec,
+  voiceDurationSec,
+  cueAtSec,
+  cueDurationSec,
+  allowTailExtension = false,
+  terminalAnchor = false,
+  maxDurationSec = 60,
+  maxTailDurationSec = 15,
+} = {}) {
+  for (const [name, value] of Object.entries({
+    timelineDurationSec,
+    voiceDurationSec,
+    cueAtSec,
+    cueDurationSec,
+    maxDurationSec,
+    maxTailDurationSec,
+  })) {
+    if (!Number.isFinite(value)) throw new Error(name + " must be a finite number");
+  }
+  if (timelineDurationSec <= 0 || voiceDurationSec <= 0 ||
+      cueAtSec < 0 || cueDurationSec < 0.1 ||
+      maxDurationSec <= 0 || maxTailDurationSec < 0) {
+    throw new Error("Terminal Foley timeline values are outside their valid ranges");
+  }
+
+  const cueEndSec = cueAtSec + cueDurationSec;
+  if (cueEndSec <= timelineDurationSec + 0.001) {
+    return Object.freeze({
+      durationSec: timelineDurationSec,
+      actualTailDurationSec: Math.max(0, timelineDurationSec - voiceDurationSec),
+      extended: false,
+    });
+  }
+
+  if (!allowTailExtension || !terminalAnchor) {
+    throw new Error("Cue at " + cueAtSec + "s extends beyond the timeline duration");
+  }
+  if (cueEndSec > maxDurationSec + 0.001) {
+    throw new Error("Terminal Foley cue would exceed the maximum timeline duration");
+  }
+
+  const requiredTailSec = Math.max(0, cueEndSec - voiceDurationSec);
+  if (requiredTailSec > maxTailDurationSec + 0.001) {
+    throw new Error("Terminal Foley cue would require more than the maximum pure-audio tail");
+  }
+
+  return Object.freeze({
+    durationSec: cueEndSec,
+    actualTailDurationSec: requiredTailSec,
+    extended: true,
+  });
+}
+
+/**
  * Cap sequential Foley cues so one action sound ends before the next begins.
  * Ambience cues are deliberately left untouched.
  */

@@ -7,7 +7,7 @@ import { parseByteRange } from "./audio-range.mjs";
 import { decodeRawPcm16, encodePcm16Wav, mixSoundscape } from "./wav-audio.mjs";
 import { joinPcm16Chunks } from "./voice-long-audio.mjs";
 import { resolveCueTimeAfterText } from "./alignment-cues.mjs";
-import { getFoleyActionCatalog, planFoleyCues, resolveFoleyTimelineDuration, sequenceFoleyCues } from "./foley-cue-planner.mjs";
+import { getFoleyActionCatalog, planFoleyCues, resolveFoleyTimelineDuration, resolveTerminalFoleyCueTimeline, sequenceFoleyCues } from "./foley-cue-planner.mjs";
 import { analyzeBreathSegments, repositionOpeningBreaths } from "./breath-engine.mjs";
 import { getVocalCueCatalog, planVocalCues } from "./vocal-cue-planner.mjs";
 import { listVocalPerformancePresets, planVocalPreset } from "./vocal-performance-presets.mjs";
@@ -1412,7 +1412,9 @@ function createServer() {
         tailDurationSec: args.tail_duration_sec,
         maxDurationSec: MAX_SOUND_SCAPE_SECONDS,
       });
-      const timelineDurationSec = timelinePlan.durationSec;
+      let timelineDurationSec = timelinePlan.durationSec;
+      let tailExtendedForCue = false;
+      const speakableTextForCueTail = stripAudioTags(result.final_text).trim();
 
       const resolvedCues = args.cues.map((cue) => {
         const originalAtSec = cue.after_text != null
@@ -1427,11 +1429,26 @@ function createServer() {
         const atSec = cue.after_text != null
           ? shiftCueTimeForPauses(originalAtSec, appliedPauses)
           : originalAtSec;
+        if (cue.duration_sec != null) {
+          const anchorText = typeof cue.after_text === "string" ? cue.after_text.trim() : "";
+          const anchorIndex = anchorText ? speakableTextForCueTail.lastIndexOf(anchorText) : -1;
+          const terminalAnchor = anchorIndex >= 0 &&
+            speakableTextForCueTail.slice(anchorIndex + anchorText.length).trim().length === 0;
+          const cueTimeline = resolveTerminalFoleyCueTimeline({
+            timelineDurationSec,
+            voiceDurationSec: voiceForMix.durationSec,
+            cueAtSec: atSec,
+            cueDurationSec: cue.duration_sec,
+            allowTailExtension: args.timeline_duration_sec == null && (args.tail_duration_sec ?? 0) > 0,
+            terminalAnchor,
+            maxDurationSec: MAX_SOUND_SCAPE_SECONDS,
+            maxTailDurationSec: 15,
+          });
+          timelineDurationSec = cueTimeline.durationSec;
+          tailExtendedForCue ||= cueTimeline.extended;
+        }
         if (atSec >= timelineDurationSec - 0.01) {
           throw new Error("Cue time must fall before the end of timeline_duration_sec");
-        }
-        if (cue.duration_sec != null && atSec + cue.duration_sec > timelineDurationSec + 0.001) {
-          throw new Error("Cue at " + atSec + "s extends beyond the timeline duration");
         }
         return {
           fileId: cue.asset_id,
@@ -1530,9 +1547,10 @@ function createServer() {
           })),
           breath_processing: breathProcessing,
           timeline_duration_sec: timelineDurationSec,
-          tail_duration_sec: Number(timelinePlan.tailDurationSec.toFixed(3)),
+          tail_duration_sec: Number(Math.max(0, timelineDurationSec - voiceForMix.durationSec).toFixed(3)),
           requested_tail_duration_sec: timelinePlan.requestedTailDurationSec,
           tail_duration_clamped: timelinePlan.tailClamped,
+          tail_duration_extended_for_cue: tailExtendedForCue,
           sequence_foley: args.sequence_foley === true,
           foley_sequence_adjustments: sequenceAdjustments,
           sample_rate: mix.sampleRate,

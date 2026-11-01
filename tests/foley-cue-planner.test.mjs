@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { getFoleyActionCatalog, planFoleyCues, resolveFoleyTimelineDuration, sequenceFoleyCues } from "../src/foley-cue-planner.mjs";
+import { getFoleyActionCatalog, planFoleyCues, resolveFoleyTimelineDuration, resolveTerminalFoleyCueTimeline, sequenceFoleyCues } from "../src/foley-cue-planner.mjs";
 
 const assets = [
   { id: "fx_clothing", name: "03_衣物摩擦_双耳.wav", kind: "foley", durationSec: 33.901 },
@@ -138,6 +138,65 @@ test("rejects Foley cues whose source offset leaves no usable audio", () => {
   const metadata = new Map([["fx_short", { durationSec: 2.05 }]]);
   assert.throws(() => sequenceFoleyCues(cues, metadata, 5), /too short/);
 });
+
+
+test("extends a requested tail when the terminal Foley cue needs a little more room", () => {
+  const result = resolveTerminalFoleyCueTimeline({
+    timelineDurationSec: 10,
+    voiceDurationSec: 8,
+    cueAtSec: 8,
+    cueDurationSec: 3,
+    allowTailExtension: true,
+    terminalAnchor: true,
+  });
+  assert.equal(result.durationSec, 11);
+  assert.equal(result.actualTailDurationSec, 3);
+  assert.equal(result.extended, true);
+});
+
+test("keeps an already sufficient timeline unchanged", () => {
+  const result = resolveTerminalFoleyCueTimeline({
+    timelineDurationSec: 12,
+    voiceDurationSec: 8,
+    cueAtSec: 8,
+    cueDurationSec: 3,
+    allowTailExtension: true,
+    terminalAnchor: true,
+  });
+  assert.equal(result.durationSec, 12);
+  assert.equal(result.extended, false);
+});
+
+test("does not extend an absolute or non-terminal timeline for a cue", () => {
+  assert.throws(() => resolveTerminalFoleyCueTimeline({
+    timelineDurationSec: 8,
+    voiceDurationSec: 8,
+    cueAtSec: 7,
+    cueDurationSec: 2,
+    allowTailExtension: false,
+    terminalAnchor: true,
+  }), /extends beyond the timeline/);
+  assert.throws(() => resolveTerminalFoleyCueTimeline({
+    timelineDurationSec: 8,
+    voiceDurationSec: 8,
+    cueAtSec: 7,
+    cueDurationSec: 2,
+    allowTailExtension: true,
+    terminalAnchor: false,
+  }), /extends beyond the timeline/);
+});
+
+test("caps terminal cue tail extension at configured service limits", () => {
+  assert.throws(() => resolveTerminalFoleyCueTimeline({
+    timelineDurationSec: 8,
+    voiceDurationSec: 8,
+    cueAtSec: 8,
+    cueDurationSec: 16,
+    allowTailExtension: true,
+    terminalAnchor: true,
+  }), /maximum timeline duration/);
+});
+
 
 test("resolves a relative pure-audio tail from the actual voice duration", () => {
   const plan = resolveFoleyTimelineDuration({

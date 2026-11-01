@@ -2,7 +2,7 @@
 
 A platform-neutral Node.js MCP server for ElevenLabs voice generation, expressive delivery and mixed voice + sound-effect playback.
 
-The actively maintained development and deployment branch is `zeabur`, currently at **v1.4.0-beta.33**. It runs as a Node.js 22+ / Express 5 service with Streamable HTTP MCP and is deployed on Zeabur. The same runtime can also run on a VPS or Docker host.
+The actively maintained development and deployment branch is `zeabur`, currently at **v1.4.0-beta.34**. It runs as a Node.js 22+ / Express 5 service with Streamable HTTP MCP and is deployed on Zeabur. The same runtime can also run on a VPS or Docker host.
 
 
 
@@ -29,6 +29,14 @@ The MCP tool `plan_voice_chunks` divides long text at sentence and clause bounda
 
 The continuous timeline response also includes `alignment_audit`, a non-blocking check of provider character alignment completeness and timestamp ordering. This is an alignment-integrity diagnostic, **not ASR**: it cannot prove that every intended word was actually spoken in the rendered waveform. A future ASR-backed check would be a separate opt-in feature.
 
+### Foley action planner and sequential cues (beta.34)
+
+The gated MCP tool `plan_foley_cues` maps an explicitly selected action list to the existing private Foley assets and approved cue levels. Each action requires an exact `after_text` anchor quoted from the spoken text. The planner checks that anchors exist and are supplied in spoken-text order, verifies that each matching private asset is present, and returns one fixed asset per action. Supported actions: clothing rustle, package opening, box opening, liquid application, continuous rhythm, bed/object sounds, wet detail, and ending detail.
+
+Planning is deterministic and **does not call ElevenLabs**. It returns ready-to-adapt cue objects for `render_continuous_audio_timeline`, plus `sequence_foley=true` and an optional `tail_duration_sec`. At render time, actual cue positions are resolved from provider character timestamps. Sequential mode trims each Foley cue to end before the next Foley cue begins; if two anchors resolve too close together, rendering fails rather than stacking action sounds. Ambience cues remain independent and may overlap Foley.
+
+`render_continuous_audio_timeline` now accepts `tail_duration_sec`, which extends the WAV by that many seconds beyond the actual generated voice duration. This is easier to use than guessing an absolute `timeline_duration_sec` before TTS. The two duration options are mutually exclusive. The cue schema also exposes `source_offset_sec` and `normalization_target_rms` so the planner can preserve the approved excerpts and normalization targets.
+
 ### Continuous voice timeline tail (beta.33)
 
 The continuous timeline tool accepts optional `timeline_duration_sec`. By default the final WAV ends with the generated voice, as before. When a longer duration is supplied, Foley or ambience cues may continue after the final spoken sample, creating a deliberate pure-sound tail without another TTS request. Absolute `at_sec` cues can be placed in that tail; every cue must still fit inside the requested timeline. The total duration remains capped at 60 seconds. The mixer already handles voice ducking against the voice envelope, so after speech ends the tail is no longer ducked by nonexistent speech.
@@ -37,13 +45,13 @@ This is intentionally a small additive change: existing cue timing, gain, pan, d
 
 ### Continuous voice timeline (beta.30)
 
-The MCP tool `render_continuous_audio_timeline` synthesizes the full spoken passage once, requests ElevenLabs character-level timestamps, and overlays Foley/ambience without splitting the voice. Each cue can use either `at_sec` for an absolute offset or `after_text` for an exact spoken phrase; `occurrence` selects a later match when the phrase repeats. This is the preferred mode when speech should remain prosodically continuous. Maximum: 60 seconds and 12 effect cues. Use `list_sound_assets` to discover private asset IDs.
+The MCP tool `render_continuous_audio_timeline` synthesizes the full spoken passage once, requests ElevenLabs character-level timestamps, and overlays Foley/ambience without splitting the voice. Each cue can use either `at_sec` for an absolute offset or `after_text` for an exact spoken phrase; `occurrence` selects a later match when the phrase repeats. This is the preferred mode when speech should remain prosodically continuous. Maximum: 60 seconds and 12 effect cues. Use `list_sound_assets` to discover private asset IDs. Use `tail_duration_sec` for a pure-sound tail after the voice without needing to predict the TTS duration, and `sequence_foley=true` to keep action cues from overlapping.
 
 Use `render_audio_timeline` when you intentionally need separately generated voice sections, voice-free gaps, or effects continuing independently of speech. The two timeline modes are complementary.
 
 ## Branches
 
-- `zeabur`: **active maintained branch** for development and current Zeabur deployment; currently v1.4.0-beta.33.
+- `zeabur`: **active maintained branch** for development and current Zeabur deployment; currently v1.4.0-beta.34.
 - `voice-v1.4-private-drama`: historical v1.4 beta.7 snapshot. It is not the active deployment branch; do not switch to it without comparing its history against `zeabur`.
 - `main`: repository default branch; it may not contain the latest maintained v1.4 work. Do not assume it is the deployment branch.
 
@@ -123,7 +131,7 @@ The new action markers each play exactly one Foley asset per call; they do not s
 
 The marker is stripped before the direction reaches ElevenLabs. Omit the marker for the original voice-only MP3 path. Soundscape playback uses a temporary WAV URL and requires the curated assets plus `MCP_PUBLIC_BASE_URL` or Zeabur's injected `ZEABUR_WEB_URL` fallback.
 
-### `list_sound_assets`
+### `plan_foley_cues`\n\nPlan exact-anchor Foley actions from the private sound library. This tool makes no TTS request. It returns fixed approved gain/fade/source-offset settings and cues ready for `render_continuous_audio_timeline`; pass its `tail_duration_sec` and `sequence_foley` values through.\n\n### `list_sound_assets`
 
 List the WAV assets that have been explicitly uploaded to this server's private audio library. Use this tool to retrieve `asset_id` values.
 

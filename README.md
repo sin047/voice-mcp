@@ -29,9 +29,9 @@ The MCP tool `plan_voice_chunks` divides long text at sentence and clause bounda
 
 The continuous timeline response also includes `alignment_audit`, a non-blocking check of provider character alignment completeness and timestamp ordering. This is an alignment-integrity diagnostic, **not ASR**: it cannot prove that every intended word was actually spoken in the rendered waveform. A future ASR-backed check would be a separate opt-in feature.
 
-### Foley action planner and sequential cues (beta.34)
+### Foley action planner and sequential cues (beta.35)
 
-The gated MCP tool `plan_foley_cues` maps an explicitly selected action list to the existing private Foley assets and approved cue levels. Each action requires an exact `after_text` anchor quoted from the spoken text. The planner checks that anchors exist and are supplied in spoken-text order, verifies that each matching private asset is present, and returns one fixed asset per action. Supported actions: clothing rustle, package opening, box opening, liquid application, continuous rhythm, bed/object sounds, wet detail, and ending detail.
+The gated MCP tool `plan_foley_cues` maps an explicitly selected action list to the existing private Foley assets and approved cue levels. Each action requires an exact `after_text` anchor quoted from the spoken text. If punctuation or closing quotation marks immediately follow the anchor, the planner includes them automatically so the cue lands after the complete spoken phrase. It checks that anchors exist and are supplied in spoken-text order, verifies that each matching private asset is present, and returns one fixed asset per action. Supported actions: clothing rustle, package opening, box opening, liquid application, continuous rhythm, bed/object sounds, wet detail, and ending detail.
 
 Planning is deterministic and **does not call ElevenLabs**. It returns ready-to-adapt cue objects for `render_continuous_audio_timeline`, plus `sequence_foley=true` and an optional `tail_duration_sec`. At render time, actual cue positions are resolved from provider character timestamps. Sequential mode trims each Foley cue to end before the next Foley cue begins; if two anchors resolve too close together, rendering fails rather than stacking action sounds. Ambience cues remain independent and may overlap Foley.
 

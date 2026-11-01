@@ -119,6 +119,19 @@ jobs:
           ASSET_DELETE=$(curl -s -o /tmp/asset-delete.json -w '%{http_code}' -u "voice-mcp:$TEST_ACCESS_TOKEN" -X DELETE "http://127.0.0.1:8765/assets/$ASSET_ID")
           test "$ASSET_DELETE" = "204"
 
+          BREATH_UPLOAD=$(curl -s -o /tmp/breath-upload.json -w '%{http_code}' -u "voice-mcp:$TEST_ACCESS_TOKEN" -X POST http://127.0.0.1:8765/assets -H 'Content-Type: audio/wav' -H 'X-Asset-Name: ci-inhale.wav' -H 'X-Asset-Kind: breath' -H 'X-Asset-Breath-Type: inhale' --data-binary @/tmp/ci-audio.wav)
+          test "$BREATH_UPLOAD" = "201"
+          node --input-type=module -e '
+            import fs from "node:fs";
+            import assert from "node:assert/strict";
+            const payload = JSON.parse(fs.readFileSync("/tmp/breath-upload.json", "utf8"));
+            assert.equal(payload.asset.kind, "breath");
+            assert.equal(payload.asset.breathType, "inhale");
+          '
+          BREATH_ID=$(node --input-type=module -e 'import fs from "node:fs"; const payload=JSON.parse(fs.readFileSync("/tmp/breath-upload.json","utf8")); process.stdout.write(payload.asset.id);')
+          BREATH_DELETE=$(curl -s -o /tmp/breath-delete.json -w '%{http_code}' -u "voice-mcp:$TEST_ACCESS_TOKEN" -X DELETE "http://127.0.0.1:8765/assets/$BREATH_ID")
+          test "$BREATH_DELETE" = "204"
+
           RECORDINGS_UNAUTH=$(curl -s -o /tmp/recordings-unauthorized.json -w '%{http_code}' http://127.0.0.1:8765/recordings)
           test "$RECORDINGS_UNAUTH" = "401"
           curl -fsS -u "voice-mcp:$TEST_ACCESS_TOKEN" http://127.0.0.1:8765/recordings -o /tmp/recordings-list.json

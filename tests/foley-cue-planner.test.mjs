@@ -178,3 +178,21 @@ test("includes closing punctuation and quote marks in the resolved anchor", () =
   assert.equal(plan.cues[0].after_text, "把盒子打开。”");
   assert.equal(plan.anchor_order[0].after_text, "把盒子打开。”");
 });
+
+test("includes actual tab, carriage return, and newline characters in trailing anchors", () => {
+  const cases = [
+    ["我把盒子打开\t下一句。", "\t"],
+    ["我把盒子打开\r下一句。", "\r"],
+    ["我把盒子打开\n下一句。", "\n"],
+    ["我把盒子打开\r\n下一句。", "\r\n"],
+  ];
+
+  for (const [text, suffix] of cases) {
+    const plan = planFoleyCues({
+      text,
+      actions: [{ action: "box_open", after_text: "我把盒子打开" }],
+      assets,
+    });
+    assert.equal(plan.cues[0].after_text, "我把盒子打开" + suffix);
+  }
+});

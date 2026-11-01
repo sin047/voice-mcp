@@ -50,11 +50,11 @@ export function resolveCueTimeAfterText({ alignment, normalizedAlignment, expect
   }
 
   const finalIndex = matchIndex + afterText.length - 1;
-  const atSec = selected.ends[finalIndex];
+  const atSec = selected.character_end_times_seconds[finalIndex];
   if (typeof atSec !== "number" || !Number.isFinite(atSec) || atSec < 0) {
     throw new Error("Alignment returned an invalid end time for after_text");
   }
-  const startSec = selected.starts[matchIndex];
+  const startSec = selected.character_start_times_seconds[matchIndex];
   if (typeof startSec !== "number" || !Number.isFinite(startSec) || startSec < 0 || atSec < startSec) {
     throw new Error("Alignment returned invalid timing values for after_text");
   }

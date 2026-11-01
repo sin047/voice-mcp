@@ -142,7 +142,14 @@ test("inserts real silence frames while preserving every speech sample", () => {
   const inserted = insertTimelinePauses(voicePcm, [
     { after_text: "ab", occurrence: 1, atSec: 0.2, durationSec: 0.2 },
   ]);
-  assert.deepEqual(Array.from(inserted.voicePcm.channels[0]), [0.1, 0.2, 0, 0, 0.3, 0.4]);
+  const samples = Array.from(inserted.voicePcm.channels[0]);
+  assert.equal(samples.length, 6);
+  assert.ok(Math.abs(samples[0] - 0.1) < 1e-6);
+  assert.ok(Math.abs(samples[1] - 0.2) < 1e-6);
+  assert.equal(samples[2], 0);
+  assert.equal(samples[3], 0);
+  assert.ok(Math.abs(samples[4] - 0.3) < 1e-6);
+  assert.ok(Math.abs(samples[5] - 0.4) < 1e-6);
   assert.equal(inserted.voicePcm.durationSec, 0.6);
   assert.equal(inserted.insertedDurationSec, 0.2);
 });

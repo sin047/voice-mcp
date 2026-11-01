@@ -2,7 +2,7 @@
 
 A platform-neutral Node.js MCP server for ElevenLabs voice generation, expressive delivery and mixed voice + sound-effect playback.
 
-The actively maintained development and deployment branch is `zeabur`, currently at **v1.4.0-beta.34**. It runs as a Node.js 22+ / Express 5 service with Streamable HTTP MCP and is deployed on Zeabur. The same runtime can also run on a VPS or Docker host.
+The actively maintained development and deployment branch is `zeabur`, currently at **v1.4.0-beta.36**. It runs as a Node.js 22+ / Express 5 service with Streamable HTTP MCP and is deployed on Zeabur. The same runtime can also run on a VPS or Docker host.
 
 
 
@@ -35,6 +35,17 @@ The gated MCP tool `plan_foley_cues` maps an explicitly selected action list to 
 
 Planning is deterministic and **does not call ElevenLabs**. It returns ready-to-adapt cue objects for `render_continuous_audio_timeline`, plus `sequence_foley=true` and an optional `tail_duration_sec`. At render time, actual cue positions are resolved from provider character timestamps. Sequential mode trims each Foley cue to end before the next Foley cue begins; if two anchors resolve too close together, rendering fails rather than stacking action sounds. Ambience cues remain independent and may overlap Foley.
 
+### Natural breath repair (beta.36)
+
+The continuous timeline accepts optional `breath_mode`:
+
+- `off` (default) preserves the existing render path.
+- `natural` analyzes the generated 24 kHz mono PCM using short-frame RMS and periodicity, then repositions only high-confidence pre-speech inhales by moving surrounding silence. It preserves total duration and speech sample positions.
+- This first mode does not insert synthetic breath clips or change voice/Foley gain settings. It makes no additional TTS requests beyond the single synthesis already required by the continuous timeline.
+- The response includes `breath_processing` diagnostics (candidate, inhale, exhale and repositioned counts).
+
+The mode remains opt-in until a real listening test confirms that its placement is natural. Breath-pool harvesting and enhanced gap insertion are later phases.
+
 `render_continuous_audio_timeline` now accepts `tail_duration_sec`, which extends the WAV by that many seconds beyond the actual generated voice duration. This is easier to use than guessing an absolute `timeline_duration_sec` before TTS. The two duration options are mutually exclusive. The cue schema also exposes `source_offset_sec` and `normalization_target_rms` so the planner can preserve the approved excerpts and normalization targets. If voice plus requested tail would exceed the 60-second cap, the tail is shortened to the available remainder and the result reports both requested and applied tail durations.
 
 ### Continuous voice timeline tail (beta.33)
@@ -51,7 +62,7 @@ Use `render_audio_timeline` when you intentionally need separately generated voi
 
 ## Branches
 
-- `zeabur`: **active maintained branch** for development and current Zeabur deployment; currently v1.4.0-beta.34.
+- `zeabur`: **active maintained branch** for development and current Zeabur deployment; currently v1.4.0-beta.36.
 - `voice-v1.4-private-drama`: historical v1.4 beta.7 snapshot. It is not the active deployment branch; do not switch to it without comparing its history against `zeabur`.
 - `main`: repository default branch; it may not contain the latest maintained v1.4 work. Do not assume it is the deployment branch.
 

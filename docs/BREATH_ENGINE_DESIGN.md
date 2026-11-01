@@ -1,6 +1,6 @@
 # Breath Engine and Explicit Foley Design
 
-Status: design baseline, no runtime behavior changed
+Status: Phase 1 implemented; opt-in natural repair is integrated, default off
 Target branch: `zeabur`
 Baseline: `48867e86935c11bb51391c2b2236df58710fa6c0` (1.4.0-beta.35)
 
@@ -49,6 +49,15 @@ Neither reference repository contains a LICENSE file or a package manifest in it
 - The existing Foley planner maps each selected action to exactly one approved asset and supports sequential trimming.
 - Character alignment is not ASR. Keep transcript QA as a separate optional subsystem.
 - Do not alter current approved soundscape gain constants as part of Breath Engine work.
+
+## Current implementation status
+
+- `src/breath-engine.mjs` implements pure-code breath candidate analysis using 10 ms RMS frames and a lightweight periodicity estimate.
+- It classifies candidate inhale/exhale contours, compares their level with nearby voiced speech, and reports confidence/rejection reasons.
+- `repositionOpeningBreaths` moves only high-confidence pre-speech inhales by swapping surrounding silence. It preserves total duration and all samples at/after the next speech onset.
+- `render_continuous_audio_timeline` exposes `breath_mode: "off" | "natural"`; `off` remains the default. The response includes `breath_processing` diagnostics.
+- The first implementation is covered by synthetic PCM tests. It is not yet validated against a real ElevenLabs sample and must remain opt-in.
+- Breath-pool storage, insertion, and ASR QA are not implemented yet.
 
 ## Proposed architecture
 

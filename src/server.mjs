@@ -8,6 +8,7 @@ import { decodeRawPcm16, encodePcm16Wav, mixSoundscape } from "./wav-audio.mjs";
 import { joinPcm16Chunks } from "./voice-long-audio.mjs";
 import { resolveCueTimeAfterText } from "./alignment-cues.mjs";
 import { planFoleyCues, resolveFoleyTimelineDuration, sequenceFoleyCues } from "./foley-cue-planner.mjs";
+import { analyzeBreathSegments, repositionOpeningBreaths } from "./breath-engine.mjs";
 import { planVoiceChunks } from "./voice-chunker.mjs";
 import { auditCharacterAlignment } from "./alignment-audit.mjs";
 import { buildSoundscapePresetCues, parseSoundscapeDirective } from "./soundscape-presets.mjs";
@@ -1037,7 +1038,7 @@ function createServer() {
 
   mcp.registerTool("render_continuous_audio_timeline", {
     title: `${BOT_NAME}'s Continuous Voice Timeline`,
-    description: `Synthesize one continuous voice passage exactly once, then overlay independently timed Foley and ambience. Use after_text on a cue to place it immediately after an exact phrase in the spoken text using ElevenLabs character timestamps; use at_sec for absolute timing. Optional tail_duration_sec adds a pure-Foley/ambience tail after the generated voice without needing to know the voice duration in advance; timeline_duration_sec remains available as an absolute override. Set sequence_foley=true to trim each Foley cue at the next Foley cue start, preventing action sounds from overlapping. Effects may occupy silent intervals or continue after the voice; no additional TTS calls are made. This avoids extra TTS chunk boundaries. Call list_sound_assets first. Text and finished audio are limited to ${MAX_SOUND_SCAPE_TEXT_CHARS} characters and ${MAX_SOUND_SCAPE_SECONDS} seconds.`,
+    description: `Synthesize one continuous voice passage exactly once, then overlay independently timed Foley and ambience. Use after_text on a cue to place it immediately after an exact phrase in the spoken text using ElevenLabs character timestamps; use at_sec for absolute timing. Optional tail_duration_sec adds a pure-Foley/ambience tail after the generated voice without needing to know the voice duration in advance; timeline_duration_sec remains available as an absolute override. Set sequence_foley=true to trim each Foley cue at the next Foley cue start, preventing action sounds from overlapping. Effects may occupy silent intervals or continue after the voice; no additional TTS calls are made. Optional breath_mode='natural' runs a pure-code pass after the single synthesis and repositions only high-confidence opening inhales by moving silence; it does not add clips or change speech samples. Default 'off' preserves current behavior. This avoids extra TTS chunk boundaries. Call list_sound_assets first. Text and finished audio are limited to ${MAX_SOUND_SCAPE_TEXT_CHARS} characters and ${MAX_SOUND_SCAPE_SECONDS} seconds.`,
     inputSchema: z.object({
       text: z.string().min(1).max(MAX_SOUND_SCAPE_TEXT_CHARS),
       performance: z.enum(["auto", "natural", "soft", "close", "breathy", "expressive"]).optional(),
@@ -1049,6 +1050,7 @@ function createServer() {
       timeline_duration_sec: z.number().min(0.1).max(MAX_SOUND_SCAPE_SECONDS).optional(),
       tail_duration_sec: z.number().min(0).max(15).optional(),
       sequence_foley: z.boolean().optional(),
+      breath_mode: z.enum(["off", "natural"]).optional(),
       cues: z.array(z.object({
         asset_id: z.string().min(1).max(64),
         kind: z.enum(["foley", "ambience"]),
@@ -1107,6 +1109,39 @@ function createServer() {
         sampleRate: 24000,
         channels: 1,
       });
+      const breathMode = args.breath_mode ?? "off";
+      let voiceForMix = voicePcm;
+      let breathProcessing = {
+        mode: breathMode,
+        applied: false,
+        candidate_count: 0,
+        inhale_count: 0,
+        exhale_count: 0,
+        repositioned_count: 0,
+      };
+      if (breathMode === "natural") {
+        const breathAnalysis = analyzeBreathSegments({
+          samples: voicePcm.channels[0],
+          sampleRate: voicePcm.sampleRate,
+        });
+        const breathRepair = repositionOpeningBreaths({
+          samples: voicePcm.channels[0],
+          sampleRate: voicePcm.sampleRate,
+          analysis: breathAnalysis,
+        });
+        voiceForMix = { ...voicePcm, channels: [breathRepair.samples] };
+        const acceptedBreaths = breathAnalysis.breaths.filter((breath) => breath.accepted);
+        breathProcessing = {
+          mode: breathMode,
+          applied: breathRepair.adjustments.length > 0,
+          candidate_count: acceptedBreaths.length,
+          inhale_count: acceptedBreaths.filter((breath) => breath.breathType === "inhale").length,
+          exhale_count: acceptedBreaths.filter((breath) => breath.breathType === "exhale").length,
+          repositioned_count: breathRepair.adjustments.length,
+          duration_preserved: breathRepair.durationPreserved,
+          speech_samples_preserved: breathRepair.speechSamplesPreserved,
+        };
+      }
       if (voicePcm.durationSec > MAX_SOUND_SCAPE_SECONDS) {
         throw new Error("Continuous voice exceeds the " + MAX_SOUND_SCAPE_SECONDS + " second limit; shorten the text");
       }
@@ -1158,7 +1193,7 @@ function createServer() {
       }
 
       const mix = mixSoundscape({
-        voicePcm,
+        voicePcm: voiceForMix,
         totalDurationSec: timelineDurationSec,
         assets: loadedAssets,
         cues: resolvedCues,
@@ -1220,6 +1255,7 @@ function createServer() {
           audio_mime_type: "audio/wav",
           duration_sec: mix.durationSec,
           voice_duration_sec: voicePcm.durationSec,
+          breath_processing: breathProcessing,
           timeline_duration_sec: timelineDurationSec,
           tail_duration_sec: Number(timelinePlan.tailDurationSec.toFixed(3)),
           requested_tail_duration_sec: timelinePlan.requestedTailDurationSec,

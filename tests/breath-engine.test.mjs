@@ -85,6 +85,18 @@ test("does not move an exhale or a breath with too little preceding silence", ()
   assert.equal(repositionOpeningBreaths({ samples: shortLead, sampleRate, analysis: shortAnalysis }).adjustments.length, 0);
 });
 
+test("does not reposition a low-confidence inhale candidate", () => {
+  const samples = fixture("in");
+  const analysis = analyzeBreathSegments({ samples, sampleRate });
+  const lowConfidence = {
+    ...analysis,
+    breaths: analysis.breaths.map((breath) => ({ ...breath, confidence: 0.49 })),
+  };
+  const result = repositionOpeningBreaths({ samples, sampleRate, analysis: lowConfidence });
+  assert.equal(result.adjustments.length, 0);
+  assert.deepEqual(result.samples, samples);
+});
+
 test("rejects mismatched analysis and invalid input", () => {
   const samples = fixture("in");
   const analysis = analyzeBreathSegments({ samples, sampleRate });

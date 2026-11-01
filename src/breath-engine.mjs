@@ -261,7 +261,7 @@ export function repositionOpeningBreaths({
   }
 
   const candidates = analysis.breaths
-    .filter((breath) => breath.accepted && breath.breathType === "inhale" && breath.nextSpeechStartSample != null)
+    .filter((breath) => breath.accepted && breath.confidence >= 0.5 && breath.breathType === "inhale" && breath.nextSpeechStartSample != null)
     .sort((a, b) => b.startSample - a.startSample);
   let output = new Float32Array(samples);
   const adjustments = [];

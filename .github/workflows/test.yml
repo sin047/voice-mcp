@@ -214,6 +214,8 @@ jobs:
             assert.ok(continuous.inputSchema.properties.timeline_duration_sec);
             assert.ok(continuous.inputSchema.properties.tail_duration_sec);
             assert.ok(continuous.inputSchema.properties.sequence_foley);
+            assert.deepEqual(continuous.inputSchema.properties.breath_mode.enum, ["off", "natural"]);
+            assert.ok(continuous.description.includes("high-confidence opening inhales"));
             assert.ok(continuous.inputSchema.properties.cues.items.properties.source_offset_sec);
             assert.ok(continuous.inputSchema.properties.cues.items.properties.normalization_target_rms);
             assert.ok(continuous.description.includes("pure-Foley/ambience tail after the generated voice"));

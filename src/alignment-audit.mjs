@@ -15,11 +15,18 @@ function usableAlignment(value) {
  * and cannot prove that the rendered waveform contains every intended word.
  */
 export function auditCharacterAlignment({ expectedText, alignment, normalizedAlignment } = {}) {
+  const expected = stripAudioTags(expectedText ?? "");
   const candidates = [
     ["normalized", normalizedAlignment],
     ["raw", alignment],
-  ];
-  const selected = candidates.find(([, value]) => usableAlignment(value));
+  ].filter(([, value]) => usableAlignment(value));
+
+  // Prefer a character stream that exactly matches the text sent for speech.
+  // Normalized alignment may be expanded/rewritten by the provider and should
+  // not create a false mismatch when raw alignment is an exact match.
+  const selected = candidates.find(([, value]) => value.characters.join("") === expected)
+    || candidates[0];
+
   if (!selected) {
     return {
       available: false,
@@ -31,7 +38,6 @@ export function auditCharacterAlignment({ expectedText, alignment, normalizedAli
   }
 
   const [source, data] = selected;
-  const expected = stripAudioTags(expectedText ?? "");
   const actual = data.characters.join("");
   const starts = data.character_start_times_seconds;
   const ends = data.character_end_times_seconds;
@@ -59,6 +65,6 @@ export function auditCharacterAlignment({ expectedText, alignment, normalizedAli
     first_character_start_sec: starts[0],
     final_character_end_sec: ends[ends.length - 1],
     issues,
-    note: "Alignment diagnostics are not ASR and cannot verify that the waveform audibly contains every intended word.",
+    note: "Alignment diagnostics are not ASR and cannot verify that the rendered waveform audibly contains every intended word.",
   };
 }

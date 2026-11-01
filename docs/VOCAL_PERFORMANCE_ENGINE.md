@@ -78,6 +78,21 @@ User feedback: “挺像的” (“sounds quite realistic”).
 
 Status: the two-tag combination passed an initial subjective listening check on the current voice. This is not yet an isolated A/B validation of each tag, and it does not validate the rest of the catalogue. Keep the existing voice, B2.1 breath settings, and mix parameters unchanged. No Foley assets or gain settings were modified.
 
+## Second listening result — breathing pair
+
+The current voice was auditioned once with the following two explicit tags in the same short passage:
+- `[heavy ragged breathing]` after “让我缓口气”.
+- `[ragged exhale]` after “再靠近一点”.
+
+User feedback: both sounded good and should be retained; `heavy ragged breathing` is the preferred of the two.
+
+Status:
+- `heavy_ragged_breathing`: accepted for the preferred cue set; first choice.
+- `ragged_exhale`: accepted for the preferred cue set; approved alternate/complement.
+- Validation scope is this combined audition on the current voice; no isolated A/B claim is made.
+- Keep the current voice, model, B2.1 breath settings, and mix parameters unchanged.
+- No Foley assets or gain settings were modified.
+
 ## Validation plan
 
 1. Test the planner with synthetic text only; no TTS.

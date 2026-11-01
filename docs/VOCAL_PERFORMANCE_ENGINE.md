@@ -151,3 +151,8 @@ This is a usage convention only. It does not change TTS settings, add audio proc
 - No automatic inference from sexual/action keywords.
 - No changes to Foley gain, pan, fades, source offsets, or one-action/one-asset policy.
 - No new environment variables or runtime dependencies.
+
+
+## beta.43 · Scene Director
+
+The Scene Director composes multiple explicitly selected vocal presets across exact ordered text beats, optional pauses, optional rain/desk ambience and explicit Foley actions. It is deterministic and planning-only; the render path remains a single continuous TTS synthesis. See docs/SCENE_DIRECTOR.md.

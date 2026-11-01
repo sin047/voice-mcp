@@ -104,6 +104,17 @@ test("rejects anchors outside their beat and anchors without a selected preset",
   }), /without a vocal_preset/);
 });
 
+test("rejects untrusted inline audio tags when an approved preset enables raw tag preservation", () => {
+  assert.throws(() => planSceneDirector({
+    text: "[unverified cue]你好。",
+    beats: [{
+      text: "[unverified cue]你好。",
+      vocal_preset: "breathless_dialogue",
+      anchors: [{ slot: "dialogue", anchor_text: "你好" }],
+    }],
+  }), /must not contain existing bracketed audio tags/);
+});
+
 test("requires a matching uploaded ambience asset", () => {
   assert.throws(() => planSceneDirector({
     text: "雨声里说话。",

@@ -172,6 +172,9 @@ export function planSceneDirector({
   if (reconstructedText !== text) {
     throw new Error("Ordered beat text must concatenate exactly to the scene text");
   }
+  if (hasVocalTags && /\[[A-Za-z][^\]\r\n]{0,179}\]/u.test(text)) {
+    throw new Error("Scene source text must not contain existing bracketed audio tags; add approved tags through vocal presets");
+  }
 
   let foleyPlan = null;
   if (foleyActions.length > 0) {

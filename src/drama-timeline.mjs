@@ -23,7 +23,7 @@ export function createDramaTimeline(input) {
   const voiceGain = boundedNumber(input.voiceGain ?? 0.9, "voiceGain", 0, 1);
   const ambienceBusGain = boundedNumber(input.ambienceBusGain ?? 0.82, "ambienceBusGain", 0, 1);
   const foleyBusGain = boundedNumber(input.foleyBusGain ?? 0.9, "foleyBusGain", 0, 1);
-  const breathBusGain = boundedNumber(input.breathBusGain ?? 0.58, "breathBusGain", 0, 1);
+  const breathBusGain = boundedNumber(input.breathBusGain ?? 0.75, "breathBusGain", 0, 1);
   const masterGain = boundedNumber(input.masterGain ?? 0.85, "masterGain", 0, 1);
   const duckingAmount = boundedNumber(input.duckingAmount ?? 0.75, "duckingAmount", 0, 1);
   const foleyDuckingDepth = boundedNumber(input.foleyDuckingDepth ?? 0.35, "foleyDuckingDepth", 0, 1);
@@ -52,13 +52,13 @@ export function createDramaTimeline(input) {
     }
 
     const atSec = boundedNumber(cue.atSec ?? 0, "atSec", 0, duration);
-    const defaultGain = kind === "ambience" ? 0.1 : kind === "breath" ? 0.14 : 0.22;
+    const defaultGain = kind === "ambience" ? 0.1 : kind === "breath" ? 0.28 : 0.22;
     const gain = boundedNumber(cue.gain ?? defaultGain, "gain", 0, 0.7);
     const pan = boundedNumber(cue.pan ?? 0, "pan", -1, 1);
     const distanceMeters = boundedNumber(cue.distanceMeters ?? 1.5, "distanceMeters", 0.5, 8);
     const sourceOffsetSec = boundedNumber(cue.sourceOffsetSec ?? 0, "sourceOffsetSec", 0, MAX_SECONDS);
     const normalizationTargetRms = boundedNumber(
-      cue.normalizationTargetRms ?? (kind === "breath" ? 0.04 : 0.1),
+      cue.normalizationTargetRms ?? (kind === "breath" ? 0.06 : 0.1),
       "normalizationTargetRms",
       0.01,
       0.2,

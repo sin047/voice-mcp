@@ -180,3 +180,8 @@ Rules:
 - No Python/NumPy/Qwen3-ASR installation in the Zeabur container.
 - No Spatial Voice or Call integration.
 - No automatic Foley layering.
+
+
+## Listening feedback refinement (beta.37)
+
+The first live sample was clear but sounded too much like an outward warm-air huff. The breathy performance prompt now asks for a quiet inward nasal inhale and explicitly rejects an outward huff. This changes only descriptive direction text: the `[inhales]` event, B2.1 level, voice ID, model, stability and mix levels remain unchanged. Re-test once after deployment; do not compensate by increasing gain.

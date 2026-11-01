@@ -43,7 +43,7 @@ const EMOTION_PROFILES = Object.freeze({
 const PERFORMANCE_DIRECTIONS = {
   soft: "soft-spoken, warm, unhurried",
   close: "low, close-mic, quiet, unhurried",
-  breathy: "low, close-mic, restrained, breath-led",
+  breathy: "quiet inward nasal inhale, no outward huff",
   expressive: "warm, emotionally expressive, natural",
 };
 
@@ -276,7 +276,11 @@ export function createPerformancePlan(text, options = {}) {
     selectedDirection = PERFORMANCE_DIRECTIONS[mode];
   }
   if (emotionProfile) {
-    selectedDirection = mergeDirectionPrefix(emotionProfile.direction, selectedDirection);
+    if (mode === "breathy" && emotion === "tender" && !explicitDirection) {
+      selectedDirection = "tender, quiet inward nasal inhale, no outward huff";
+    } else {
+      selectedDirection = mergeDirectionPrefix(emotionProfile.direction, selectedDirection);
+    }
   }
 
   const safeDirection = trimDirectionForText(selectedDirection, baseText);

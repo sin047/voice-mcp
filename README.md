@@ -2,7 +2,7 @@
 
 A platform-neutral Node.js MCP server for ElevenLabs voice generation, expressive delivery and mixed voice + sound-effect playback.
 
-The actively maintained development and deployment branch is `zeabur`, currently at **v1.4.0-beta.36**. It runs as a Node.js 22+ / Express 5 service with Streamable HTTP MCP and is deployed on Zeabur. The same runtime can also run on a VPS or Docker host.
+The actively maintained development and deployment branch is `zeabur`, currently at **v1.4.0-beta.37**. It runs as a Node.js 22+ / Express 5 service with Streamable HTTP MCP and is deployed on Zeabur. The same runtime can also run on a VPS or Docker host.
 
 
 
@@ -35,7 +35,7 @@ The gated MCP tool `plan_foley_cues` maps an explicitly selected action list to 
 
 Planning is deterministic and **does not call ElevenLabs**. It returns ready-to-adapt cue objects for `render_continuous_audio_timeline`, plus `sequence_foley=true` and an optional `tail_duration_sec`. At render time, actual cue positions are resolved from provider character timestamps. Sequential mode trims each Foley cue to end before the next Foley cue begins; if two anchors resolve too close together, rendering fails rather than stacking action sounds. Ambience cues remain independent and may overlap Foley.
 
-### Natural breath repair (beta.36)
+### Natural breath repair (beta.37)
 
 The continuous timeline accepts optional `breath_mode`:
 
@@ -62,7 +62,7 @@ Use `render_audio_timeline` when you intentionally need separately generated voi
 
 ## Branches
 
-- `zeabur`: **active maintained branch** for development and current Zeabur deployment; currently v1.4.0-beta.36.
+- `zeabur`: **active maintained branch** for development and current Zeabur deployment; currently v1.4.0-beta.37.
 - `voice-v1.4-private-drama`: historical v1.4 beta.7 snapshot. It is not the active deployment branch; do not switch to it without comparing its history against `zeabur`.
 - `main`: repository default branch; it may not contain the latest maintained v1.4 work. Do not assume it is the deployment branch.
 
@@ -252,3 +252,6 @@ MIT. This fork preserves the upstream license from [garan0613/voice-mcp](https:/
 ## Persistent recording archive
 
 The optional `speak_with_soundscape` parameter `save_recording: true` saves the completed mixed WAV and its metadata to a private persistent recording directory. Saving is opt-in and defaults to false. Configure `RECORDING_DIR` on a persistent volume; see [ZEABUR.md](./ZEABUR.md) for storage limits, private archive endpoints and backup guidance.
+
+
+The `breathy` performance direction now explicitly requests a quiet inward nasal inhale and rejects an outward huff. The approved B2.1 breath level and voice settings are unchanged; validate the new direction with one controlled listening sample before further tuning.

@@ -51,6 +51,30 @@ test("breathy mode uses a natural inhale or no tag, never a marked exhale", () =
   assert.equal(quiet.rendered_text, text);
 });
 
+test("breathy direction requests a quiet inward inhale rather than an outward huff", () => {
+  const text = "我本来想告诉你一件事，可是看见你以后，又突然忘记了要说什么。";
+  const plan = createPerformancePlan(text, {
+    performance: "breathy",
+    recentPatterns: ["none"],
+  });
+  assert.equal(plan.direction, "quiet inward nasal inhale, no outward huff");
+  assert.equal(plan.breath_event, "inhale");
+  assert.match(plan.rendered_text, /\\[inhales\\]/);
+});
+
+test("tender breathy delivery keeps the inhale direction within the provider prompt budget", () => {
+  const text = "嗯，慢一点……先听我说。靠近一些。好，吸一口气，我们继续。";
+  const plan = createPerformancePlan(text, {
+    performance: "breathy",
+    emotion: "tender",
+    recentPatterns: ["none"],
+  });
+  assert.equal(plan.direction, "tender, quiet inward nasal inhale, no outward huff");
+  assert.equal(plan.breath_event, "inhale");
+  assert.match(plan.rendered_text, /\\[inhales\\]/);
+  assert.doesNotMatch(plan.direction, /breath-led|exhale|huffing/i);
+});
+
 test("emotion profiles map neutral delivery to subtle B1 without a forced inhale", () => {
   const text = "今日はゆっくり話そう。急がなくても大丈夫だから、落ち着いて聞いていてね。";
   const plan = createPerformancePlan(text, { performance: "natural", emotion: "neutral" });

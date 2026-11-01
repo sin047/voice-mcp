@@ -1,10 +1,10 @@
 # Vocal Performance Engine
 
-Status: deterministic cue planner and five-category catalogue in beta.39; reusable vocal-performance preset registry/planner added in beta.40; no synthesis integration
+Status: deterministic cue planner and five-category catalogue in beta.39; reusable vocal-performance preset registry/planner added in beta.40; beta.41 explicitly connects approved preset output to continuous timeline synthesis through opt-in raw-tag preservation.
 
 ## Purpose
 
-See the practical usage guide: [Vocal Cue Playbook](./VOCAL_CUE_PLAYBOOK.md). Reusable bundles are documented in [Vocal Performance Presets](./VOCAL_PERFORMANCE_PRESETS.md).
+See the practical usage guide: [Vocal Cue Playbook](./VOCAL_CUE_PLAYBOOK.md). Reusable bundles are documented in [Vocal Performance Presets](./VOCAL_PERFORMANCE_PRESETS.md). When rendering planner output, set `raw_tags: true` on `render_continuous_audio_timeline`.
 
 Turn the user's reference guide into deterministic, inspectable TTS performance instructions. The first phase only plans tags around exact text anchors. It does not call ElevenLabs, alter generated audio, infer actions from keywords, or change the approved voice and mix settings.
 

@@ -9,8 +9,8 @@ Provide reusable, named combinations of already-reviewed vocal cues. A preset se
 The preset tools are planning-only:
 - `list_vocal_presets` returns the curated preset catalogue.
 - `plan_vocal_preset` places a selected preset around exact text anchors and returns `rendered_text`.
-- Both make zero ElevenLabs requests and consume zero TTS credits.
-- Review the result, then pass `rendered_text` to the existing continuous timeline renderer when an audio render is actually wanted.
+- Both make zero ElevenLabs requests and consume zero TTS credits. The continuous timeline renderer accepts `raw_tags: true` so approved planner output can be synthesized without stripping its tags.
+- Review the result, then pass `rendered_text` to `render_continuous_audio_timeline` with `raw_tags: true` when an audio render is actually wanted. The renderer defaults to stripping inline tags for safety; this explicit flag is required to preserve the planner-approved tags.
 
 No new dependency or environment variable is required.
 

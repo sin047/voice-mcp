@@ -41,7 +41,7 @@ const MODEL_ID = process.env.ELEVENLABS_MODEL_ID || "eleven_v4";
 const OUTPUT_FORMAT = process.env.ELEVENLABS_OUTPUT_FORMAT || "mp3_44100_128";
 const PLAYER_URI = "ui://voice-mcp/player.html";
 const PLAYER_MIME = "text/html;profile=mcp-app";
-const VERSION = "1.4.0-beta.40";
+const VERSION = "1.4.0-beta.41";
 const MAX_CONTEXT_CHARS = 4000;
 const MAX_SPEAK_CHARS = 4000;
 const MAX_SOUND_SCAPE_TEXT_CHARS = 1200;
@@ -1201,9 +1201,10 @@ function createServer() {
 
   mcp.registerTool("render_continuous_audio_timeline", {
     title: `${BOT_NAME}'s Continuous Voice Timeline`,
-    description: `Synthesize one continuous voice passage exactly once, then overlay independently timed Foley and ambience. Use after_text on a cue to place it immediately after an exact phrase in the spoken text using ElevenLabs character timestamps; use at_sec for absolute timing. Optional tail_duration_sec adds a pure-Foley/ambience tail after the generated voice without needing to know the voice duration in advance; timeline_duration_sec remains available as an absolute override. Set sequence_foley=true to trim each Foley cue at the next Foley cue start, preventing action sounds from overlapping. Effects may occupy silent intervals or continue after the voice; no additional TTS calls are made. Optional breath_mode='natural' runs a pure-code pass after the single synthesis and repositions only high-confidence opening inhales by moving silence; it does not add clips or change speech samples. Default 'off' preserves current behavior. This avoids extra TTS chunk boundaries. Call list_sound_assets first. Text and finished audio are limited to ${MAX_SOUND_SCAPE_TEXT_CHARS} characters and ${MAX_SOUND_SCAPE_SECONDS} seconds.`,
+    description: `Synthesize one continuous voice passage exactly once, then overlay independently timed Foley and ambience. Use after_text on a cue to place it immediately after an exact phrase in the spoken text using ElevenLabs character timestamps; use at_sec for absolute timing. Optional tail_duration_sec adds a pure-Foley/ambience tail after the generated voice without needing to know the voice duration in advance; timeline_duration_sec remains available as an absolute override. Set sequence_foley=true to trim each Foley cue at the next Foley cue start, preventing action sounds from overlapping. Effects may occupy silent intervals or continue after the voice; no additional TTS calls are made. Optional breath_mode='natural' runs a pure-code pass after the single synthesis and repositions only high-confidence opening inhales by moving silence; it does not add clips or change speech samples. Default 'off' preserves current behavior. When passing tagged text from plan_vocal_preset, set raw_tags=true to preserve those inline TTS tags; the default false keeps ordinary untrusted inline tags stripped. This avoids extra TTS chunk boundaries. Call list_sound_assets first. Text and finished audio are limited to ${MAX_SOUND_SCAPE_TEXT_CHARS} characters and ${MAX_SOUND_SCAPE_SECONDS} seconds.`,
     inputSchema: z.object({
       text: z.string().min(1).max(MAX_SOUND_SCAPE_TEXT_CHARS),
+      raw_tags: z.boolean().optional(),
       performance: z.enum(["auto", "natural", "soft", "close", "breathy", "expressive"]).optional(),
       emotion: z.enum(["neutral", "calm", "warm", "tender", "curious", "excited", "nervous", "intense", "tired"]).optional(),
       language: z.enum(["auto", "zh", "ja", "en", "ko"]).optional(),
@@ -1264,6 +1265,7 @@ function createServer() {
         direction: args.direction,
         previousText: args.previous_text,
         nextText: args.next_text,
+        rawTags: args.raw_tags === true,
         includeAlignment: true,
         outputFormat: "pcm_24000",
         recordEvent: false,
@@ -1775,6 +1777,7 @@ app.get("/status", (_req, res) => {
       vocal_cue_catalog: SOUNDSCAPE_MCP_ENABLED,
       vocal_performance_presets: SOUNDSCAPE_MCP_ENABLED,
       vocal_preset_planner: SOUNDSCAPE_MCP_ENABLED,
+      continuous_timeline_raw_tags: SOUNDSCAPE_MCP_ENABLED,
       voice_chunk_planning: true,
       speak_long: true,
       long_voice_max_seconds: MAX_LONG_VOICE_SECONDS,

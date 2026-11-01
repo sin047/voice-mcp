@@ -39,6 +39,7 @@ jobs:
           node --check src/breath-engine.mjs
           node --check src/vocal-cue-planner.mjs
           node --check src/vocal-performance-presets.mjs
+          node --check src/scene-director.mjs
       - name: Regression tests
         run: npm test
       - name: Install runtime dependencies
@@ -61,7 +62,7 @@ jobs:
             import assert from "node:assert/strict";
             const status = JSON.parse(fs.readFileSync("/tmp/voice-status.json", "utf8"));
             assert.equal(status.status, "ok");
-            assert.equal(status.version, "1.4.0-beta.42");
+            assert.equal(status.version, "1.4.0-beta.43");
             assert.equal(status.features.request_id_continuity, true);
             assert.equal(status.features.language_auto_detection, true);
             assert.equal(status.features.local_drama_preview, true);
@@ -74,6 +75,8 @@ jobs:
             assert.equal(status.features.vocal_cue_catalog, true);
             assert.equal(status.features.vocal_performance_presets, true);
             assert.equal(status.features.vocal_preset_planner, true);
+            assert.equal(status.features.scene_director, true);
+            assert.equal(status.features.continuous_timeline_pauses, true);
             assert.equal(status.features.continuous_timeline_raw_tags, true);
             assert.equal(status.features.continuous_timeline_voice_only, true);
             assert.equal(status.features.speak_long, true);
@@ -209,6 +212,7 @@ jobs:
             assert.ok(names.includes("render_continuous_audio_timeline"));
             assert.ok(names.includes("plan_foley_cues"));
             assert.ok(names.includes("plan_vocal_cues"));
+            assert.ok(names.includes("plan_scene_director"));
             assert.ok(names.includes("plan_voice_chunks"));
             assert.ok(names.includes("speak_long"));
             const speakLong = tools.find((tool) => tool.name === "speak_long");
@@ -230,10 +234,16 @@ jobs:
             assert.ok(continuous.description.includes("high-confidence opening inhales"));
             assert.ok(continuous.description.includes("raw_tags=true"));
             assert.equal(continuous.inputSchema.properties.raw_tags.type, "boolean");
+            assert.ok(continuous.inputSchema.properties.pauses);
+            assert.ok(continuous.description.includes("actual silent PCM frames"));
             assert.equal(continuous.inputSchema.properties.cues.minItems, undefined);
             assert.ok(continuous.inputSchema.properties.cues.items.properties.source_offset_sec);
             assert.ok(continuous.inputSchema.properties.cues.items.properties.normalization_target_rms);
             assert.ok(continuous.description.includes("pure-Foley/ambience tail after the generated voice"));
+            const sceneDirector = tools.find((tool) => tool.name === "plan_scene_director");
+            assert.ok(sceneDirector.description.includes("exact ordered text beats"));
+            assert.ok(sceneDirector.inputSchema.properties.beats);
+            assert.ok(sceneDirector.inputSchema.properties.foley_actions);
             const vocalPlanner = tools.find((tool) => tool.name === "plan_vocal_cues");
             assert.ok(vocalPlanner.description.includes("does NOT call ElevenLabs"));
             assert.ok(vocalPlanner.description.includes("never inferred from keywords"));

@@ -11,6 +11,7 @@ import { getFoleyActionCatalog, planFoleyCues, resolveFoleyTimelineDuration, seq
 import { analyzeBreathSegments, repositionOpeningBreaths } from "./breath-engine.mjs";
 import { getVocalCueCatalog, planVocalCues } from "./vocal-cue-planner.mjs";
 import { listVocalPerformancePresets, planVocalPreset } from "./vocal-performance-presets.mjs";
+import { insertTimelinePauses, planSceneDirector, resolveScenePauses, shiftCueTimeForPauses } from "./scene-director.mjs";
 import { planVoiceChunks } from "./voice-chunker.mjs";
 import { auditCharacterAlignment } from "./alignment-audit.mjs";
 import { buildSoundscapePresetCues, parseSoundscapeDirective } from "./soundscape-presets.mjs";
@@ -41,7 +42,7 @@ const MODEL_ID = process.env.ELEVENLABS_MODEL_ID || "eleven_v4";
 const OUTPUT_FORMAT = process.env.ELEVENLABS_OUTPUT_FORMAT || "mp3_44100_128";
 const PLAYER_URI = "ui://voice-mcp/player.html";
 const PLAYER_MIME = "text/html;profile=mcp-app";
-const VERSION = "1.4.0-beta.42";
+const VERSION = "1.4.0-beta.43";
 const MAX_CONTEXT_CHARS = 4000;
 const MAX_SPEAK_CHARS = 4000;
 const MAX_SOUND_SCAPE_TEXT_CHARS = 1200;
@@ -833,6 +834,83 @@ function createServer() {
   );
 
   mcp.registerTool(
+    "plan_scene_director",
+    {
+      title: "Plan a complete voice scene",
+      description: "Compose one continuous voice scene from exact ordered text beats, explicitly selected vocal presets, optional aligned pauses, an optional uploaded rain/desk ambience bed, and explicitly selected Foley actions. This deterministic planning tool does NOT call ElevenLabs or consume TTS credits. Beat text must concatenate exactly to the original text. Actions are never inferred from keywords. Review render_request, then pass it to render_continuous_audio_timeline; tagged text requires raw_tags=true. Aligned pauses are inserted as silence in the single rendered voice passage, and later text-anchored Foley cues move with them.",
+      inputSchema: z.object({
+        text: z.string().min(1).max(MAX_SOUND_SCAPE_TEXT_CHARS),
+        beats: z.array(z.object({
+          id: z.string().min(1).max(40).optional(),
+          text: z.string().min(1).max(MAX_SOUND_SCAPE_TEXT_CHARS),
+          vocal_preset: z.enum([
+            "close_soft",
+            "heavy_breathing",
+            "breathless_dialogue",
+            "ragged_release",
+            "breathing_to_dialogue",
+            "afterglow",
+          ]).optional(),
+          anchors: z.array(z.object({
+            slot: z.string().min(1).max(40),
+            anchor_text: z.string().min(1).max(160),
+            occurrence: z.number().int().min(1).max(10).optional(),
+          })).min(1).max(6).optional(),
+          pause_after_text: z.string().min(1).max(160).optional(),
+          pause_after_occurrence: z.number().int().min(1).max(10).optional(),
+          pause_after_ms: z.number().int().min(80).max(3000).optional(),
+        })).min(1).max(12),
+        foley_actions: z.array(z.object({
+          action: z.enum([
+            "clothing_rustle",
+            "package_open",
+            "box_open",
+            "liquid_application",
+            "continuous_rhythm",
+            "bed_objects",
+            "wet_detail",
+            "ending_detail",
+          ]),
+          after_text: z.string().min(1).max(160),
+          occurrence: z.number().int().min(1).max(10).optional(),
+          duration_sec: z.number().min(0.1).max(MAX_SOUND_SCAPE_SECONDS).optional(),
+        })).max(8).default([]),
+        ambience_preset: z.enum(["rain", "desk"]).optional(),
+        tail_duration_sec: z.number().min(0).max(15).optional(),
+      }),
+    },
+    async (args) => {
+      try {
+        const needsAssets = args.foley_actions.length > 0 || args.ambience_preset != null;
+        const assets = needsAssets ? await audioAssetStore.list() : [];
+        const plan = planSceneDirector({
+          text: args.text,
+          beats: args.beats,
+          foleyActions: args.foley_actions,
+          ambiencePreset: args.ambience_preset,
+          assets,
+          tailDurationSec: args.tail_duration_sec ?? 0,
+        });
+        return {
+          content: [{
+            type: "text",
+            text: "Planned " + plan.beat_count + " scene beats, " + plan.foley_action_count +
+              " Foley action(s), and " + plan.pause_total_ms + "ms of aligned pauses. No ElevenLabs request was made.",
+          }],
+          structuredContent: plan,
+        };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        return {
+          content: [{ type: "text", text: "Scene Director planning failed: " + message }],
+          structuredContent: { error: message, estimated_tts_calls: 0 },
+          isError: true,
+        };
+      }
+    },
+  );
+
+  mcp.registerTool(
     "plan_foley_cues",
     {
       title: "Plan Foley action cues",
@@ -1201,7 +1279,7 @@ function createServer() {
 
   mcp.registerTool("render_continuous_audio_timeline", {
     title: `${BOT_NAME}'s Continuous Voice Timeline`,
-    description: `Synthesize one continuous voice passage exactly once, then overlay independently timed Foley and ambience. Use after_text on a cue to place it immediately after an exact phrase in the spoken text using ElevenLabs character timestamps; use at_sec for absolute timing. Optional tail_duration_sec adds a pure-Foley/ambience tail after the generated voice without needing to know the voice duration in advance; timeline_duration_sec remains available as an absolute override. Set sequence_foley=true to trim each Foley cue at the next Foley cue start, preventing action sounds from overlapping. Effects may occupy silent intervals or continue after the voice; no additional TTS calls are made. Optional breath_mode='natural' runs a pure-code pass after the single synthesis and repositions only high-confidence opening inhales by moving silence; it does not add clips or change speech samples. Default 'off' preserves current behavior. When passing tagged text from plan_vocal_preset, set raw_tags=true to preserve those inline TTS tags; the default false keeps ordinary untrusted inline tags stripped. This avoids extra TTS chunk boundaries. If adding Foley or ambience, call list_sound_assets first; omit cues or pass an empty array for voice-only rendering. Text and finished audio are limited to ${MAX_SOUND_SCAPE_TEXT_CHARS} characters and ${MAX_SOUND_SCAPE_SECONDS} seconds.`,
+    description: `Synthesize one continuous voice passage exactly once, then overlay independently timed Foley and ambience. Use after_text on a cue to place it immediately after an exact phrase in the spoken text using ElevenLabs character timestamps; use at_sec for absolute timing. Optional tail_duration_sec adds a pure-Foley/ambience tail after the generated voice without needing to know the voice duration in advance; timeline_duration_sec remains available as an absolute override. Set sequence_foley=true to trim each Foley cue at the next Foley cue start, preventing action sounds from overlapping. Effects may occupy silent intervals or continue after the voice; no additional TTS calls are made. Optional breath_mode='natural' runs a pure-code pass after the single synthesis and repositions only high-confidence opening inhales by moving silence; it does not add clips or change speech samples. Optional pauses insert actual silent PCM frames after exact aligned phrases, preserving speech samples and shifting later text-anchored Foley cues. Default 'off' preserves current behavior. When passing tagged text from plan_vocal_preset, set raw_tags=true to preserve those inline TTS tags; the default false keeps ordinary untrusted inline tags stripped. This avoids extra TTS chunk boundaries. If adding Foley or ambience, call list_sound_assets first; omit cues or pass an empty array for voice-only rendering. Text and finished audio are limited to ${MAX_SOUND_SCAPE_TEXT_CHARS} characters and ${MAX_SOUND_SCAPE_SECONDS} seconds.`,
     inputSchema: z.object({
       text: z.string().min(1).max(MAX_SOUND_SCAPE_TEXT_CHARS),
       raw_tags: z.boolean().optional(),
@@ -1215,6 +1293,11 @@ function createServer() {
       tail_duration_sec: z.number().min(0).max(15).optional(),
       sequence_foley: z.boolean().optional(),
       breath_mode: z.enum(["off", "natural"]).optional(),
+      pauses: z.array(z.object({
+        after_text: z.string().min(1).max(160),
+        occurrence: z.number().int().min(1).max(10).optional(),
+        duration_ms: z.number().int().min(80).max(3000),
+      })).max(12).default([]),
       cues: z.array(z.object({
         asset_id: z.string().min(1).max(64),
         kind: z.enum(["foley", "ambience"]),
@@ -1310,8 +1393,20 @@ function createServer() {
       if (voicePcm.durationSec > MAX_SOUND_SCAPE_SECONDS) {
         throw new Error("Continuous voice exceeds the " + MAX_SOUND_SCAPE_SECONDS + " second limit; shorten the text");
       }
-      const timelinePlan = resolveFoleyTimelineDuration({
+      const resolvedPauses = resolveScenePauses({
+        alignment: result.alignment,
+        normalizedAlignment: result.normalized_alignment,
+        expectedText: stripAudioTags(result.final_text),
+        pauses: args.pauses,
         voiceDurationSec: voicePcm.durationSec,
+      });
+      const pauseInsertion = insertTimelinePauses(voiceForMix, resolvedPauses, {
+        maxDurationSec: MAX_SOUND_SCAPE_SECONDS,
+      });
+      voiceForMix = pauseInsertion.voicePcm;
+      const appliedPauses = pauseInsertion.pauses;
+      const timelinePlan = resolveFoleyTimelineDuration({
+        voiceDurationSec: voiceForMix.durationSec,
         timelineDurationSec: args.timeline_duration_sec,
         tailDurationSec: args.tail_duration_sec,
         maxDurationSec: MAX_SOUND_SCAPE_SECONDS,
@@ -1319,7 +1414,7 @@ function createServer() {
       const timelineDurationSec = timelinePlan.durationSec;
 
       const resolvedCues = args.cues.map((cue) => {
-        const atSec = cue.after_text != null
+        const originalAtSec = cue.after_text != null
           ? resolveCueTimeAfterText({
             alignment: result.alignment,
             normalizedAlignment: result.normalized_alignment,
@@ -1328,6 +1423,9 @@ function createServer() {
             occurrence: cue.occurrence ?? 1,
           })
           : cue.at_sec;
+        const atSec = cue.after_text != null
+          ? shiftCueTimeForPauses(originalAtSec, appliedPauses)
+          : originalAtSec;
         if (atSec >= timelineDurationSec - 0.01) {
           throw new Error("Cue time must fall before the end of timeline_duration_sec");
         }
@@ -1420,6 +1518,15 @@ function createServer() {
           audio_mime_type: "audio/wav",
           duration_sec: mix.durationSec,
           voice_duration_sec: voicePcm.durationSec,
+          timeline_voice_duration_sec: voiceForMix.durationSec,
+          pause_count: appliedPauses.length,
+          inserted_pause_total_ms: Math.round(pauseInsertion.insertedDurationSec * 1000),
+          pauses: appliedPauses.map((pause) => ({
+            after_text: pause.after_text,
+            occurrence: pause.occurrence,
+            at_sec: Number(pause.atSec.toFixed(3)),
+            duration_ms: pause.durationMs,
+          })),
           breath_processing: breathProcessing,
           timeline_duration_sec: timelineDurationSec,
           tail_duration_sec: Number(timelinePlan.tailDurationSec.toFixed(3)),
@@ -1777,6 +1884,8 @@ app.get("/status", (_req, res) => {
       vocal_cue_catalog: SOUNDSCAPE_MCP_ENABLED,
       vocal_performance_presets: SOUNDSCAPE_MCP_ENABLED,
       vocal_preset_planner: SOUNDSCAPE_MCP_ENABLED,
+      scene_director: SOUNDSCAPE_MCP_ENABLED,
+      continuous_timeline_pauses: SOUNDSCAPE_MCP_ENABLED,
       continuous_timeline_raw_tags: SOUNDSCAPE_MCP_ENABLED,
       continuous_timeline_voice_only: SOUNDSCAPE_MCP_ENABLED,
       voice_chunk_planning: true,

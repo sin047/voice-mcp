@@ -67,7 +67,33 @@ test("audio asset store rejects unsupported effect categories", async () => {
   try {
     await assert.rejects(
       () => store.save({ buffer: fixtureWav(), kind: "remote" }),
-      /kind must be ambience or foley/,
+      /kind must be ambience, foley, or breath/,
+    );
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("audio asset store requires and preserves inhale or exhale classification", async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), "voice-mcp-assets-"));
+  const store = createAudioAssetStore({ directory });
+  try {
+    await assert.rejects(
+      () => store.save({ buffer: fixtureWav(), kind: "breath" }),
+      /classified as inhale or exhale/,
+    );
+    const saved = await store.save({
+      buffer: fixtureWav(),
+      name: "soft inhale.wav",
+      kind: "breath",
+      breathType: "inhale",
+    });
+    assert.equal(saved.kind, "breath");
+    assert.equal(saved.breathType, "inhale");
+    assert.equal((await store.list())[0].breathType, "inhale");
+    await assert.rejects(
+      () => store.save({ buffer: fixtureWav(), kind: "foley", breathType: "exhale" }),
+      /only valid for breath assets/,
     );
   } finally {
     await rm(directory, { recursive: true, force: true });

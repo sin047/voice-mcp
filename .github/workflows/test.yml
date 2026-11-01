@@ -36,6 +36,7 @@ jobs:
           node --check src/voice-long-audio.mjs
           node --check src/soundscape-presets.mjs
           node --check src/foley-cue-planner.mjs
+          node --check src/breath-engine.mjs
       - name: Regression tests
         run: npm test
       - name: Install runtime dependencies
@@ -46,7 +47,7 @@ jobs:
           TEST_ACCESS_TOKEN="ci-only-private-drama-token-0123456789abcdef"
           PRIVATE_DRAMA_ACCESS_TOKEN="$TEST_ACCESS_TOKEN" MCP_PUBLIC_BASE_URL="https://voice.example.test" AUDIO_ASSET_DIR="/tmp/voice-mcp-assets" RECORDING_DIR="/tmp/voice-mcp-recordings" MCP_SOUNDSCAPE_TOOLS_ENABLED=true MCP_MAX_REQUESTS_PER_MINUTE=3 HOST=127.0.0.1 PORT=8765 node src/server.mjs > /tmp/voice-mcp.log 2>&1 &
           SERVER_PID=$!
-          trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
+          trap 'status=$?; kill "$SERVER_PID" 2>/dev/null || true; if [ "$status" -ne 0 ]; then cat /tmp/voice-mcp.log; fi; exit "$status"' EXIT
           for attempt in {1..20}; do
             if curl -fsS http://127.0.0.1:8765/status > /tmp/voice-status.json; then
               break
@@ -58,11 +59,13 @@ jobs:
             import assert from "node:assert/strict";
             const status = JSON.parse(fs.readFileSync("/tmp/voice-status.json", "utf8"));
             assert.equal(status.status, "ok");
-            assert.equal(status.version, "1.4.0-beta.35");
+            assert.equal(status.version, "1.4.0-beta.36");
             assert.equal(status.features.request_id_continuity, true);
             assert.equal(status.features.language_auto_detection, true);
             assert.equal(status.features.local_drama_preview, true);
             assert.equal(status.features.private_audio_asset_library, true);
+            assert.equal(status.features.breath_asset_classification, true);
+            assert.equal(status.features.automatic_breath_engine, true);
             assert.equal(status.features.persistent_recording_archive, true);
             assert.equal(status.features.continuous_voice_timeline, true);
             assert.equal(status.features.continuous_timeline_effect_tail, true);
@@ -115,6 +118,19 @@ jobs:
           ASSET_ID=$(node --input-type=module -e 'import fs from "node:fs"; const payload=JSON.parse(fs.readFileSync("/tmp/assets-list.json","utf8")); process.stdout.write(payload.assets[0].id);')
           ASSET_DELETE=$(curl -s -o /tmp/asset-delete.json -w '%{http_code}' -u "voice-mcp:$TEST_ACCESS_TOKEN" -X DELETE "http://127.0.0.1:8765/assets/$ASSET_ID")
           test "$ASSET_DELETE" = "204"
+
+          BREATH_UPLOAD=$(curl -s -o /tmp/breath-upload.json -w '%{http_code}' -u "voice-mcp:$TEST_ACCESS_TOKEN" -X POST http://127.0.0.1:8765/assets -H 'Content-Type: audio/wav' -H 'X-Asset-Name: ci-inhale.wav' -H 'X-Asset-Kind: breath' -H 'X-Asset-Breath-Type: inhale' --data-binary @/tmp/ci-audio.wav)
+          test "$BREATH_UPLOAD" = "201"
+          node --input-type=module -e '
+            import fs from "node:fs";
+            import assert from "node:assert/strict";
+            const payload = JSON.parse(fs.readFileSync("/tmp/breath-upload.json", "utf8"));
+            assert.equal(payload.asset.kind, "breath");
+            assert.equal(payload.asset.breathType, "inhale");
+          '
+          BREATH_ID=$(node --input-type=module -e 'import fs from "node:fs"; const payload=JSON.parse(fs.readFileSync("/tmp/breath-upload.json","utf8")); process.stdout.write(payload.asset.id);')
+          BREATH_DELETE=$(curl -s -o /tmp/breath-delete.json -w '%{http_code}' -u "voice-mcp:$TEST_ACCESS_TOKEN" -X DELETE "http://127.0.0.1:8765/assets/$BREATH_ID")
+          test "$BREATH_DELETE" = "204"
 
           RECORDINGS_UNAUTH=$(curl -s -o /tmp/recordings-unauthorized.json -w '%{http_code}' http://127.0.0.1:8765/recordings)
           test "$RECORDINGS_UNAUTH" = "401"
@@ -215,7 +231,10 @@ jobs:
             assert.ok(continuous.inputSchema.properties.sequence_foley);
             assert.ok(continuous.inputSchema.properties.cues.items.properties.source_offset_sec);
             assert.ok(continuous.inputSchema.properties.cues.items.properties.normalization_target_rms);
-            assert.ok(continuous.description.includes("pure-Foley/ambience tail after the generated voice"));
+            assert.ok(continuous.description.includes("pure-effects tail after the generated voice"));
+            assert.ok(continuous.description.includes("silence")); 
+            assert.ok(continuous.inputSchema.properties.breath_engine);
+            assert.ok(continuous.inputSchema.properties.breath_bus_gain);
             const foleyPlanner = tools.find((tool) => tool.name === "plan_foley_cues");
             assert.ok(foleyPlanner.description.includes("does NOT call ElevenLabs"));
             assert.ok(foleyPlanner.description.includes("trailing punctuation"));
@@ -223,7 +242,7 @@ jobs:
             assert.ok(foleyPlanner.inputSchema.properties.pure_audio_tail_sec);
             assert.equal(continuous._meta.ui.resourceUri, "ui://voice-mcp/player.html");
             const timeline = tools.find((tool) => tool.name === "render_audio_timeline");
-            assert.deepEqual(timeline.inputSchema.properties.segments.items.properties.type.enum, ["voice", "foley", "ambience", "gap"]);
+            assert.deepEqual(timeline.inputSchema.properties.segments.items.properties.type.enum, ["voice", "foley", "ambience", "breath", "gap"]);
             const speak = tools.find((tool) => tool.name === "speak");
             const soundscape = tools.find((tool) => tool.name === "speak_with_soundscape");
             assert.equal(speak._meta.ui.resourceUri, "ui://voice-mcp/player.html");
@@ -235,6 +254,7 @@ jobs:
             assert.deepEqual(speak.inputSchema.properties.emotion.enum, ["neutral", "calm", "warm", "tender", "curious", "excited", "nervous", "intense", "tired"]);
             assert.deepEqual(soundscape.inputSchema.properties.emotion.enum, ["neutral", "calm", "warm", "tender", "curious", "excited", "nervous", "intense", "tired"]);
             assert.equal(soundscape._meta.ui.resourceUri, "ui://voice-mcp/player.html");
+            assert.deepEqual(soundscape.inputSchema.properties.cues.items.properties.kind.enum, ["ambience", "foley", "breath"]);
             const caps = JSON.parse(fs.readFileSync("/tmp/mcp-initialize.json", "utf8")).result.capabilities;
             assert.deepEqual(caps.extensions["io.modelcontextprotocol/ui"].mimeTypes, ["text/html;profile=mcp-app"]);
             const resource = JSON.parse(fs.readFileSync("/tmp/mcp-player.json", "utf8")).result.contents[0];

@@ -5,6 +5,7 @@ import { createAudioAssetStore } from "./audio-assets.mjs";
 import { createRecordingStore } from "./recording-store.mjs";
 import { parseByteRange } from "./audio-range.mjs";
 import { decodeRawPcm16, encodePcm16Wav, mixSoundscape } from "./wav-audio.mjs";
+import { planBreathCues } from "./breath-engine.mjs";
 import { joinPcm16Chunks } from "./voice-long-audio.mjs";
 import { resolveCueTimeAfterText } from "./alignment-cues.mjs";
 import { planFoleyCues, resolveFoleyTimelineDuration, sequenceFoleyCues } from "./foley-cue-planner.mjs";
@@ -38,7 +39,7 @@ const MODEL_ID = process.env.ELEVENLABS_MODEL_ID || "eleven_v4";
 const OUTPUT_FORMAT = process.env.ELEVENLABS_OUTPUT_FORMAT || "mp3_44100_128";
 const PLAYER_URI = "ui://voice-mcp/player.html";
 const PLAYER_MIME = "text/html;profile=mcp-app";
-const VERSION = "1.4.0-beta.35";
+const VERSION = "1.4.0-beta.36";
 const MAX_CONTEXT_CHARS = 4000;
 const MAX_SPEAK_CHARS = 4000;
 const MAX_SOUND_SCAPE_TEXT_CHARS = 1200;
@@ -95,7 +96,7 @@ const recentPerformancePatterns = [];
 const cors = (_req, res, next) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,PATCH,DELETE,OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, Accept, Mcp-Session-Id, Last-Event-ID, X-Asset-Name, X-Asset-Kind, X-Recording-Text, X-Recording-Performance, X-Recording-Language");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, Accept, Mcp-Session-Id, Last-Event-ID, X-Asset-Name, X-Asset-Kind, X-Asset-Breath-Type, X-Recording-Text, X-Recording-Performance, X-Recording-Language");
   if (_req.method === "OPTIONS") return res.status(204).end();
   next();
 };
@@ -133,8 +134,9 @@ app.post(
     let name = req.get("x-asset-name") || "sound-effect.wav";
     try { name = decodeURIComponent(name); } catch { /* Keep the original safe-name input. */ }
     const kind = req.get("x-asset-kind") || "foley";
+    const breathType = req.get("x-asset-breath-type") || undefined;
     try {
-      const asset = await audioAssetStore.save({ buffer: req.body, name, kind });
+      const asset = await audioAssetStore.save({ buffer: req.body, name, kind, breathType });
       return res.status(201).json({ asset });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -806,7 +808,7 @@ function createServer() {
     "list_sound_assets",
     {
       title: "List sound-effect library",
-      description: "List private WAV sound assets already uploaded to this voice-mcp instance. Call this first to obtain asset_id values before using speak_with_soundscape.",
+      description: "List private WAV sound assets already uploaded to this voice-mcp instance, including breath assets classified as inhale or exhale. Call this first to obtain asset_id values before using soundscape tools.",
       inputSchema: z.object({}),
     },
     async () => {
@@ -816,7 +818,7 @@ function createServer() {
           audioAssetStore.getUsage(),
         ]);
         const summary = assets.length
-          ? assets.map((asset) => `- ${asset.name} | asset_id=${asset.id} | ${asset.kind} | ${asset.durationSec}s | ${asset.channels}ch`).join("\\n")
+          ? assets.map((asset) => `- ${asset.name} | asset_id=${asset.id} | ${asset.kind}${asset.breathType ? "/" + asset.breathType : ""} | ${asset.durationSec}s | ${asset.channels}ch`).join("\\n")
           : "The sound-effect library is empty. Upload WAV files from the Private Drama preview first.";
         return {
           content: [{ type: "text", text: summary }],
@@ -833,7 +835,7 @@ function createServer() {
     "plan_foley_cues",
     {
       title: "Plan Foley action cues",
-      description: "Plan a small sequence of approved Foley actions for render_continuous_audio_timeline. This is a deterministic planning-only tool: it does NOT call ElevenLabs, synthesize speech, or consume TTS credits. Choose only actions actually described or clearly implied by the spoken text, quote an exact after_text anchor from that text for each action, and supply actions in spoken-text order. Trailing punctuation immediately following an anchor is included automatically so the Foley cue lands after the complete spoken phrase. Each action maps to exactly one uploaded Foley asset with the existing approved gain, pan, source offset, and fade defaults. The returned cues are ready to adapt for render_continuous_audio_timeline; pass sequence_foley=true and tail_duration_sec from the plan. If pure_audio_tail_sec is requested, the last action anchor must be at the end of the spoken text.",
+      description: "Plan a small sequence of approved Foley actions for render_continuous_audio_timeline. This is a deterministic planning-only tool: it does NOT call ElevenLabs, synthesize speech, or consume TTS credits. Choose only actions actually described or clearly implied by the spoken text, quote an exact after_text anchor from that text for each action, and supply actions in spoken-text order. The trailing punctuation immediately following an anchor is included automatically so the Foley cue lands after the complete spoken phrase. Each action maps to exactly one uploaded Foley asset with the existing approved gain, pan, source offset, and fade defaults. The returned cues are ready to adapt for render_continuous_audio_timeline; pass sequence_foley=true and tail_duration_sec from the plan. If pure_audio_tail_sec is requested, the last action anchor must be at the end of the spoken text.",
       inputSchema: z.object({
         text: z.string().min(1).max(MAX_SOUND_SCAPE_TEXT_CHARS),
         actions: z.array(z.object({
@@ -894,7 +896,7 @@ function createServer() {
         direction: z.string().max(180).optional(),
         cues: z.array(z.object({
           asset_id: z.string().min(1).max(64).describe("asset_id returned by list_sound_assets"),
-          kind: z.enum(["ambience", "foley"]),
+          kind: z.enum(["ambience", "foley", "breath"]),
           at_sec: z.number().min(0).max(MAX_SOUND_SCAPE_SECONDS).optional(),
           gain: z.number().min(0).max(0.7).optional(),
           pan: z.number().min(-1).max(1).optional(),
@@ -907,6 +909,7 @@ function createServer() {
         voice_gain: z.number().min(0).max(1).optional(),
         ambience_bus_gain: z.number().min(0).max(1).optional(),
         foley_bus_gain: z.number().min(0).max(1).optional(),
+        breath_bus_gain: z.number().min(0).max(1).optional(),
         master_gain: z.number().min(0).max(1).optional(),
         ducking_enabled: z.boolean().optional(),
         ducking_amount: z.number().min(0).max(1).optional(),
@@ -917,7 +920,7 @@ function createServer() {
         "ui/resourceUri": PLAYER_URI,
       },
     },
-    async ({ text, performance, emotion, language, direction, cues, voice_gain, ambience_bus_gain, foley_bus_gain, master_gain, ducking_enabled, ducking_amount, save_recording }) => {
+    async ({ text, performance, emotion, language, direction, cues, voice_gain, ambience_bus_gain, foley_bus_gain, breath_bus_gain, master_gain, ducking_enabled, ducking_amount, save_recording }) => {
       try {
         const emotionDirective = parseEmotionDirective(direction);
         const selectedEmotion = emotion ?? emotionDirective.emotion;
@@ -974,6 +977,7 @@ function createServer() {
           voiceGain: voice_gain,
           ambienceBusGain: ambience_bus_gain,
           foleyBusGain: foley_bus_gain,
+          breathBusGain: breath_bus_gain,
           masterGain: master_gain,
           duckingEnabled: ducking_enabled,
           duckingAmount: ducking_amount,
@@ -1037,7 +1041,7 @@ function createServer() {
 
   mcp.registerTool("render_continuous_audio_timeline", {
     title: `${BOT_NAME}'s Continuous Voice Timeline`,
-    description: `Synthesize one continuous voice passage exactly once, then overlay independently timed Foley and ambience. Use after_text on a cue to place it immediately after an exact phrase in the spoken text using ElevenLabs character timestamps; use at_sec for absolute timing. Optional tail_duration_sec adds a pure-Foley/ambience tail after the generated voice without needing to know the voice duration in advance; timeline_duration_sec remains available as an absolute override. Set sequence_foley=true to trim each Foley cue at the next Foley cue start, preventing action sounds from overlapping. Effects may occupy silent intervals or continue after the voice; no additional TTS calls are made. This avoids extra TTS chunk boundaries. Call list_sound_assets first. Text and finished audio are limited to ${MAX_SOUND_SCAPE_TEXT_CHARS} characters and ${MAX_SOUND_SCAPE_SECONDS} seconds.`,
+    description: `Synthesize one continuous voice passage exactly once, then overlay Foley, ambience, and optional breath assets. Use after_text on a cue to place it immediately after an exact phrase in the spoken text using ElevenLabs character timestamps; use at_sec for absolute timing. Optional tail_duration_sec adds a pure-effects tail after the generated voice; timeline_duration_sec remains available as an absolute override. Set sequence_foley=true to trim each Foley cue at the next Foley cue start. Optionally set breath_engine.enabled=true after uploading WAV breath assets classified as inhale or exhale: it detects internal low-energy silence gaps and places subtle breath clips only inside those gaps, without moving or changing voice samples and without extra TTS calls. Call list_sound_assets first. Text and finished audio are limited to ${MAX_SOUND_SCAPE_TEXT_CHARS} characters and ${MAX_SOUND_SCAPE_SECONDS} seconds.`,
     inputSchema: z.object({
       text: z.string().min(1).max(MAX_SOUND_SCAPE_TEXT_CHARS),
       performance: z.enum(["auto", "natural", "soft", "close", "breathy", "expressive"]).optional(),
@@ -1051,7 +1055,7 @@ function createServer() {
       sequence_foley: z.boolean().optional(),
       cues: z.array(z.object({
         asset_id: z.string().min(1).max(64),
-        kind: z.enum(["foley", "ambience"]),
+        kind: z.enum(["foley", "ambience", "breath"]),
         at_sec: z.number().min(0).max(MAX_SOUND_SCAPE_SECONDS).optional(),
         after_text: z.string().min(1).max(160).optional(),
         occurrence: z.number().int().min(1).max(10).optional(),
@@ -1062,12 +1066,20 @@ function createServer() {
         fade_out_sec: z.number().min(0).max(10).optional(),
         duration_sec: z.number().min(0.01).max(MAX_SOUND_SCAPE_SECONDS).optional(),
         source_offset_sec: z.number().min(0).max(MAX_SOUND_SCAPE_SECONDS).optional(),
-        normalization_target_rms: z.number().min(0.05).max(0.2).optional(),
+        normalization_target_rms: z.number().min(0.01).max(0.2).optional(),
         loop: z.boolean().optional(),
-      })).min(1).max(12),
+      })).max(12).default([]),
+      breath_engine: z.object({
+        enabled: z.boolean().default(true),
+        max_breaths: z.number().int().min(1).max(6).optional(),
+        min_gap_sec: z.number().min(0.2).max(5).optional(),
+        silence_threshold_db: z.number().min(-90).max(-20).optional(),
+        gain: z.number().min(0).max(0.35).optional(),
+      }).optional(),
       voice_gain: z.number().min(0).max(1).optional(),
       ambience_bus_gain: z.number().min(0).max(1).optional(),
       foley_bus_gain: z.number().min(0).max(1).optional(),
+      breath_bus_gain: z.number().min(0).max(1).optional(),
       master_gain: z.number().min(0).max(1).optional(),
       ducking_enabled: z.boolean().optional(),
       ducking_amount: z.number().min(0).max(1).optional(),
@@ -1079,6 +1091,15 @@ function createServer() {
     },
   }, async (args) => {
     try {
+      if (!args.cues.length && !args.breath_engine?.enabled) {
+        throw new Error("Provide at least one manual cue or enable breath_engine");
+      }
+      const breathAssets = args.breath_engine?.enabled
+        ? (await audioAssetStore.list()).filter((asset) => asset.kind === "breath")
+        : [];
+      if (args.breath_engine?.enabled && !breathAssets.length) {
+        throw new Error("Upload at least one inhale or exhale WAV asset before enabling breath_engine");
+      }
       const loadedAssets = new Map();
       const assetMetadata = new Map();
       for (const cue of args.cues) {
@@ -1150,6 +1171,43 @@ function createServer() {
         };
       });
 
+      let breathEngineReport = null;
+      if (args.breath_engine?.enabled) {
+        const occupiedCues = resolvedCues.map((cue) => {
+          const metadata = assetMetadata.get(cue.fileId);
+          const remaining = Math.max(0, timelineDurationSec - cue.atSec);
+          const inferredDuration = cue.loop
+            ? remaining
+            : Math.min(Math.max(0, (metadata?.durationSec ?? 0) - (cue.sourceOffsetSec ?? 0)), remaining);
+          return { ...cue, durationSec: cue.durationSec ?? inferredDuration };
+        });
+        const breathPlan = planBreathCues({
+          pcm: voicePcm,
+          assets: breathAssets,
+          occupiedCues,
+          maxBreaths: args.breath_engine.max_breaths ?? 4,
+          minGapSec: args.breath_engine.min_gap_sec ?? 0.72,
+          silenceThresholdDb: args.breath_engine.silence_threshold_db ?? -48,
+          gain: args.breath_engine.gain ?? 0.28,
+        });
+        if (resolvedCues.length + breathPlan.cues.length > 12) {
+          throw new Error("Manual and automatic effects exceed the 12-cue timeline limit; reduce manual cues or max_breaths");
+        }
+        for (const cue of breathPlan.cues) {
+          if (!loadedAssets.has(cue.fileId)) {
+            const stored = await audioAssetStore.get(cue.fileId);
+            if (!stored) throw new Error("Breath asset not found: " + cue.fileId);
+            loadedAssets.set(cue.fileId, stored.buffer);
+            assetMetadata.set(cue.fileId, stored.metadata);
+          }
+          resolvedCues.push(cue);
+        }
+        breathEngineReport = breathPlan.report;
+      }
+      if (!resolvedCues.length && !breathEngineReport) {
+        throw new Error("Provide at least one manual cue or enable breath_engine");
+      }
+
       let sequenceAdjustments = [];
       if (args.sequence_foley) {
         const sequenced = sequenceFoleyCues(resolvedCues, assetMetadata, timelineDurationSec);
@@ -1165,6 +1223,7 @@ function createServer() {
         voiceGain: args.voice_gain,
         ambienceBusGain: args.ambience_bus_gain,
         foleyBusGain: args.foley_bus_gain,
+        breathBusGain: args.breath_bus_gain,
         masterGain: args.master_gain,
         duckingEnabled: args.ducking_enabled,
         duckingAmount: args.ducking_amount,
@@ -1226,6 +1285,7 @@ function createServer() {
           tail_duration_clamped: timelinePlan.tailClamped,
           sequence_foley: args.sequence_foley === true,
           foley_sequence_adjustments: sequenceAdjustments,
+          breath_engine: breathEngineReport,
           sample_rate: mix.sampleRate,
           channels: mix.channels,
           voice_generation_count: 1,
@@ -1237,7 +1297,7 @@ function createServer() {
             asset_id: cue.fileId,
             kind: cue.kind,
             at_sec: cue.atSec,
-            anchor_text: args.cues[index].after_text || null,
+            anchor_text: args.cues[index]?.after_text || null,
           })),
           effects_segments: mix.timeline.cues.map((cue) => ({
             asset_id: cue.fileId,
@@ -1261,11 +1321,11 @@ function createServer() {
 
   mcp.registerTool("render_audio_timeline", {
     title: `${BOT_NAME}'s Audio Timeline`,
-    description: `Render a private multitrack timeline with independently timed voice, Foley, ambience, and gap segments. Voice segments are synthesized separately. Effects can continue when no voice is present. Use only asset_id values returned by list_sound_assets. Maximum timeline length: ${MAX_SOUND_SCAPE_SECONDS} seconds.`,
+    description: `Render a private multitrack timeline with independently timed voice, Foley, ambience, breath, and gap segments. Voice segments are synthesized separately. Effects can continue when no voice is present. Use only asset_id values returned by list_sound_assets. Maximum timeline length: ${MAX_SOUND_SCAPE_SECONDS} seconds.`,
     inputSchema: z.object({
       duration_sec: z.number().min(0.1).max(MAX_SOUND_SCAPE_SECONDS),
       segments: z.array(z.object({
-        type: z.enum(["voice", "foley", "ambience", "gap"]),
+        type: z.enum(["voice", "foley", "ambience", "breath", "gap"]),
         at_sec: z.number().min(0).max(MAX_SOUND_SCAPE_SECONDS),
         duration_sec: z.number().min(0.01).max(MAX_SOUND_SCAPE_SECONDS),
         text: z.string().min(1).max(MAX_SOUND_SCAPE_TEXT_CHARS).optional(),
@@ -1284,6 +1344,7 @@ function createServer() {
       voice_gain: z.number().min(0).max(1).optional(),
       ambience_bus_gain: z.number().min(0).max(1).optional(),
       foley_bus_gain: z.number().min(0).max(1).optional(),
+      breath_bus_gain: z.number().min(0).max(1).optional(),
       master_gain: z.number().min(0).max(1).optional(),
       ducking_enabled: z.boolean().optional(),
       ducking_amount: z.number().min(0).max(1).optional(),
@@ -1297,12 +1358,12 @@ function createServer() {
       }
       for (const s of segments) {
         if (s.type === "voice" && !s.text) throw new Error("Every voice segment requires text");
-        if ((s.type === "foley" || s.type === "ambience") && !s.asset_id) throw new Error("Every Foley/ambience segment requires asset_id");
+        if ((s.type === "foley" || s.type === "ambience" || s.type === "breath") && !s.asset_id) throw new Error("Every Foley/ambience/breath segment requires asset_id");
         if (s.type === "gap" && (s.text || s.asset_id)) throw new Error("Gap segments cannot contain text or asset_id");
       }
       const voiceItems = segments.filter(s => s.type === "voice");
-      const effectItems = segments.filter(s => s.type === "foley" || s.type === "ambience");
-      if (effectItems.length > 12) throw new Error("A timeline can contain at most 12 Foley/ambience cues");
+      const effectItems = segments.filter(s => s.type === "foley" || s.type === "ambience" || s.type === "breath");
+      if (effectItems.length > 12) throw new Error("A timeline can contain at most 12 Foley/ambience/breath cues");
       if (!voiceItems.length && !effectItems.length) throw new Error("Timeline needs at least one voice or effect segment");
 
       const loadedAssets = new Map();
@@ -1335,7 +1396,7 @@ function createServer() {
       const mix = mixSoundscape({
         voiceSegments, totalDurationSec: duration_sec, assets: loadedAssets, cues,
         voiceGain: args.voice_gain, ambienceBusGain: args.ambience_bus_gain,
-        foleyBusGain: args.foley_bus_gain, masterGain: args.master_gain,
+        foleyBusGain: args.foley_bus_gain, breathBusGain: args.breath_bus_gain, masterGain: args.master_gain,
         duckingEnabled: args.ducking_enabled, duckingAmount: args.ducking_amount,
       });
       if (mix.buffer.length > 16 * 1024 * 1024) throw new Error("Mixed audio exceeds the 16 MB playback cache limit");
@@ -1563,6 +1624,8 @@ app.get("/status", (_req, res) => {
       japanese_text_normalization_opt_in: true,
       local_drama_preview: true,
       private_audio_asset_library: true,
+      breath_asset_classification: true,
+      automatic_breath_engine: SOUNDSCAPE_MCP_ENABLED,
       persistent_recording_archive: true,
       mcp_apps_audio_player: true,
       soundscape_mcp_enabled: SOUNDSCAPE_MCP_ENABLED,

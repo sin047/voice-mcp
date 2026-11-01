@@ -252,10 +252,12 @@ export function mixSoundscape({
   voiceGain = 0.9,
   ambienceBusGain = 0.82,
   foleyBusGain = 0.9,
+  breathBusGain = 0.75,
   masterGain = 0.85,
   duckingEnabled = true,
   duckingAmount = 0.75,
   foleyDuckingDepth = 0.35,
+  breathDuckingDepth = 0.05,
 } = {}) {
   const normalizedVoiceSegments = [];
   if (voicePcm) {
@@ -301,8 +303,8 @@ export function mixSoundscape({
       return {
         ...cue,
         durationSec: duration,
-        fadeInSec: Math.min(cue.fadeInSec ?? (cue.kind === "ambience" ? 1 : 0.03), duration / 2),
-        fadeOutSec: Math.min(cue.fadeOutSec ?? (cue.kind === "ambience" ? 1 : 0.1), duration / 2),
+        fadeInSec: Math.min(cue.fadeInSec ?? (cue.kind === "ambience" ? 1 : cue.kind === "breath" ? 0.025 : 0.03), duration / 2),
+        fadeOutSec: Math.min(cue.fadeOutSec ?? (cue.kind === "ambience" ? 1 : cue.kind === "breath" ? 0.045 : 0.1), duration / 2),
       };
     });
 
@@ -311,10 +313,12 @@ export function mixSoundscape({
     voiceGain,
     ambienceBusGain,
     foleyBusGain,
+    breathBusGain,
     masterGain,
     duckingEnabled,
     duckingAmount,
     foleyDuckingDepth,
+    breathDuckingDepth,
     spatialMode: "stereo",
     cues: trimmedCues,
   });
@@ -344,6 +348,11 @@ export function mixSoundscape({
       amount: duckingAmount * timeline.mix.ducking.foleyDepth,
     })
     : [{ gain: 1 }];
+  const breathEnvelope = duckingEnabled
+    ? createVoiceDuckingEnvelope([duckingReference], TARGET_SAMPLE_RATE, {
+      amount: duckingAmount * timeline.mix.ducking.breathDepth,
+    })
+    : [{ gain: 1 }];
 
   for (const cue of timeline.cues) {
     const asset = assets instanceof Map ? assets.get(cue.fileId) : assets?.[cue.fileId];
@@ -358,7 +367,7 @@ export function mixSoundscape({
     const sourceFrames = sourceChannels[0].length;
     const sourceOffsetFrames = Math.round(cue.sourceOffsetSec * TARGET_SAMPLE_RATE);
     if (sourceOffsetFrames >= sourceFrames) {
-      throw new Error("Foley/ambience source offset exceeds audio asset duration");
+      throw new Error("Foley/ambience/breath source offset exceeds audio asset duration");
     }
     const startFrame = Math.round(cue.atSec * TARGET_SAMPLE_RATE);
     const remainingFrames = voiceFrames - startFrame;
@@ -371,8 +380,10 @@ export function mixSoundscape({
 
     const busGain = cue.kind === "ambience"
       ? timeline.mix.ambienceBusGain
-      : timeline.mix.foleyBusGain;
-    const envelope = cue.kind === "ambience" ? ambienceEnvelope : foleyEnvelope;
+      : cue.kind === "breath" ? timeline.mix.breathBusGain : timeline.mix.foleyBusGain;
+    const envelope = cue.kind === "ambience"
+      ? ambienceEnvelope
+      : cue.kind === "breath" ? breathEnvelope : foleyEnvelope;
     const panAngle = ((cue.pan + 1) / 2) * Math.PI / 2;
     const monoLeft = Math.cos(panAngle);
     const monoRight = Math.sin(panAngle);
@@ -391,6 +402,15 @@ export function mixSoundscape({
         cueFrames,
         cue.loop,
         cue.normalizationTargetRms,
+      )
+      : 1;
+    const breathBoost = cue.kind === "breath"
+      ? foleyExcerptBoost(
+        sourceChannels,
+        sourceOffsetFrames,
+        cueFrames,
+        cue.loop,
+        cue.normalizationTargetRms ?? 0.04,
       )
       : 1;
     const fadeInFrames = Math.round(cue.fadeInSec * TARGET_SAMPLE_RATE);
@@ -414,8 +434,12 @@ export function mixSoundscape({
       const leftSample = sourceChannels[0][sourceFrame];
       const rightSample = sourceChannels.length > 1
         ? sourceChannels[1][sourceFrame] : leftSample;
-      const leftFx = cue.kind === "foley" ? Math.tanh(leftSample * foleyBoost) : leftSample;
-      const rightFx = cue.kind === "foley" ? Math.tanh(rightSample * foleyBoost) : rightSample;
+      const leftFx = cue.kind === "foley"
+        ? Math.tanh(leftSample * foleyBoost)
+        : cue.kind === "breath" ? Math.tanh(leftSample * breathBoost) : leftSample;
+      const rightFx = cue.kind === "foley"
+        ? Math.tanh(rightSample * foleyBoost)
+        : cue.kind === "breath" ? Math.tanh(rightSample * breathBoost) : rightSample;
 
       if (sourceChannels.length === 1) {
         left[targetFrame] += leftFx * gain * monoLeft;

@@ -137,12 +137,12 @@ List the WAV assets that have been explicitly uploaded to this server's private 
 
 ### `speak_with_soundscape`
 
-Generate speech and mix it with up to 12 uploaded ambience/Foley assets. The tool returns a short-lived audio URL which the inline MCP player can play.
+Generate speech and mix it with up to 12 uploaded ambience, Foley, or breath assets. The tool returns a short-lived audio URL which the inline MCP player can play.
 
 - Voice remains centered.
 - Mono effects support timing, gain, left/right pan and distance attenuation.
 - Stereo effects retain their recorded stereo image.
-- Ambience and Foley have independent buses.
+- Ambience, Foley, and breath have independent buses.
 - Voice-priority ducking gently lowers effects while speech is present.
 - Output is a stereo WAV, limited to 60 seconds.
 - The server-side mix uses stereo panning, not browser HRTF.
@@ -241,3 +241,8 @@ MIT. This fork preserves the upstream license from [garan0613/voice-mcp](https:/
 ## Persistent recording archive
 
 The optional `speak_with_soundscape` parameter `save_recording: true` saves the completed mixed WAV and its metadata to a private persistent recording directory. Saving is opt-in and defaults to false. Configure `RECORDING_DIR` on a persistent volume; see [ZEABUR.md](./ZEABUR.md) for storage limits, private archive endpoints and backup guidance.
+
+
+## Breath Engine (beta.36)
+
+Upload short WAV samples as `breath` assets classified `inhale` or `exhale` in the Private Drama preview. `render_continuous_audio_timeline` can then enable conservative silence-aware placement with `breath_engine: { enabled: true }`. The planner overlays samples only inside internal low-energy gaps, preserves voice samples and total duration, and makes no additional TTS requests. See [docs/breath-engine.md](./docs/breath-engine.md) for upload headers, tuning options, and limits.

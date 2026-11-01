@@ -7,6 +7,7 @@ import { parseByteRange } from "./audio-range.mjs";
 import { decodeRawPcm16, encodePcm16Wav, mixSoundscape } from "./wav-audio.mjs";
 import { joinPcm16Chunks } from "./voice-long-audio.mjs";
 import { resolveCueTimeAfterText } from "./alignment-cues.mjs";
+import { planFoleyCues } from "./foley-cue-planner.mjs";
 import { planVoiceChunks } from "./voice-chunker.mjs";
 import { auditCharacterAlignment } from "./alignment-audit.mjs";
 import { buildSoundscapePresetCues, parseSoundscapeDirective } from "./soundscape-presets.mjs";
@@ -37,7 +38,7 @@ const MODEL_ID = process.env.ELEVENLABS_MODEL_ID || "eleven_v4";
 const OUTPUT_FORMAT = process.env.ELEVENLABS_OUTPUT_FORMAT || "mp3_44100_128";
 const PLAYER_URI = "ui://voice-mcp/player.html";
 const PLAYER_MIME = "text/html;profile=mcp-app";
-const VERSION = "1.4.0-beta.33";
+const VERSION = "1.4.0-beta.34";
 const MAX_CONTEXT_CHARS = 4000;
 const MAX_SPEAK_CHARS = 4000;
 const MAX_SOUND_SCAPE_TEXT_CHARS = 1200;
@@ -829,6 +830,58 @@ function createServer() {
   );
 
   mcp.registerTool(
+    "plan_foley_cues",
+    {
+      title: "Plan Foley action cues",
+      description: "Plan a small sequence of approved Foley actions for render_continuous_audio_timeline. This is a deterministic planning-only tool: it does NOT call ElevenLabs, synthesize speech, or consume TTS credits. Choose only actions actually described or clearly implied by the spoken text, quote an exact after_text anchor from that text for each action, and supply actions in spoken-text order. Each action maps to exactly one uploaded Foley asset with the existing approved gain, pan, source offset, and fade defaults. The returned cues are ready to adapt for render_continuous_audio_timeline; pass sequence_foley=true and tail_duration_sec from the plan. If pure_audio_tail_sec is requested, the last action anchor must be at the end of the spoken text.",
+      inputSchema: z.object({
+        text: z.string().min(1).max(MAX_SOUND_SCAPE_TEXT_CHARS),
+        actions: z.array(z.object({
+          action: z.enum([
+            "clothing_rustle",
+            "package_open",
+            "box_open",
+            "liquid_application",
+            "continuous_rhythm",
+            "bed_objects",
+            "wet_detail",
+            "ending_detail",
+          ]),
+          after_text: z.string().min(1).max(160),
+          occurrence: z.number().int().min(1).max(10).optional(),
+          duration_sec: z.number().min(0.1).max(MAX_SOUND_SCAPE_SECONDS).optional(),
+        })).min(1).max(8),
+        pure_audio_tail_sec: z.number().min(0).max(15).optional(),
+      }),
+    },
+    async (args) => {
+      try {
+        const assets = await audioAssetStore.list();
+        const plan = planFoleyCues({
+          text: args.text,
+          actions: args.actions,
+          assets,
+          pureAudioTailSec: args.pure_audio_tail_sec ?? 0,
+        });
+        return {
+          content: [{
+            type: "text",
+            text: "Planned " + plan.action_count + " Foley actions. No ElevenLabs request was made.",
+          }],
+          structuredContent: plan,
+        };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        return {
+          content: [{ type: "text", text: "Foley cue planning failed: " + message }],
+          structuredContent: { error: message, estimated_tts_calls: 0 },
+          isError: true,
+        };
+      }
+    },
+  );
+
+  mcp.registerTool(
     "speak_with_soundscape",
     {
       title: `${BOT_NAME}'s Voice + Soundscape`,
@@ -984,7 +1037,7 @@ function createServer() {
 
   mcp.registerTool("render_continuous_audio_timeline", {
     title: `${BOT_NAME}'s Continuous Voice Timeline`,
-    description: `Synthesize one continuous voice passage exactly once, then overlay independently timed Foley and ambience. Use after_text on a cue to place it immediately after an exact phrase in the spoken text using ElevenLabs character timestamps; use at_sec for absolute timing. Optional timeline_duration_sec extends the finished WAV beyond the spoken voice, allowing a pure-Foley/ambience tail after speech ends. Effects may occupy silent intervals or continue after the voice; no additional TTS calls are made. This avoids extra TTS chunk boundaries. Call list_sound_assets first. Text and finished audio are limited to ${MAX_SOUND_SCAPE_TEXT_CHARS} characters and ${MAX_SOUND_SCAPE_SECONDS} seconds.`,
+    description: `Synthesize one continuous voice passage exactly once, then overlay independently timed Foley and ambience. Use after_text on a cue to place it immediately after an exact phrase in the spoken text using ElevenLabs character timestamps; use at_sec for absolute timing. Optional tail_duration_sec adds a pure-Foley/ambience tail after the generated voice without needing to know the voice duration in advance; timeline_duration_sec remains available as an absolute override. Set sequence_foley=true to trim each Foley cue at the next Foley cue start, preventing action sounds from overlapping. Effects may occupy silent intervals or continue after the voice; no additional TTS calls are made. This avoids extra TTS chunk boundaries. Call list_sound_assets first. Text and finished audio are limited to ${MAX_SOUND_SCAPE_TEXT_CHARS} characters and ${MAX_SOUND_SCAPE_SECONDS} seconds.`,
     inputSchema: z.object({
       text: z.string().min(1).max(MAX_SOUND_SCAPE_TEXT_CHARS),
       performance: z.enum(["auto", "natural", "soft", "close", "breathy", "expressive"]).optional(),
@@ -994,6 +1047,8 @@ function createServer() {
       previous_text: z.string().max(MAX_CONTEXT_CHARS).optional(),
       next_text: z.string().max(MAX_CONTEXT_CHARS).optional(),
       timeline_duration_sec: z.number().min(0.1).max(MAX_SOUND_SCAPE_SECONDS).optional(),
+      tail_duration_sec: z.number().min(0).max(15).optional(),
+      sequence_foley: z.boolean().optional(),
       cues: z.array(z.object({
         asset_id: z.string().min(1).max(64),
         kind: z.enum(["foley", "ambience"]),
@@ -1006,6 +1061,8 @@ function createServer() {
         fade_in_sec: z.number().min(0).max(10).optional(),
         fade_out_sec: z.number().min(0).max(10).optional(),
         duration_sec: z.number().min(0.01).max(MAX_SOUND_SCAPE_SECONDS).optional(),
+        source_offset_sec: z.number().min(0).max(MAX_SOUND_SCAPE_SECONDS).optional(),
+        normalization_target_rms: z.number().min(0.05).max(0.2).optional(),
         loop: z.boolean().optional(),
       })).min(1).max(12),
       voice_gain: z.number().min(0).max(1).optional(),
@@ -1023,6 +1080,7 @@ function createServer() {
   }, async (args) => {
     try {
       const loadedAssets = new Map();
+      const assetMetadata = new Map();
       for (const cue of args.cues) {
         if ((cue.at_sec == null) === (cue.after_text == null)) {
           throw new Error("Each cue must provide exactly one of at_sec or after_text");
@@ -1031,6 +1089,7 @@ function createServer() {
         const stored = await audioAssetStore.get(cue.asset_id);
         if (!stored) throw new Error("Sound asset not found: " + cue.asset_id);
         loadedAssets.set(cue.asset_id, stored.buffer);
+        assetMetadata.set(cue.asset_id, stored.metadata);
       }
 
       const result = await synthesize(args.text, {
@@ -1051,7 +1110,11 @@ function createServer() {
       if (voicePcm.durationSec > MAX_SOUND_SCAPE_SECONDS) {
         throw new Error("Continuous voice exceeds the " + MAX_SOUND_SCAPE_SECONDS + " second limit; shorten the text");
       }
-      const timelineDurationSec = args.timeline_duration_sec ?? voicePcm.durationSec;
+      if (args.timeline_duration_sec != null && args.tail_duration_sec != null) {
+        throw new Error("Use either timeline_duration_sec or tail_duration_sec, not both");
+      }
+      const timelineDurationSec = args.timeline_duration_sec ??
+        (voicePcm.durationSec + (args.tail_duration_sec ?? 0));
       if (timelineDurationSec + 0.001 < voicePcm.durationSec) {
         throw new Error("timeline_duration_sec cannot be shorter than the generated voice");
       }
@@ -1084,9 +1147,51 @@ function createServer() {
           distanceMeters: cue.distance_meters,
           fadeInSec: cue.fade_in_sec,
           fadeOutSec: cue.fade_out_sec,
+          sourceOffsetSec: cue.source_offset_sec,
+          normalizationTargetRms: cue.normalization_target_rms,
           loop: cue.loop,
         };
       });
+
+      const sequenceAdjustments = [];
+      if (args.sequence_foley) {
+        const orderedFoley = resolvedCues
+          .map((cue, index) => ({ cue, index }))
+          .filter(({ cue }) => cue.kind === "foley")
+          .sort((a, b) => a.cue.atSec - b.cue.atSec);
+        for (let index = 0; index < orderedFoley.length; index += 1) {
+          const { cue } = orderedFoley[index];
+          const metadata = assetMetadata.get(cue.fileId);
+          const sourceRemainingSec = Math.max(0,
+            (metadata?.durationSec ?? 0) - (cue.sourceOffsetSec ?? 0));
+          if (sourceRemainingSec < 0.1) {
+            throw new Error("Foley source is too short at the selected source offset: " + cue.fileId);
+          }
+          let durationSec = Math.min(cue.durationSec ?? sourceRemainingSec, sourceRemainingSec);
+          const nextCue = orderedFoley[index + 1]?.cue;
+          if (nextCue) {
+            const availableWindowSec = nextCue.atSec - cue.atSec;
+            if (availableWindowSec < 0.1) {
+              throw new Error("Sequential Foley anchors resolve too close together; move one action anchor later");
+            }
+            if (durationSec > availableWindowSec) {
+              durationSec = availableWindowSec;
+              sequenceAdjustments.push({
+                asset_id: cue.fileId,
+                trimmed_to_sec: Number(durationSec.toFixed(3)),
+                reason: "next Foley action starts",
+              });
+            }
+          }
+          durationSec = Math.min(durationSec, timelineDurationSec - cue.atSec);
+          if (durationSec < 0.1) {
+            throw new Error("Sequential Foley cue has no usable playback window");
+          }
+          cue.durationSec = durationSec;
+          cue.fadeInSec = Math.min(cue.fadeInSec ?? 0.03, durationSec / 2);
+          cue.fadeOutSec = Math.min(cue.fadeOutSec ?? 0.1, durationSec / 2);
+        }
+      }
 
       const mix = mixSoundscape({
         voicePcm,
@@ -1152,6 +1257,9 @@ function createServer() {
           duration_sec: mix.durationSec,
           voice_duration_sec: voicePcm.durationSec,
           timeline_duration_sec: timelineDurationSec,
+          tail_duration_sec: Math.max(0, Number((timelineDurationSec - voicePcm.durationSec).toFixed(3))),
+          sequence_foley: args.sequence_foley === true,
+          foley_sequence_adjustments: sequenceAdjustments,
           sample_rate: mix.sampleRate,
           channels: mix.channels,
           voice_generation_count: 1,
@@ -1497,6 +1605,7 @@ app.get("/status", (_req, res) => {
       character_alignment: true,
       continuous_voice_timeline: SOUNDSCAPE_MCP_ENABLED,
       continuous_timeline_effect_tail: SOUNDSCAPE_MCP_ENABLED,
+      foley_cue_planner: SOUNDSCAPE_MCP_ENABLED,
       voice_chunk_planning: true,
       speak_long: true,
       long_voice_max_seconds: MAX_LONG_VOICE_SECONDS,

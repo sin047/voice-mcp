@@ -57,7 +57,7 @@ button.remove{padding:7px 14px;font-size:12px}
 <input id="fx" type="file" accept="audio/*" multiple>
 <div id="cues"></div>
 <div class="actions"><button id="refreshAssets">刷新服务器音效库</button></div><div id="assetLibrary" class="hint">服务器音效库尚未加载。</div>
-<p class="hint">环境声建议音量 0.10，动作声建议 0.22。左右声像 -1 为左耳，+1 为右耳。循环只适用于环境声。保存音效会把 WAV 上传到此 voice-mcp 实例的私有音效库。</p>
+<p class="hint">环境声建议音量 0.10，动作声建议 0.22，呼吸建议 0.14。呼吸素材请标记吸气或呼气；自动呼吸引擎会按静音间隙放置。左右声像 -1 为左耳，+1 为右耳。循环只适用于环境声。保存音效会把 WAV 上传到此 voice-mcp 实例的私有音效库。</p>
 </section>
 <section>
 <h2>03 / 混音总线与空间</h2>

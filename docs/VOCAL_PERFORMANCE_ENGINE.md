@@ -68,6 +68,16 @@ Output includes the cue list, Chinese labels, exact tags, resolved anchors, rend
 - Avoid strong bilabial popping syllables when they produce an unwanted hard plosive. Do not assume Japanese phonetic spellings transfer naturally to Chinese TTS.
 - Daily conversation should not receive intimate-performance cues by default.
 
+## First listening result (beta.38)
+
+The first consolidated audition on the current Shin Voice used two tags together:
+- `[soft shuddering inhale]` before the approach phrase.
+- `[intense close-up whisper against ear]` before the close-whisper phrase.
+
+User feedback: “挺像的” (“sounds quite realistic”).
+
+Status: the two-tag combination passed an initial subjective listening check on the current voice. This is not yet an isolated A/B validation of each tag, and it does not validate the rest of the catalogue. Keep the existing voice, B2.1 breath settings, and mix parameters unchanged. No Foley assets or gain settings were modified.
+
 ## Validation plan
 
 1. Test the planner with synthetic text only; no TTS.

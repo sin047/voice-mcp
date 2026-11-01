@@ -47,7 +47,7 @@ jobs:
           TEST_ACCESS_TOKEN="ci-only-private-drama-token-0123456789abcdef"
           PRIVATE_DRAMA_ACCESS_TOKEN="$TEST_ACCESS_TOKEN" MCP_PUBLIC_BASE_URL="https://voice.example.test" AUDIO_ASSET_DIR="/tmp/voice-mcp-assets" RECORDING_DIR="/tmp/voice-mcp-recordings" MCP_SOUNDSCAPE_TOOLS_ENABLED=true MCP_MAX_REQUESTS_PER_MINUTE=3 HOST=127.0.0.1 PORT=8765 node src/server.mjs > /tmp/voice-mcp.log 2>&1 &
           SERVER_PID=$!
-          trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
+          trap 'status=$?; kill "$SERVER_PID" 2>/dev/null || true; if [ "$status" -ne 0 ]; then cat /tmp/voice-mcp.log; fi; exit "$status"' EXIT
           for attempt in {1..20}; do
             if curl -fsS http://127.0.0.1:8765/status > /tmp/voice-status.json; then
               break

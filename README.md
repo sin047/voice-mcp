@@ -35,7 +35,7 @@ The gated MCP tool `plan_foley_cues` maps an explicitly selected action list to 
 
 Planning is deterministic and **does not call ElevenLabs**. It returns ready-to-adapt cue objects for `render_continuous_audio_timeline`, plus `sequence_foley=true` and an optional `tail_duration_sec`. At render time, actual cue positions are resolved from provider character timestamps. Sequential mode trims each Foley cue to end before the next Foley cue begins; if two anchors resolve too close together, rendering fails rather than stacking action sounds. Ambience cues remain independent and may overlap Foley.
 
-`render_continuous_audio_timeline` now accepts `tail_duration_sec`, which extends the WAV by that many seconds beyond the actual generated voice duration. This is easier to use than guessing an absolute `timeline_duration_sec` before TTS. The two duration options are mutually exclusive. The cue schema also exposes `source_offset_sec` and `normalization_target_rms` so the planner can preserve the approved excerpts and normalization targets.
+`render_continuous_audio_timeline` now accepts `tail_duration_sec`, which extends the WAV by that many seconds beyond the actual generated voice duration. This is easier to use than guessing an absolute `timeline_duration_sec` before TTS. The two duration options are mutually exclusive. The cue schema also exposes `source_offset_sec` and `normalization_target_rms` so the planner can preserve the approved excerpts and normalization targets. If voice plus requested tail would exceed the 60-second cap, the tail is shortened to the available remainder and the result reports both requested and applied tail durations.
 
 ### Continuous voice timeline tail (beta.33)
 

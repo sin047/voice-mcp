@@ -62,7 +62,7 @@ jobs:
             import assert from "node:assert/strict";
             const status = JSON.parse(fs.readFileSync("/tmp/voice-status.json", "utf8"));
             assert.equal(status.status, "ok");
-            assert.equal(status.version, "1.4.0-beta.45");
+            assert.equal(status.version, "1.4.0-beta.46");
             assert.equal(status.features.request_id_continuity, true);
             assert.equal(status.features.language_auto_detection, true);
             assert.equal(status.features.local_drama_preview, true);
@@ -244,6 +244,10 @@ jobs:
             assert.ok(sceneDirector.description.includes("exact ordered text beats"));
             assert.ok(sceneDirector.inputSchema.properties.beats);
             assert.ok(sceneDirector.inputSchema.properties.foley_actions);
+            const sceneActions = sceneDirector.inputSchema.properties.foley_actions.items.properties.action.enum;
+            for (const action of ["penetration_basic", "penetration_crisp", "penetration_intense", "cumshot"]) {
+              assert.ok(sceneActions.includes(action), "Scene Director must expose " + action);
+            }
             const vocalPlanner = tools.find((tool) => tool.name === "plan_vocal_cues");
             assert.ok(vocalPlanner.description.includes("does NOT call ElevenLabs"));
             assert.ok(vocalPlanner.description.includes("never inferred from keywords"));
@@ -255,6 +259,10 @@ jobs:
             assert.ok(foleyPlanner.description.includes("does NOT call ElevenLabs"));
             assert.ok(foleyPlanner.description.includes("trailing punctuation"));
             assert.ok(foleyPlanner.inputSchema.properties.actions);
+            const foleyActions = foleyPlanner.inputSchema.properties.actions.items.properties.action.enum;
+            for (const action of ["penetration_basic", "penetration_crisp", "penetration_intense", "cumshot"]) {
+              assert.ok(foleyActions.includes(action), "Foley planner must expose " + action);
+            }
             assert.ok(foleyPlanner.inputSchema.properties.pure_audio_tail_sec);
             assert.equal(continuous._meta.ui.resourceUri, "ui://voice-mcp/player.html");
             const timeline = tools.find((tool) => tool.name === "render_audio_timeline");
@@ -263,6 +271,10 @@ jobs:
             const soundscape = tools.find((tool) => tool.name === "speak_with_soundscape");
             assert.equal(speak._meta.ui.resourceUri, "ui://voice-mcp/player.html");
             assert.ok(speak.description.includes("[soundscape:rhythm]"));
+            assert.ok(speak.description.includes("[soundscape:rhythm-basic]"));
+            assert.ok(speak.description.includes("[soundscape:rhythm-crisp]"));
+            assert.ok(speak.description.includes("[soundscape:rhythm-intense]"));
+            assert.ok(speak.description.includes("[soundscape:cumshot]"));
             assert.ok(speak.description.includes("[soundscape:clothing]"));
             assert.ok(speak.description.includes("Add a per-call duration"));
             assert.ok(speak.description.includes("[soundscape:rhythm:12]"));

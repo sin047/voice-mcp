@@ -1616,6 +1616,8 @@ app.get("/status", (_req, res) => {
       japanese_text_normalization_opt_in: true,
       local_drama_preview: true,
       private_audio_asset_library: true,
+      breath_asset_classification: true,
+      automatic_breath_engine: SOUNDSCAPE_MCP_ENABLED,
       persistent_recording_archive: true,
       mcp_apps_audio_player: true,
       soundscape_mcp_enabled: SOUNDSCAPE_MCP_ENABLED,

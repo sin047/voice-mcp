@@ -11,6 +11,77 @@ function usableAlignment(value) {
 }
 
 /**
+ * Remove provider-aligned TTS tag characters while retaining the timing
+ * metadata for spoken characters. This remains an alignment audit, not ASR.
+ */
+function stripAlignedAudioTags(value) {
+  const entries = value.characters.map((character, index) => ({
+    character,
+    start: value.character_start_times_seconds[index],
+    end: value.character_end_times_seconds[index],
+  }));
+  const withoutTags = [];
+  let removedCharacters = 0;
+
+  for (let index = 0; index < entries.length; index += 1) {
+    if (entries[index].character === "[") {
+      let closingIndex = -1;
+      const limit = Math.min(entries.length, index + 182);
+      for (let cursor = index + 1; cursor < limit; cursor += 1) {
+        const character = entries[cursor].character;
+        if (character === "\r" || character === "\n") break;
+        if (character === "]") {
+          closingIndex = cursor;
+          break;
+        }
+      }
+      if (closingIndex > index + 1 && /^[A-Za-z]$/u.test(entries[index + 1].character)) {
+        removedCharacters += closingIndex - index + 1;
+        index = closingIndex;
+        continue;
+      }
+    }
+    withoutTags.push(entries[index]);
+  }
+
+  const normalized = [];
+  for (let index = 0; index < withoutTags.length;) {
+    const current = withoutTags[index];
+    if (current.character !== " " && current.character !== "\t") {
+      normalized.push(current);
+      index += 1;
+      continue;
+    }
+
+    let end = index + 1;
+    while (end < withoutTags.length &&
+      (withoutTags[end].character === " " || withoutTags[end].character === "\t")) {
+      end += 1;
+    }
+    if (end - index > 1) {
+      normalized.push({
+        character: " ",
+        start: current.start,
+        end: withoutTags[end - 1].end,
+      });
+    } else {
+      normalized.push(current);
+    }
+    index = end;
+  }
+
+  while (normalized.length && /^\s$/u.test(normalized[0].character)) normalized.shift();
+  while (normalized.length && /^\s$/u.test(normalized[normalized.length - 1].character)) normalized.pop();
+
+  return {
+    characters: normalized.map((entry) => entry.character),
+    character_start_times_seconds: normalized.map((entry) => entry.start),
+    character_end_times_seconds: normalized.map((entry) => entry.end),
+    removedAudioTagCharacters: removedCharacters,
+  };
+}
+
+/**
  * Audits provider character alignment only. This is not speech recognition
  * and cannot prove that the rendered waveform contains every intended word.
  */
@@ -19,12 +90,15 @@ export function auditCharacterAlignment({ expectedText, alignment, normalizedAli
   const candidates = [
     ["normalized", normalizedAlignment],
     ["raw", alignment],
-  ].filter(([, value]) => usableAlignment(value));
+  ]
+    .filter(([, value]) => usableAlignment(value))
+    .map(([source, raw]) => ({
+      source,
+      raw,
+      data: stripAlignedAudioTags(raw),
+    }));
 
-  // Prefer a character stream that exactly matches the text sent for speech.
-  // Normalized alignment may be expanded/rewritten by the provider and should
-  // not create a false mismatch when raw alignment is an exact match.
-  const selected = candidates.find(([, value]) => value.characters.join("") === expected)
+  const selected = candidates.find(({ data }) => data.characters.join("") === expected)
     || candidates[0];
 
   if (!selected) {
@@ -37,7 +111,7 @@ export function auditCharacterAlignment({ expectedText, alignment, normalizedAli
     };
   }
 
-  const [source, data] = selected;
+  const { source, raw, data } = selected;
   const actual = data.characters.join("");
   const starts = data.character_start_times_seconds;
   const ends = data.character_end_times_seconds;
@@ -60,6 +134,8 @@ export function auditCharacterAlignment({ expectedText, alignment, normalizedAli
     source,
     expected_characters: Array.from(expected).length,
     aligned_characters: data.characters.length,
+    raw_aligned_characters: raw.characters.length,
+    stripped_audio_tag_characters: data.removedAudioTagCharacters,
     exact_text_match: exactMatch,
     monotonic_timestamps: monotonic,
     first_character_start_sec: starts[0],

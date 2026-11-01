@@ -33,7 +33,7 @@ test("plans one approved Foley asset for each exact action anchor without TTS", 
   assert.equal(plan.sequence_foley, true);
   assert.equal(plan.tail_duration_sec, 2.5);
   assert.equal(plan.action_count, 3);
-  assert.deepEqual(plan.action_labels.map((item) => item.label_zh), ["包装撕开", "盒子开封", "具体动作未确认"]);
+  assert.deepEqual(plan.action_labels.map((item) => item.label_zh), ["包装撕开", "盒子开封", "收尾音效（旧版兼容）"]);
   assert.deepEqual(plan.cues.map((cue) => cue.asset_id), ["fx_package", "fx_box", "fx_finish"]);
   assert.ok(plan.cues.every((cue) => cue.kind === "foley" && cue.loop === false));
   assert.equal(plan.cues[0].duration_sec, 1.8);

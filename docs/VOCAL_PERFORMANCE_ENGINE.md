@@ -4,6 +4,8 @@ Status: Phase 1 planner implemented in beta.38; no synthesis integration yet
 
 ## Purpose
 
+See the practical usage guide: [Vocal Cue Playbook](./VOCAL_CUE_PLAYBOOK.md).
+
 Turn the user's reference guide into deterministic, inspectable TTS performance instructions. The first phase only plans tags around exact text anchors. It does not call ElevenLabs, alter generated audio, infer actions from keywords, or change the approved voice and mix settings.
 
 ## Three separate systems
@@ -92,6 +94,32 @@ Status:
 - Validation scope is this combined audition on the current voice; no isolated A/B claim is made.
 - Keep the current voice, model, B2.1 breath settings, and mix parameters unchanged.
 - No Foley assets or gain settings were modified.
+
+## Third listening result — breathless husky whisper
+
+The current voice was auditioned with one inline `[breathless husky whisper]` cue before “想再靠近你一点” in:
+“等我一下……我还没缓过来，想再靠近你一点。”
+
+User feedback: liked it and found it more realistic. The user clarified that this is a spoken-delivery state, distinct from `heavy ragged breathing`.
+
+Approved use distinction:
+- `breathless_husky_whisper`: apply to spoken dialogue when the voice itself should sound breath-inflected and husky.
+- `heavy_ragged_breathing`: a separate nonverbal breathing performance; preferred for sustained, vigorous breathing around or between spoken lines.
+- `ragged_exhale`: a distinct rough exhalation, useful as a short release or transition.
+
+The distinction is semantic and based on the current voice audition; it does not imply that these prompts are guaranteed provider controls. Keep the existing voice, model, B2.1 breath settings, and mix parameters unchanged.
+
+## Afterglow note
+
+`Afterglow` is a local arrangement concept, not a literal tag from the supplied reference image and not a registered catalogue cue. The reference does contain `warm exhale`, but a standalone post-speech `[warm exhale]` was auditioned and the user found it abrupt. Do not use it by default.
+
+For now, build an Afterglow-like ending through a gradual performance transition:
+1. If the scene calls for it, use the already approved nonverbal `heavy ragged breathing` cue.
+2. Move into the already approved spoken `breathless husky whisper` state.
+3. Let the final line return toward untagged, relaxed speech with natural punctuation and a short pause.
+4. Do not append a separate exhale tag just to manufacture a tail. The final breath/decay remains an unvalidated design goal.
+
+This is a usage convention only. It does not change TTS settings, add audio processing, or claim that an Afterglow effect is already implemented.
 
 ## Validation plan
 

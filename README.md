@@ -50,6 +50,8 @@ The mode remains opt-in until a real listening test confirms that its placement 
 
 ### Vocal cue planner (beta.38)
 
+Practical usage, validated cue roles, line/inline examples, and the Afterglow distinction: [Vocal Cue Playbook](./docs/VOCAL_CUE_PLAYBOOK.md).
+
 `plan_vocal_cues` arranges explicitly selected, reference-derived TTS performance tags around exact text anchors. It is planning-only and makes no ElevenLabs request. It supports line or inline layout, repeated-phrase occurrence selection, and optional user-supplied vocalization text. Tags are candidates until auditioned on the current voice; they are not Foley assets. Use `plan_foley_cues` separately for physical action audio.
 
 ### Continuous voice timeline tail (beta.33)

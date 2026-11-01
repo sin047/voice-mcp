@@ -36,6 +36,7 @@ jobs:
           node --check src/voice-long-audio.mjs
           node --check src/soundscape-presets.mjs
           node --check src/foley-cue-planner.mjs
+          node --check src/breath-engine.mjs
       - name: Regression tests
         run: npm test
       - name: Install runtime dependencies
@@ -58,11 +59,13 @@ jobs:
             import assert from "node:assert/strict";
             const status = JSON.parse(fs.readFileSync("/tmp/voice-status.json", "utf8"));
             assert.equal(status.status, "ok");
-            assert.equal(status.version, "1.4.0-beta.35");
+            assert.equal(status.version, "1.4.0-beta.36");
             assert.equal(status.features.request_id_continuity, true);
             assert.equal(status.features.language_auto_detection, true);
             assert.equal(status.features.local_drama_preview, true);
             assert.equal(status.features.private_audio_asset_library, true);
+            assert.equal(status.features.breath_asset_classification, true);
+            assert.equal(status.features.automatic_breath_engine, true);
             assert.equal(status.features.persistent_recording_archive, true);
             assert.equal(status.features.continuous_voice_timeline, true);
             assert.equal(status.features.continuous_timeline_effect_tail, true);
@@ -215,7 +218,10 @@ jobs:
             assert.ok(continuous.inputSchema.properties.sequence_foley);
             assert.ok(continuous.inputSchema.properties.cues.items.properties.source_offset_sec);
             assert.ok(continuous.inputSchema.properties.cues.items.properties.normalization_target_rms);
-            assert.ok(continuous.description.includes("pure-Foley/ambience tail after the generated voice"));
+            assert.ok(continuous.description.includes("pure-effects tail after the generated voice"));
+            assert.ok(continuous.description.includes("silence")); 
+            assert.ok(continuous.inputSchema.properties.breath_engine);
+            assert.ok(continuous.inputSchema.properties.breath_bus_gain);
             const foleyPlanner = tools.find((tool) => tool.name === "plan_foley_cues");
             assert.ok(foleyPlanner.description.includes("does NOT call ElevenLabs"));
             assert.ok(foleyPlanner.description.includes("trailing punctuation"));
@@ -223,7 +229,7 @@ jobs:
             assert.ok(foleyPlanner.inputSchema.properties.pure_audio_tail_sec);
             assert.equal(continuous._meta.ui.resourceUri, "ui://voice-mcp/player.html");
             const timeline = tools.find((tool) => tool.name === "render_audio_timeline");
-            assert.deepEqual(timeline.inputSchema.properties.segments.items.properties.type.enum, ["voice", "foley", "ambience", "gap"]);
+            assert.deepEqual(timeline.inputSchema.properties.segments.items.properties.type.enum, ["voice", "foley", "ambience", "breath", "gap"]);
             const speak = tools.find((tool) => tool.name === "speak");
             const soundscape = tools.find((tool) => tool.name === "speak_with_soundscape");
             assert.equal(speak._meta.ui.resourceUri, "ui://voice-mcp/player.html");
@@ -235,6 +241,7 @@ jobs:
             assert.deepEqual(speak.inputSchema.properties.emotion.enum, ["neutral", "calm", "warm", "tender", "curious", "excited", "nervous", "intense", "tired"]);
             assert.deepEqual(soundscape.inputSchema.properties.emotion.enum, ["neutral", "calm", "warm", "tender", "curious", "excited", "nervous", "intense", "tired"]);
             assert.equal(soundscape._meta.ui.resourceUri, "ui://voice-mcp/player.html");
+            assert.deepEqual(soundscape.inputSchema.properties.cues.items.properties.kind.enum, ["ambience", "foley", "breath"]);
             const caps = JSON.parse(fs.readFileSync("/tmp/mcp-initialize.json", "utf8")).result.capabilities;
             assert.deepEqual(caps.extensions["io.modelcontextprotocol/ui"].mimeTypes, ["text/html;profile=mcp-app"]);
             const resource = JSON.parse(fs.readFileSync("/tmp/mcp-player.json", "utf8")).result.contents[0];

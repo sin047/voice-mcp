@@ -104,12 +104,16 @@ function findOccurrence(text, anchor, occurrence) {
   return index;
 }
 
-const TRAILING_ANCHOR_PUNCTUATION = /^[\\s，。！？、；：,.!?…'"“”‘’（）()\\[\\]【】《》「」『』]+$/u;
+const TRAILING_ANCHOR_PUNCTUATION = new Set([
+  " ", "\\t", "\\r", "\\n", "，", "。", "！", "？", "、", "；", "：",
+  ",", ".", "!", "?", "…", "'", '"', "“", "”", "‘", "’", "（", "）",
+  "(", ")", "[", "]", "【", "】", "《", "》", "「", "」", "『", "』",
+]);
 
 function includeTrailingPunctuation(text, start, end) {
   let resolvedEnd = end;
   while (resolvedEnd < text.length &&
-    TRAILING_ANCHOR_PUNCTUATION.test(text[resolvedEnd]) &&
+    TRAILING_ANCHOR_PUNCTUATION.has(text[resolvedEnd]) &&
     resolvedEnd - start < 160) {
     resolvedEnd += 1;
   }

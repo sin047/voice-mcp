@@ -60,7 +60,7 @@ export function createDramaTimeline(input) {
     const normalizationTargetRms = boundedNumber(
       cue.normalizationTargetRms ?? (kind === "breath" ? 0.04 : 0.1),
       "normalizationTargetRms",
-      0.05,
+      0.01,
       0.2,
     );
     const defaultFadeIn = kind === "ambience" ? 1 : kind === "breath" ? 0.025 : 0.03;

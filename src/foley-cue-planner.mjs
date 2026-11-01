@@ -104,6 +104,21 @@ function findOccurrence(text, anchor, occurrence) {
   return index;
 }
 
+const TRAILING_ANCHOR_PUNCTUATION = /^[\\s，。！？、；：,.!?…'"“”‘’（）()\\[\\]【】《》「」『』]+$/u;
+
+function includeTrailingPunctuation(text, start, end) {
+  let resolvedEnd = end;
+  while (resolvedEnd < text.length &&
+    TRAILING_ANCHOR_PUNCTUATION.test(text[resolvedEnd]) &&
+    resolvedEnd - start < 160) {
+    resolvedEnd += 1;
+  }
+  return {
+    text: text.slice(start, resolvedEnd),
+    end: resolvedEnd,
+  };
+}
+
 /**
  * Build a deterministic, no-TTS Foley plan.
  * The caller chooses the action and quotes an exact text anchor; this module
@@ -130,6 +145,7 @@ export function planFoleyCues({
 
   let previousAnchorEnd = -1;
   const cues = [];
+  const resolvedAnchors = [];
   const warnings = [];
 
   for (let index = 0; index < actions.length; index += 1) {
@@ -157,7 +173,14 @@ export function planFoleyCues({
     if (anchorStart < previousAnchorEnd) {
       throw new Error("Foley actions must be supplied in spoken-text order with non-overlapping anchors");
     }
-    previousAnchorEnd = anchorEnd;
+    const resolvedAnchor = includeTrailingPunctuation(text, anchorStart, anchorEnd);
+    const resolvedAnchorText = resolvedAnchor.text;
+    previousAnchorEnd = resolvedAnchor.end;
+    resolvedAnchors.push(Object.freeze({
+      after_text: resolvedAnchorText,
+      occurrence,
+      start: anchorStart,
+    }));
 
     const asset = assets.find((item) =>
       item && item.kind === "foley" &&
@@ -190,7 +213,7 @@ export function planFoleyCues({
     cues.push({
       asset_id: asset.id,
       kind: "foley",
-      after_text: anchorText,
+      after_text: resolvedAnchorText,
       occurrence,
       duration_sec: durationSec,
       gain: definition.gain,
@@ -224,15 +247,12 @@ export function planFoleyCues({
     action_count: cues.length,
     cues: Object.freeze(cues.map((cue) => Object.freeze(cue))),
     action_order: Object.freeze(actions.map((request) => request.action)),
-    anchor_order: Object.freeze(actions.map((request) => Object.freeze({
-      after_text: request.after_text,
-      occurrence: request.occurrence ?? 1,
-      start: findOccurrence(text, request.after_text, request.occurrence ?? 1),
-    }))),
+    anchor_order: Object.freeze(resolvedAnchors),
     warnings: Object.freeze(warnings),
     notes: Object.freeze([
       "No ElevenLabs request was made while planning.",
       "Each action maps to exactly one uploaded Foley asset.",
+      "Trailing punctuation immediately after an anchor is included so Foley starts after the complete spoken phrase.",
       "Exact after_text anchors are resolved against provider character timestamps during rendering.",
       "Sequential Foley cues are trimmed at the next cue boundary so action sounds do not overlap.",
     ]),

@@ -43,7 +43,7 @@ The planner:
 4. Uses at most `max_breaths` overlays and skips placements that overlap existing effect cues.
 5. Returns a `breath_engine` report with detected gaps, selected samples, and skipped placements.
 
-Defaults are intentionally restrained: cue gain 0.14, breath bus gain 0.58, and normalization target RMS 0.04. Adjust only after listening to the result.
+Defaults are intentionally restrained: cue gain 0.28, breath bus gain 0.75, and normalization target RMS 0.06. Adjust only after listening to the result.
 
 ## 3. Safety properties and current limits
 

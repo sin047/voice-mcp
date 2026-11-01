@@ -36,6 +36,7 @@ jobs:
           node --check src/voice-long-audio.mjs
           node --check src/soundscape-presets.mjs
           node --check src/foley-cue-planner.mjs
+          node --check src/breath-engine.mjs
       - name: Regression tests
         run: npm test
       - name: Install runtime dependencies

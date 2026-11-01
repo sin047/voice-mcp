@@ -7,7 +7,7 @@ import { parseByteRange } from "./audio-range.mjs";
 import { decodeRawPcm16, encodePcm16Wav, mixSoundscape } from "./wav-audio.mjs";
 import { joinPcm16Chunks } from "./voice-long-audio.mjs";
 import { resolveCueTimeAfterText } from "./alignment-cues.mjs";
-import { planFoleyCues } from "./foley-cue-planner.mjs";
+import { planFoleyCues, sequenceFoleyCues } from "./foley-cue-planner.mjs";
 import { planVoiceChunks } from "./voice-chunker.mjs";
 import { auditCharacterAlignment } from "./alignment-audit.mjs";
 import { buildSoundscapePresetCues, parseSoundscapeDirective } from "./soundscape-presets.mjs";
@@ -1153,44 +1153,11 @@ function createServer() {
         };
       });
 
-      const sequenceAdjustments = [];
+      let sequenceAdjustments = [];
       if (args.sequence_foley) {
-        const orderedFoley = resolvedCues
-          .map((cue, index) => ({ cue, index }))
-          .filter(({ cue }) => cue.kind === "foley")
-          .sort((a, b) => a.cue.atSec - b.cue.atSec);
-        for (let index = 0; index < orderedFoley.length; index += 1) {
-          const { cue } = orderedFoley[index];
-          const metadata = assetMetadata.get(cue.fileId);
-          const sourceRemainingSec = Math.max(0,
-            (metadata?.durationSec ?? 0) - (cue.sourceOffsetSec ?? 0));
-          if (sourceRemainingSec < 0.1) {
-            throw new Error("Foley source is too short at the selected source offset: " + cue.fileId);
-          }
-          let durationSec = Math.min(cue.durationSec ?? sourceRemainingSec, sourceRemainingSec);
-          const nextCue = orderedFoley[index + 1]?.cue;
-          if (nextCue) {
-            const availableWindowSec = nextCue.atSec - cue.atSec;
-            if (availableWindowSec < 0.1) {
-              throw new Error("Sequential Foley anchors resolve too close together; move one action anchor later");
-            }
-            if (durationSec > availableWindowSec) {
-              durationSec = availableWindowSec;
-              sequenceAdjustments.push({
-                asset_id: cue.fileId,
-                trimmed_to_sec: Number(durationSec.toFixed(3)),
-                reason: "next Foley action starts",
-              });
-            }
-          }
-          durationSec = Math.min(durationSec, timelineDurationSec - cue.atSec);
-          if (durationSec < 0.1) {
-            throw new Error("Sequential Foley cue has no usable playback window");
-          }
-          cue.durationSec = durationSec;
-          cue.fadeInSec = Math.min(cue.fadeInSec ?? 0.03, durationSec / 2);
-          cue.fadeOutSec = Math.min(cue.fadeOutSec ?? 0.1, durationSec / 2);
-        }
+        const sequenced = sequenceFoleyCues(resolvedCues, assetMetadata, timelineDurationSec);
+        resolvedCues.splice(0, resolvedCues.length, ...sequenced.cues);
+        sequenceAdjustments = sequenced.adjustments;
       }
 
       const mix = mixSoundscape({

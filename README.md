@@ -2,7 +2,7 @@
 
 A platform-neutral Node.js MCP server for ElevenLabs voice generation, expressive delivery and mixed voice + sound-effect playback.
 
-The actively maintained development and deployment branch is `zeabur`, currently at **v1.4.0-beta.38**. It runs as a Node.js 22+ / Express 5 service with Streamable HTTP MCP and is deployed on Zeabur. The same runtime can also run on a VPS or Docker host.
+The actively maintained development and deployment branch is `zeabur`, currently at **v1.4.0-beta.40**. It runs as a Node.js 22+ / Express 5 service with Streamable HTTP MCP and is deployed on Zeabur. The same runtime can also run on a VPS or Docker host.
 
 
 
@@ -171,6 +171,10 @@ Generate speech and mix it with up to 12 uploaded ambience/Foley assets. The too
 The generated playback URL expires after 10 minutes and is held in process memory; a server restart invalidates it. The URL is an unguessable, temporary bearer link.
 
 Both `speak` and `speak_with_soundscape` attach the same MCP App audio player. Voice-only output is passed as an audio data URL; mixed soundscape output is loaded from its short-lived HTTPS playback URL. The player uses the current MCP Apps `ui/initialize` handshake (`2026-01-26`) and native browser audio controls. Hosts without MCP Apps still receive the normal text/structured tool result. After changing MCP tool UI metadata, refresh the custom MCP app in ChatGPT so the host re-reads the tool definitions.
+
+### Vocal performance presets (beta.40)
+
+The MCP tools `list_vocal_presets` and `plan_vocal_preset` provide reusable, deterministic vocal-performance arrangements. The initial registry includes close-soft, sustained heavy breathing, breathless dialogue, ragged exhale, breathing-to-dialogue, and Afterglow. Preset planning requires exact text anchors and makes zero ElevenLabs calls. Unverified mouth/contact prompts are excluded from automatic presets; Afterglow remains an arrangement pattern with an untagged closing line. See [Vocal Performance Presets](./docs/VOCAL_PERFORMANCE_PRESETS.md).
 
 ## Private sound library
 

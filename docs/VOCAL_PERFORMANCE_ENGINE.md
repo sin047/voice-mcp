@@ -1,10 +1,10 @@
 # Vocal Performance Engine
 
-Status: Phase 1 planner implemented in beta.38; five-category cue catalogue and validation registry added in beta.39; no synthesis integration yet
+Status: deterministic cue planner and five-category catalogue in beta.39; reusable vocal-performance preset registry/planner added in beta.40; no synthesis integration
 
 ## Purpose
 
-See the practical usage guide: [Vocal Cue Playbook](./VOCAL_CUE_PLAYBOOK.md).
+See the practical usage guide: [Vocal Cue Playbook](./VOCAL_CUE_PLAYBOOK.md). Reusable bundles are documented in [Vocal Performance Presets](./VOCAL_PERFORMANCE_PRESETS.md).
 
 Turn the user's reference guide into deterministic, inspectable TTS performance instructions. The first phase only plans tags around exact text anchors. It does not call ElevenLabs, alter generated audio, infer actions from keywords, or change the approved voice and mix settings.
 

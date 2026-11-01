@@ -10,6 +10,7 @@ import { resolveCueTimeAfterText } from "./alignment-cues.mjs";
 import { getFoleyActionCatalog, planFoleyCues, resolveFoleyTimelineDuration, sequenceFoleyCues } from "./foley-cue-planner.mjs";
 import { analyzeBreathSegments, repositionOpeningBreaths } from "./breath-engine.mjs";
 import { getVocalCueCatalog, planVocalCues } from "./vocal-cue-planner.mjs";
+import { listVocalPerformancePresets, planVocalPreset } from "./vocal-performance-presets.mjs";
 import { planVoiceChunks } from "./voice-chunker.mjs";
 import { auditCharacterAlignment } from "./alignment-audit.mjs";
 import { buildSoundscapePresetCues, parseSoundscapeDirective } from "./soundscape-presets.mjs";
@@ -40,7 +41,7 @@ const MODEL_ID = process.env.ELEVENLABS_MODEL_ID || "eleven_v4";
 const OUTPUT_FORMAT = process.env.ELEVENLABS_OUTPUT_FORMAT || "mp3_44100_128";
 const PLAYER_URI = "ui://voice-mcp/player.html";
 const PLAYER_MIME = "text/html;profile=mcp-app";
-const VERSION = "1.4.0-beta.39";
+const VERSION = "1.4.0-beta.40";
 const MAX_CONTEXT_CHARS = 4000;
 const MAX_SPEAK_CHARS = 4000;
 const MAX_SOUND_SCAPE_TEXT_CHARS = 1200;
@@ -916,6 +917,80 @@ function createServer() {
   );
 
   mcp.registerTool(
+    "list_vocal_presets",
+    {
+      title: "List vocal performance presets",
+      description: "List reusable vocal-performance presets built only from positively auditioned or approved cues. This read-only catalogue does NOT call ElevenLabs or consume TTS credits. It excludes unverified mouth/contact candidates and keeps Afterglow as arrangement guidance rather than a TTS tag.",
+      inputSchema: z.object({}),
+    },
+    async () => {
+      try {
+        const catalog = listVocalPerformancePresets();
+        const summary = catalog.presets.map((preset) => {
+          const slots = preset.slots.map((slot) =>
+            "- " + slot.id + ": " + (slot.tag ? "[" + slot.tag + "]" : "untagged") +
+            " — " + slot.validation_status
+          ).join("\n");
+          return preset.label_zh + " (" + preset.id + ") — " + preset.validation_status + "\n" + slots;
+        }).join("\n\n");
+        return {
+          content: [{ type: "text", text: summary }],
+          structuredContent: catalog,
+        };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        return {
+          content: [{ type: "text", text: "Could not list vocal presets: " + message }],
+          isError: true,
+        };
+      }
+    },
+  );
+
+  mcp.registerTool(
+    "plan_vocal_preset",
+    {
+      title: "Plan a vocal performance preset",
+      description: "Apply a reusable vocal-performance preset to exact phrases in the spoken text. This is deterministic planning only: it does NOT call ElevenLabs or consume TTS credits. Supply anchors in the preset's defined slot order; each anchor must be an exact, distinct phrase from the text. Review rendered_text before passing it to render_continuous_audio_timeline. Physical-action Foley remains separate and is planned with plan_foley_cues.",
+      inputSchema: z.object({
+        text: z.string().min(1).max(MAX_SOUND_SCAPE_TEXT_CHARS),
+        preset: z.enum([
+          "close_soft",
+          "heavy_breathing",
+          "breathless_dialogue",
+          "ragged_release",
+          "breathing_to_dialogue",
+          "afterglow",
+        ]),
+        anchors: z.array(z.object({
+          slot: z.string().min(1).max(40),
+          anchor_text: z.string().min(1).max(160),
+          occurrence: z.number().int().min(1).max(10).optional(),
+        })).min(1).max(6),
+      }),
+    },
+    async (args) => {
+      try {
+        const plan = planVocalPreset(args);
+        return {
+          content: [{
+            type: "text",
+            text: "Planned preset " + plan.preset + " with " + plan.cue_count + " vocal cue(s). No ElevenLabs request was made.",
+          }],
+          structuredContent: plan,
+        };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        return {
+          content: [{ type: "text", text: "Vocal preset planning failed: " + message }],
+          structuredContent: { error: message, estimated_tts_calls: 0 },
+          isError: true,
+        };
+      }
+    },
+  );
+
+  mcp.registerTool(
     "plan_vocal_cues",
     {
       title: "Plan vocal performance cues",
@@ -1698,6 +1773,8 @@ app.get("/status", (_req, res) => {
       foley_cue_planner: SOUNDSCAPE_MCP_ENABLED,
       vocal_cue_planner: SOUNDSCAPE_MCP_ENABLED,
       vocal_cue_catalog: SOUNDSCAPE_MCP_ENABLED,
+      vocal_performance_presets: SOUNDSCAPE_MCP_ENABLED,
+      vocal_preset_planner: SOUNDSCAPE_MCP_ENABLED,
       voice_chunk_planning: true,
       speak_long: true,
       long_voice_max_seconds: MAX_LONG_VOICE_SECONDS,

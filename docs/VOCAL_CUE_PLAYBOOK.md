@@ -1,6 +1,6 @@
 # Shin Voice — Vocal Cue Playbook
 
-Status: practical guide for the beta.38 `plan_vocal_cues` planner and beta.39 five-category catalogue. This document records reference-derived prompt wording and current listening decisions; it is not a provider compatibility guarantee.
+Status: practical guide for the beta.39 `plan_vocal_cues` planner/catalogue and beta.40 reusable preset planner. This document records reference-derived prompt wording and current listening decisions; it is not a provider compatibility guarantee. See [Vocal Performance Presets](./VOCAL_PERFORMANCE_PRESETS.md) for named reusable combinations.
 
 ## 1. Is “Afterglow” in the supplied reference?
 

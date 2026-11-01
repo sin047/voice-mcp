@@ -61,3 +61,32 @@ test("continuous voice timeline can carry a pure Foley tail after speech ends", 
   );
   assert.equal(afterCuePeak, 0, "the pure-Foley tail should end at its cue boundary");
 });
+
+
+test("continuous voice timeline renders voice-only audio with an empty Foley cue list", () => {
+  const sampleRate = 24000;
+  const voice = {
+    sampleRate,
+    channels: [new Float32Array(sampleRate / 10).fill(0.1)],
+    durationSec: 0.1,
+  };
+  const mixed = mixSoundscape({
+    voicePcm: voice,
+    totalDurationSec: 0.1,
+    assets: new Map(),
+    cues: [],
+    voiceGain: 1,
+    ambienceBusGain: 1,
+    foleyBusGain: 1,
+    masterGain: 1,
+    duckingEnabled: false,
+  });
+  const decoded = decodePcmWav(mixed.buffer);
+  assert.equal(mixed.durationSec, 0.1);
+  assert.equal(decoded.sampleRate, 44100);
+  assert.equal(decoded.channelCount, 2);
+  const peak = Math.max(...decoded.channels.map(channel =>
+    channel.reduce((maximum, value) => Math.max(maximum, Math.abs(value)), 0)
+  ));
+  assert.ok(peak > 0.05, "voice-only rendering should preserve audible voice samples");
+});

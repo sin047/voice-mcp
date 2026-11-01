@@ -1,6 +1,6 @@
 # Vocal Performance Engine
 
-Status: deterministic cue planner and five-category catalogue in beta.39; reusable vocal-performance preset registry/planner added in beta.40; beta.41 explicitly connects approved preset output to continuous timeline synthesis through opt-in raw-tag preservation.
+Status: deterministic cue planner and five-category catalogue in beta.39; reusable vocal-performance preset registry/planner added in beta.40; beta.41 explicitly connects approved preset output to continuous timeline synthesis through opt-in raw-tag preservation; beta.42 allows voice-only continuous rendering with no Foley cues.
 
 ## Purpose
 

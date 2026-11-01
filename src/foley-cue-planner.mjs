@@ -204,8 +204,6 @@ export function planFoleyCues({
         ? {}
         : { normalization_target_rms: definition.normalizationTargetRms }),
       loop: false,
-      anchor_start: anchorStart,
-      anchor_end: anchorEnd,
     });
   }
 
@@ -226,6 +224,11 @@ export function planFoleyCues({
     tail_duration_sec: pureAudioTailSec,
     action_count: cues.length,
     cues: Object.freeze(cues.map((cue) => Object.freeze(cue))),
+    anchor_order: Object.freeze(actions.map((request) => Object.freeze({
+      action: request.action,
+      after_text: request.after_text,
+      start: findOccurrence(text, request.after_text, request.occurrence ?? 1),
+    }))),
     warnings: Object.freeze(warnings),
     notes: Object.freeze([
       "No ElevenLabs request was made while planning.",
@@ -233,5 +236,64 @@ export function planFoleyCues({
       "Exact after_text anchors are resolved against provider character timestamps during rendering.",
       "Sequential Foley cues are trimmed at the next cue boundary so action sounds do not overlap.",
     ]),
+  });
+}
+
+/**
+ * Cap sequential Foley cues so one action sound ends before the next begins.
+ * Ambience cues are deliberately left untouched.
+ */
+export function sequenceFoleyCues(cues, assetMetadata, timelineDurationSec) {
+  if (!Array.isArray(cues)) throw new Error("cues must be an array");
+  if (!(assetMetadata instanceof Map)) throw new Error("assetMetadata must be a Map");
+  if (!Number.isFinite(timelineDurationSec) || timelineDurationSec <= 0) {
+    throw new Error("timelineDurationSec must be a positive number");
+  }
+
+  const normalized = cues.map((cue) => ({ ...cue }));
+  const ordered = normalized
+    .map((cue, index) => ({ cue, index }))
+    .filter(({ cue }) => cue.kind === "foley")
+    .sort((a, b) => a.cue.atSec - b.cue.atSec);
+  const adjustments = [];
+
+  for (let index = 0; index < ordered.length; index += 1) {
+    const { cue } = ordered[index];
+    const metadata = assetMetadata.get(cue.fileId);
+    const sourceRemainingSec = Math.max(0,
+      (metadata?.durationSec ?? 0) - (cue.sourceOffsetSec ?? 0));
+    if (sourceRemainingSec < 0.1) {
+      throw new Error("Foley source is too short at the selected source offset: " + cue.fileId);
+    }
+
+    let durationSec = Math.min(cue.durationSec ?? sourceRemainingSec, sourceRemainingSec);
+    const nextCue = ordered[index + 1]?.cue;
+    if (nextCue) {
+      const availableWindowSec = nextCue.atSec - cue.atSec;
+      if (availableWindowSec < 0.1) {
+        throw new Error("Sequential Foley anchors resolve too close together; move one action anchor later");
+      }
+      if (durationSec > availableWindowSec) {
+        durationSec = availableWindowSec;
+        adjustments.push({
+          asset_id: cue.fileId,
+          trimmed_to_sec: Number(durationSec.toFixed(3)),
+          reason: "next Foley action starts",
+        });
+      }
+    }
+
+    durationSec = Math.min(durationSec, timelineDurationSec - cue.atSec);
+    if (durationSec < 0.1) {
+      throw new Error("Sequential Foley cue has no usable playback window");
+    }
+    cue.durationSec = durationSec;
+    cue.fadeInSec = Math.min(cue.fadeInSec ?? 0.03, durationSec / 2);
+    cue.fadeOutSec = Math.min(cue.fadeOutSec ?? 0.1, durationSec / 2);
+  }
+
+  return Object.freeze({
+    cues: Object.freeze(normalized.map((cue) => Object.freeze(cue))),
+    adjustments: Object.freeze(adjustments.map((item) => Object.freeze(item))),
   });
 }

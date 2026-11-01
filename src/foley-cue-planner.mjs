@@ -297,3 +297,53 @@ export function sequenceFoleyCues(cues, assetMetadata, timelineDurationSec) {
     adjustments: Object.freeze(adjustments.map((item) => Object.freeze(item))),
   });
 }
+
+/**
+ * Resolve the final WAV duration without guessing the TTS duration in advance.
+ * Relative tails are safely capped at the service's maximum output duration.
+ */
+export function resolveFoleyTimelineDuration({
+  voiceDurationSec,
+  timelineDurationSec,
+  tailDurationSec,
+  maxDurationSec = 60,
+} = {}) {
+  if (!Number.isFinite(voiceDurationSec) || voiceDurationSec <= 0) {
+    throw new Error("voiceDurationSec must be a positive finite number");
+  }
+  if (!Number.isFinite(maxDurationSec) || maxDurationSec <= 0) {
+    throw new Error("maxDurationSec must be a positive finite number");
+  }
+  if (voiceDurationSec > maxDurationSec) {
+    throw new Error("Voice duration exceeds the maximum timeline duration");
+  }
+  if (timelineDurationSec != null && tailDurationSec != null) {
+    throw new Error("Use either timelineDurationSec or tailDurationSec, not both");
+  }
+
+  if (timelineDurationSec != null) {
+    if (!Number.isFinite(timelineDurationSec) ||
+        timelineDurationSec + 0.001 < voiceDurationSec ||
+        timelineDurationSec > maxDurationSec) {
+      throw new Error("timelineDurationSec must fit the voice and maximum timeline duration");
+    }
+    return Object.freeze({
+      durationSec: timelineDurationSec,
+      tailDurationSec: Math.max(0, timelineDurationSec - voiceDurationSec),
+      requestedTailDurationSec: null,
+      tailClamped: false,
+    });
+  }
+
+  const requestedTail = tailDurationSec ?? 0;
+  if (!Number.isFinite(requestedTail) || requestedTail < 0 || requestedTail > 15) {
+    throw new Error("tailDurationSec must be between 0 and 15 seconds");
+  }
+  const actualTail = Math.min(requestedTail, Math.max(0, maxDurationSec - voiceDurationSec));
+  return Object.freeze({
+    durationSec: voiceDurationSec + actualTail,
+    tailDurationSec: actualTail,
+    requestedTailDurationSec: requestedTail,
+    tailClamped: actualTail + 0.001 < requestedTail,
+  });
+}

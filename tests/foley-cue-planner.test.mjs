@@ -33,6 +33,9 @@ test("plans one approved Foley asset for each exact action anchor without TTS", 
   assert.deepEqual(plan.cues.map((cue) => cue.asset_id), ["fx_package", "fx_box", "fx_finish"]);
   assert.ok(plan.cues.every((cue) => cue.kind === "foley" && cue.loop === false));
   assert.equal(plan.cues[0].duration_sec, 1.8);
+  assert.equal(plan.cues[0].after_text, "我把包装撕开。");
+  assert.equal(plan.cues[1].after_text, "接着打开盒子。");
+  assert.equal(plan.anchor_order[2].after_text, "最后轻轻放下。");
 });
 
 test("preserves approved clothing source offset and gain preset", () => {
@@ -164,4 +167,14 @@ test("rejects conflicting absolute and relative timeline durations", () => {
     timelineDurationSec: 12,
     tailDurationSec: 2,
   }), /either timelineDurationSec or tailDurationSec/);
+});
+
+test("includes closing punctuation and quote marks in the resolved anchor", () => {
+  const plan = planFoleyCues({
+    text: "我轻声说：“把盒子打开。”然后停一下。",
+    actions: [{ action: "box_open", after_text: "把盒子打开" }],
+    assets,
+  });
+  assert.equal(plan.cues[0].after_text, "把盒子打开。”");
+  assert.equal(plan.anchor_order[0].after_text, "把盒子打开。”");
 });

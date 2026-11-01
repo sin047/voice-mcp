@@ -188,7 +188,6 @@ export function planFoleyCues({
     const fadeInSec = Math.min(definition.fadeInSec, durationSec / 2);
     const fadeOutSec = Math.min(definition.fadeOutSec, durationSec / 2);
     cues.push({
-      action: request.action,
       asset_id: asset.id,
       kind: "foley",
       after_text: anchorText,
@@ -224,9 +223,10 @@ export function planFoleyCues({
     tail_duration_sec: pureAudioTailSec,
     action_count: cues.length,
     cues: Object.freeze(cues.map((cue) => Object.freeze(cue))),
+    action_order: Object.freeze(actions.map((request) => request.action)),
     anchor_order: Object.freeze(actions.map((request) => Object.freeze({
-      action: request.action,
       after_text: request.after_text,
+      occurrence: request.occurrence ?? 1,
       start: findOccurrence(text, request.after_text, request.occurrence ?? 1),
     }))),
     warnings: Object.freeze(warnings),

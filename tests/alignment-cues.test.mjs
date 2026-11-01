@@ -32,3 +32,17 @@ test("rejects missing or mismatched alignment arrays", () => {
     afterText: "a",
   }), /usable character-level alignment/);
 });
+
+test("prefers the alignment matching the exact speech text", () => {
+  const expanded = {
+    characters: ["H", "e", "l", "l", "o", " ", "w", "o", "r", "l", "d", "!"],
+    character_start_times_seconds: Array.from({ length: 12 }, (_, i) => 10 + i * 0.1),
+    character_end_times_seconds: Array.from({ length: 12 }, (_, i) => 10.1 + i * 0.1),
+  };
+  assert.equal(resolveCueTimeAfterText({
+    normalizedAlignment: expanded,
+    alignment,
+    expectedText: "Hello world",
+    afterText: "Hello",
+  }), 0.5);
+});

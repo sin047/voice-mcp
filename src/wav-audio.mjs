@@ -252,7 +252,7 @@ export function mixSoundscape({
   voiceGain = 0.9,
   ambienceBusGain = 0.82,
   foleyBusGain = 0.9,
-  breathBusGain = 0.58,
+  breathBusGain = 0.75,
   masterGain = 0.85,
   duckingEnabled = true,
   duckingAmount = 0.75,

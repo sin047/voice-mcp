@@ -1180,7 +1180,7 @@ function createServer() {
           maxBreaths: args.breath_engine.max_breaths ?? 4,
           minGapSec: args.breath_engine.min_gap_sec ?? 0.72,
           silenceThresholdDb: args.breath_engine.silence_threshold_db ?? -48,
-          gain: args.breath_engine.gain ?? 0.14,
+          gain: args.breath_engine.gain ?? 0.28,
         });
         if (resolvedCues.length + breathPlan.cues.length > 12) {
           throw new Error("Manual and automatic effects exceed the 12-cue timeline limit; reduce manual cues or max_breaths");

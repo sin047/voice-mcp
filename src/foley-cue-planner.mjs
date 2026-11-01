@@ -76,10 +76,10 @@ const ACTIONS = Object.freeze({
     gain: soundscapeGain("detail"),
     pan: 0.48,
     distanceMeters: 1,
-    fadeInSec: 0.12,
-    fadeOutSec: 0.5,
-    durationSec: 3.2,
-    normalizationTargetRms: 0.14,
+    fadeInSec: 0.1,
+    fadeOutSec: 0.35,
+    durationSec: 2.4,
+    sourceOffsetSec: 12,
   }),
   ending_detail: Object.freeze({
     assetName: "收尾音效",
@@ -215,6 +215,7 @@ export function planFoleyCues({
 
   return Object.freeze({
     plan_only: true,
+    text,
     estimated_tts_calls: 0,
     requires_alignment_at_render: true,
     render_tool: "render_continuous_audio_timeline",

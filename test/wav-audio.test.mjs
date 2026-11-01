@@ -263,7 +263,7 @@ test("rejects a soundscape longer than the supported duration", () => {
 });
 
 test("routes breath assets through a separate quiet bus", () => {
-  const voice = rawPcm(tone(44100, 0.1));
+  const voice = rawPcm(tone(44100, 0));
   const breath = encodePcm16Wav([tone(44100, 0.2)], 44100);
   const mixed = mixSoundscape({
     voicePcm: voice,

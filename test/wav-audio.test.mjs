@@ -261,3 +261,30 @@ test("rejects a soundscape longer than the supported duration", () => {
   const voice = rawPcm(tone(44100 * 181, 0.01));
   assert.throws(() => mixSoundscape({ voicePcm: voice, assets: new Map() }), /180 second/);
 });
+
+test("routes breath assets through a separate quiet bus", () => {
+  const voice = rawPcm(tone(44100, 0.1));
+  const breath = encodePcm16Wav([tone(44100, 0.2)], 44100);
+  const mixed = mixSoundscape({
+    voicePcm: voice,
+    assets: new Map([["inhale", breath]]),
+    cues: [{
+      fileId: "inhale",
+      kind: "breath",
+      atSec: 0.2,
+      durationSec: 0.5,
+      gain: 0.4,
+      fadeInSec: 0,
+      fadeOutSec: 0,
+    }],
+    voiceGain: 1,
+    foleyBusGain: 0,
+    breathBusGain: 0.5,
+    masterGain: 1,
+    duckingEnabled: false,
+  });
+  const output = decodePcmWav(mixed.buffer);
+  const breathSample = output.channels[0][Math.round(0.35 * 44100)];
+  assert.ok(breathSample > 0.035 && breathSample < 0.045);
+  assert.equal(output.frameCount, 44100);
+});

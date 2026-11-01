@@ -57,14 +57,14 @@ button.remove{padding:7px 14px;font-size:12px}
 <input id="fx" type="file" accept="audio/*" multiple>
 <div id="cues"></div>
 <div class="actions"><button id="refreshAssets">刷新服务器音效库</button></div><div id="assetLibrary" class="hint">服务器音效库尚未加载。</div>
-<p class="hint">环境声建议音量 0.10，动作声建议 0.22，呼吸建议 0.14。呼吸素材请标记吸气或呼气；自动呼吸引擎会按静音间隙放置。左右声像 -1 为左耳，+1 为右耳。循环只适用于环境声。保存音效会把 WAV 上传到此 voice-mcp 实例的私有音效库。</p>
+<p class="hint">环境声建议音量 0.10，动作声建议 0.22，呼吸建议 0.28。呼吸素材请标记吸气或呼气；自动呼吸引擎会按静音间隙放置。左右声像 -1 为左耳，+1 为右耳。循环只适用于环境声。保存音效会把 WAV 上传到此 voice-mcp 实例的私有音效库。</p>
 </section>
 <section>
 <h2>03 / 混音总线与空间</h2>
 <div class="row">
 <div><label for="ambienceBusGain">环境音总线（0–1）</label><input id="ambienceBusGain" type="number" min="0" max="1" step="0.05" value="0.82"></div>
 <div><label for="foleyBusGain">动作音效总线（0–1）</label><input id="foleyBusGain" type="number" min="0" max="1" step="0.05" value="0.9"></div>
-<div><label for="breathBusGain">呼吸总线（0–1）</label><input id="breathBusGain" type="number" min="0" max="1" step="0.05" value="0.58"></div>
+<div><label for="breathBusGain">呼吸总线（0–1）</label><input id="breathBusGain" type="number" min="0" max="1" step="0.05" value="0.75"></div>
 <div><label for="masterGain">总输出（0–1）</label><input id="masterGain" type="number" min="0" max="1" step="0.05" value="0.85"></div>
 </div>
 <div class="row">
@@ -262,7 +262,7 @@ function renderCues() {
     type.disabled = Boolean(item.assetId);
     type.onchange = () => {
       item.kind = type.value;
-      item.gain = item.kind === "ambience" ? 0.1 : item.kind === "breath" ? 0.14 : 0.22;
+      item.gain = item.kind === "ambience" ? 0.1 : item.kind === "breath" ? 0.28 : 0.22;
       item.fadeInSec = item.kind === "ambience" ? 0.7 : item.kind === "breath" ? 0.025 : 0.03;
       item.fadeOutSec = item.kind === "ambience" ? 0.7 : item.kind === "breath" ? 0.045 : 0.07;
       item.loop = item.kind === "ambience";

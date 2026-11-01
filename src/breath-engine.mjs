@@ -5,8 +5,8 @@ const DEFAULTS = Object.freeze({
   minGapSec: 0.72,
   edgeMarginSec: 0.05,
   inhaleLeadSec: 0.06,
-  gain: 0.14,
-  normalizationTargetRms: 0.04,
+  gain: 0.28,
+  normalizationTargetRms: 0.06,
   maxClipSec: 1.1,
 });
 

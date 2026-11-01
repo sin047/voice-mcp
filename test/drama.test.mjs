@@ -16,7 +16,7 @@ test("creates a restrained private drama cue sheet with local-only references", 
   assert.equal(timeline.voice.gain, 0.9);
   assert.equal(timeline.mix.ambienceBusGain, 0.82);
   assert.equal(timeline.mix.foleyBusGain, 0.9);
-  assert.equal(timeline.mix.breathBusGain, 0.58);
+  assert.equal(timeline.mix.breathBusGain, 0.75);
   assert.equal(timeline.mix.masterGain, 0.85);
   assert.equal(timeline.mix.duckingEnabled, true);
   assert.equal(timeline.mix.ducking.foleyDepth, 0.35);
@@ -162,9 +162,9 @@ test("breath cues use a restrained dedicated bus and inhale/exhale defaults", ()
     voiceDurationSec: 4,
     cues: [{ fileId: "inhale_01", kind: "breath", atSec: 1 }],
   });
-  assert.equal(timeline.mix.breathBusGain, 0.58);
-  assert.equal(timeline.cues[0].gain, 0.14);
-  assert.equal(timeline.cues[0].normalizationTargetRms, 0.04);
+  assert.equal(timeline.mix.breathBusGain, 0.75);
+  assert.equal(timeline.cues[0].gain, 0.28);
+  assert.equal(timeline.cues[0].normalizationTargetRms, 0.06);
   assert.equal(timeline.cues[0].fadeInSec, 0.025);
   assert.equal(timeline.cues[0].fadeOutSec, 0.045);
   assert.equal(timeline.cues[0].loop, false);

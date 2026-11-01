@@ -185,3 +185,15 @@ Rules:
 ## Listening feedback refinement (beta.37)
 
 The first live sample was clear but sounded too much like an outward warm-air huff. The breathy performance prompt now asks for a quiet inward nasal inhale and explicitly rejects an outward huff. This changes only descriptive direction text: the `[inhales]` event, B2.1 level, voice ID, model, stability and mix levels remain unchanged. Re-test once after deployment; do not compensate by increasing gain.
+
+
+## Vocal performance planner (beta.38)
+
+A separate pure-code plan_vocal_cues tool now arranges explicit, reference-derived vocal tags around exact text anchors. It supports line and inline layouts, repeated phrase occurrence selection, and optional user-supplied vocalization text. It does not infer cues from keywords and does not call ElevenLabs.
+
+The Vocal Cue Planner is deliberately separate from Breath Engine and Foley Engine:
+- Breath Engine analyzes/repositions existing breath audio.
+- Vocal Cue Planner arranges TTS performance instructions such as inhale, ragged breathing, close whisper, wet kiss, licking, sucking, and swallowing tags.
+- Foley Engine places one approved physical-action audio asset per explicitly selected action.
+
+The initial tag catalogue is a candidate list based on the user's supplied reference. It is not yet auditioned against the current Shin Voice and must not be treated as a guaranteed provider behavior. No voice ID, model, stability, B2.1 breath level, or approved mix parameter changed in beta.38.

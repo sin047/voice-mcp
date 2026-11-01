@@ -119,3 +119,8 @@ Do not treat a successful CI run as proof that the live Zeabur deployment succee
 
 
 For a one-time persistence check, an authorized client may upload a WAV to `POST /recordings` using `Content-Type: audio/wav`. This endpoint is protected by the private HTTP token and stores the WAV with import metadata. It is intended for archive verification/import; it does not expose the MCP soundscape tools or bypass the disabled-by-default MCP security gate.
+
+
+## Vocal cue planner (beta.38)
+
+The MCP tool plan_vocal_cues is planning-only. It has no new environment variables and makes no ElevenLabs calls. It returns reference-derived tag text for explicit exact-anchor cues; validate each tag by listening before using it in production. It is separate from the physical Foley planner.

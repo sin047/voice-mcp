@@ -37,6 +37,7 @@ jobs:
           node --check src/soundscape-presets.mjs
           node --check src/foley-cue-planner.mjs
           node --check src/breath-engine.mjs
+          node --check src/vocal-cue-planner.mjs
       - name: Regression tests
         run: npm test
       - name: Install runtime dependencies
@@ -59,7 +60,7 @@ jobs:
             import assert from "node:assert/strict";
             const status = JSON.parse(fs.readFileSync("/tmp/voice-status.json", "utf8"));
             assert.equal(status.status, "ok");
-            assert.equal(status.version, "1.4.0-beta.37");
+            assert.equal(status.version, "1.4.0-beta.38");
             assert.equal(status.features.request_id_continuity, true);
             assert.equal(status.features.language_auto_detection, true);
             assert.equal(status.features.local_drama_preview, true);
@@ -68,6 +69,7 @@ jobs:
             assert.equal(status.features.continuous_voice_timeline, true);
             assert.equal(status.features.continuous_timeline_effect_tail, true);
             assert.equal(status.features.foley_cue_planner, true);
+            assert.equal(status.features.vocal_cue_planner, true);
             assert.equal(status.features.speak_long, true);
             assert.equal(status.features.long_voice_max_seconds, 180);
             assert.equal(status.features.speak_with_soundscape, true);
@@ -197,6 +199,7 @@ jobs:
             assert.ok(names.includes("render_audio_timeline"));
             assert.ok(names.includes("render_continuous_audio_timeline"));
             assert.ok(names.includes("plan_foley_cues"));
+            assert.ok(names.includes("plan_vocal_cues"));
             assert.ok(names.includes("plan_voice_chunks"));
             assert.ok(names.includes("speak_long"));
             const speakLong = tools.find((tool) => tool.name === "speak_long");
@@ -219,6 +222,13 @@ jobs:
             assert.ok(continuous.inputSchema.properties.cues.items.properties.source_offset_sec);
             assert.ok(continuous.inputSchema.properties.cues.items.properties.normalization_target_rms);
             assert.ok(continuous.description.includes("pure-Foley/ambience tail after the generated voice"));
+            const vocalPlanner = tools.find((tool) => tool.name === "plan_vocal_cues");
+            assert.ok(vocalPlanner.description.includes("does NOT call ElevenLabs"));
+            assert.ok(vocalPlanner.description.includes("never inferred from keywords"));
+            assert.ok(vocalPlanner.inputSchema.properties.cues.items.properties.anchor_text);
+            assert.deepEqual(vocalPlanner.inputSchema.properties.cues.items.properties.placement.enum, ["before", "after"]);
+            assert.deepEqual(vocalPlanner.inputSchema.properties.cues.items.properties.layout.enum, ["line", "inline"]);
+            assert.ok(vocalPlanner.inputSchema.properties.cues.items.properties.vocalization);
             const foleyPlanner = tools.find((tool) => tool.name === "plan_foley_cues");
             assert.ok(foleyPlanner.description.includes("does NOT call ElevenLabs"));
             assert.ok(foleyPlanner.description.includes("trailing punctuation"));

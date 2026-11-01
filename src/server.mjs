@@ -9,6 +9,7 @@ import { joinPcm16Chunks } from "./voice-long-audio.mjs";
 import { resolveCueTimeAfterText } from "./alignment-cues.mjs";
 import { planFoleyCues, resolveFoleyTimelineDuration, sequenceFoleyCues } from "./foley-cue-planner.mjs";
 import { analyzeBreathSegments, repositionOpeningBreaths } from "./breath-engine.mjs";
+import { planVocalCues } from "./vocal-cue-planner.mjs";
 import { planVoiceChunks } from "./voice-chunker.mjs";
 import { auditCharacterAlignment } from "./alignment-audit.mjs";
 import { buildSoundscapePresetCues, parseSoundscapeDirective } from "./soundscape-presets.mjs";
@@ -39,7 +40,7 @@ const MODEL_ID = process.env.ELEVENLABS_MODEL_ID || "eleven_v4";
 const OUTPUT_FORMAT = process.env.ELEVENLABS_OUTPUT_FORMAT || "mp3_44100_128";
 const PLAYER_URI = "ui://voice-mcp/player.html";
 const PLAYER_MIME = "text/html;profile=mcp-app";
-const VERSION = "1.4.0-beta.37";
+const VERSION = "1.4.0-beta.38";
 const MAX_CONTEXT_CHARS = 4000;
 const MAX_SPEAK_CHARS = 4000;
 const MAX_SOUND_SCAPE_TEXT_CHARS = 1200;
@@ -883,6 +884,61 @@ function createServer() {
   );
 
   mcp.registerTool(
+    "plan_vocal_cues",
+    {
+      title: "Plan vocal performance cues",
+      description: "Arrange reference-derived vocal performance tags around exact spoken-text anchors. This is deterministic planning only: it does NOT call ElevenLabs or consume TTS credits. Select each cue explicitly; cues are never inferred from keywords. Use line layout to put a tag on its own line before/after a phrase, or inline layout to keep a tag and optional vocalization beside the text. These are unverified TTS tag candidates, not playable Foley. Use plan_foley_cues separately for physical action audio, keeping one action mapped to one primary asset.",
+      inputSchema: z.object({
+        text: z.string().min(1).max(MAX_SOUND_SCAPE_TEXT_CHARS),
+        cues: z.array(z.object({
+          cue: z.enum([
+            "soft_inhale",
+            "heavy_ragged_breathing",
+            "ragged_exhale",
+            "warm_exhale",
+            "close_whisper",
+            "husky_low_whisper",
+            "breathless_husky_whisper",
+            "gentle_growl",
+            "deep_wet_kiss",
+            "wet_licking",
+            "wet_sucking",
+            "wet_squelch",
+            "sticky_parting",
+            "swallowing_hard",
+            "lower_lip_suck",
+            "neck_bite",
+          ]),
+          anchor_text: z.string().min(1).max(160),
+          occurrence: z.number().int().min(1).max(10).optional(),
+          placement: z.enum(["before", "after"]).optional(),
+          layout: z.enum(["line", "inline"]).optional(),
+          vocalization: z.string().min(1).max(40).optional(),
+        })).min(1).max(16),
+      }),
+    },
+    async (args) => {
+      try {
+        const plan = planVocalCues({ text: args.text, cues: args.cues });
+        return {
+          content: [{
+            type: "text",
+            text: "Planned " + plan.cue_count + " vocal performance cues. No ElevenLabs request was made.",
+          }],
+          structuredContent: plan,
+        };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        return {
+          content: [{ type: "text", text: "Vocal cue planning failed: " + message }],
+          structuredContent: { error: message, estimated_tts_calls: 0 },
+          isError: true,
+        };
+      }
+    },
+  );
+
+  mcp.registerTool(
     "speak_with_soundscape",
     {
       title: `${BOT_NAME}'s Voice + Soundscape`,
@@ -1608,6 +1664,7 @@ app.get("/status", (_req, res) => {
       continuous_voice_timeline: SOUNDSCAPE_MCP_ENABLED,
       continuous_timeline_effect_tail: SOUNDSCAPE_MCP_ENABLED,
       foley_cue_planner: SOUNDSCAPE_MCP_ENABLED,
+      vocal_cue_planner: SOUNDSCAPE_MCP_ENABLED,
       voice_chunk_planning: true,
       speak_long: true,
       long_voice_max_seconds: MAX_LONG_VOICE_SECONDS,

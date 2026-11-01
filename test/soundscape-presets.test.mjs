@@ -14,6 +14,9 @@ const assets = [
   { id: "fx_box", name: "05_盒子开封_双耳.wav", kind: "foley" },
   { id: "fx_lube", name: "06_润滑液涂抹_双耳.wav", kind: "foley" },
   { id: "fx_rhythm", name: "07_连续节奏_双耳.wav", kind: "foley" },
+  { id: "fx_penetration_basic", name: "抽插_基础节奏.wav", kind: "foley" },
+  { id: "fx_penetration_crisp", name: "抽插_清脆弹响.wav", kind: "foley" },
+  { id: "fx_penetration_intense", name: "抽插_高强度密集.wav", kind: "foley" },
   { id: "fx_wet", name: "11_湿润细节_单声道.wav", kind: "foley" },
   { id: "fx_bed", name: "09_床铺物件声_单声道.wav", kind: "foley" },
   { id: "fx_finish", name: "10_收尾音效_双耳.wav", kind: "foley" },
@@ -39,7 +42,7 @@ test("soundscape directive is parsed and removed from the voice direction", () =
 });
 
 test("single-action soundscape markers each resolve as independent presets", () => {
-  for (const name of ["clothing", "lubricant", "rhythm", "bed", "finish"]) {
+  for (const name of ["clothing", "lubricant", "rhythm", "rhythm-basic", "rhythm-crisp", "rhythm-intense", "bed", "finish", "cumshot"]) {
     assert.deepEqual(parseSoundscapeDirective("[soundscape:" + name + "] close-mic"), {
       preset: name,
       voiceDirection: "close-mic",
@@ -80,7 +83,7 @@ test("soundscape directive rejects unknown preset names", () => {
 });
 
 test("all curated presets resolve to assets with the intended bus and timeline", () => {
-  assert.deepEqual(listSoundscapePresets(), ["rain", "desk", "package", "close", "intimate", "clothing", "lubricant", "rhythm", "bed", "finish"]);
+  assert.deepEqual(listSoundscapePresets(), ["rain", "desk", "package", "close", "intimate", "clothing", "lubricant", "rhythm", "rhythm-basic", "rhythm-crisp", "rhythm-intense", "bed", "finish", "cumshot"]);
 
   const rain = buildSoundscapePresetCues("rain", assets);
   assert.deepEqual(rain.missingAssets, []);
@@ -125,7 +128,7 @@ test("all curated presets resolve to assets with the intended bus and timeline",
     "quiet rhythm, bed and finish excerpts receive the approved excerpt normalization target",
   );
 
-  for (const name of ["clothing", "lubricant", "rhythm", "bed", "finish"]) {
+  for (const name of ["clothing", "lubricant", "rhythm", "rhythm-basic", "rhythm-crisp", "rhythm-intense", "bed", "finish", "cumshot"]) {
     const single = buildSoundscapePresetCues(name, assets);
     assert.equal(single.cues.length, 1, name + " must contain exactly one fixed Foley cue");
     assert.equal(single.cues[0].kind, "foley");
@@ -136,11 +139,34 @@ test("all curated presets resolve to assets with the intended bus and timeline",
   assert.equal(buildSoundscapePresetCues("clothing", assets).cues[0].sourceOffsetSec, 12);
   assert.equal(buildSoundscapePresetCues("lubricant", assets).cues[0].durationSec, 6);
   assert.equal(buildSoundscapePresetCues("rhythm", assets).cues[0].durationSec, 8);
+  assert.equal(buildSoundscapePresetCues("rhythm-basic", assets).cues[0].durationSec, 8);
+  assert.equal(buildSoundscapePresetCues("rhythm-crisp", assets).cues[0].durationSec, 8);
+  assert.equal(buildSoundscapePresetCues("rhythm-intense", assets).cues[0].durationSec, 8);
+  assert.equal(buildSoundscapePresetCues("cumshot", assets).cues[0].durationSec, 4);
   assert.equal(buildSoundscapePresetCues("bed", assets).cues[0].durationSec, 8);
   assert.equal(buildSoundscapePresetCues("finish", assets).cues[0].durationSec, 4);
   assert.equal(buildSoundscapePresetCues("clothing", assets, 10).cues[0].durationSec, 10);
   assert.equal(buildSoundscapePresetCues("rhythm", assets, 12.5).cues[0].durationSec, 12.5);
+  assert.equal(buildSoundscapePresetCues("rhythm-basic", assets, 12.5).cues[0].durationSec, 12.5);
   assert.equal(buildSoundscapePresetCues("lubricant", assets).cues[0].durationSec, 6, "default duration remains unchanged when no override is supplied");
+});
+
+test("new rhythm markers map to three distinct uploaded assets while legacy rhythm stays unchanged", () => {
+  const names = ["rhythm-basic", "rhythm-crisp", "rhythm-intense"];
+  const cues = names.map((name) => buildSoundscapePresetCues(name, assets).cues[0]);
+  assert.deepEqual(cues.map((cue) => cue.fileId), [
+    "fx_penetration_basic",
+    "fx_penetration_crisp",
+    "fx_penetration_intense",
+  ]);
+  assert.deepEqual(cues.map((cue) => cue.gain), [0.54, 0.54, 0.54]);
+  assert.ok(cues.every((cue) => cue.normalizationTargetRms === 0.14 && cue.loop !== true));
+  assert.equal(buildSoundscapePresetCues("rhythm", assets).cues[0].fileId, "fx_rhythm");
+  assert.equal(buildSoundscapePresetCues("cumshot", assets).cues[0].fileId, "fx_finish");
+  for (const name of names) {
+    assert.equal(parseSoundscapeDirective("[soundscape:" + name + "]").preset, name);
+  }
+  assert.equal(parseSoundscapeDirective("[soundscape:cumshot]").preset, "cumshot");
 });
 
 test("soundscape preset reports missing assets without returning incomplete cues silently", () => {

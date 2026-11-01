@@ -2,7 +2,7 @@
 
 A platform-neutral Node.js MCP server for ElevenLabs voice generation, expressive delivery and mixed voice + sound-effect playback.
 
-The actively maintained development and deployment branch is `zeabur`, currently at **v1.4.0-beta.45**. It runs as a Node.js 22+ / Express 5 service with Streamable HTTP MCP and is deployed on Zeabur. The same runtime can also run on a VPS or Docker host.
+The actively maintained development and deployment branch is `zeabur`, currently at **v1.4.0-beta.46**. It runs as a Node.js 22+ / Express 5 service with Streamable HTTP MCP and is deployed on Zeabur. The same runtime can also run on a VPS or Docker host.
 
 
 
@@ -31,7 +31,7 @@ The continuous timeline response also includes `alignment_audit`, a non-blocking
 
 ### Foley action planner and sequential cues (beta.35)
 
-The gated MCP tool `plan_foley_cues` maps an explicitly selected action list to the existing private Foley assets and approved cue levels. Each action requires an exact `after_text` anchor quoted from the spoken text. If punctuation or closing quotation marks immediately follow the anchor, the planner includes them automatically so the cue lands after the complete spoken phrase. It checks that anchors exist and are supplied in spoken-text order, verifies that each matching private asset is present, and returns one fixed asset per action. Supported actions: clothing rustle, package opening, box opening, liquid application, continuous rhythm, bed/object sounds, wet detail, and ending detail.
+The gated MCP tool `plan_foley_cues` maps an explicitly selected action list to the existing private Foley assets and approved cue levels. Each action requires an exact `after_text` anchor quoted from the spoken text. If punctuation or closing quotation marks immediately follow the anchor, the planner includes them automatically so the cue lands after the complete spoken phrase. It checks that anchors exist and are supplied in spoken-text order, verifies that each matching private asset is present, and returns one fixed asset per action. Supported actions include clothing rustle, package opening, box opening, liquid application, three explicit rhythm variants (basic, crisp and intense), legacy continuous rhythm, bed/object sounds, wet detail, ending detail, and the selected cumshot action.
 
 Planning is deterministic and **does not call ElevenLabs**. It returns ready-to-adapt cue objects for `render_continuous_audio_timeline`, plus `sequence_foley=true` and an optional `tail_duration_sec`. At render time, actual cue positions are resolved from provider character timestamps. Sequential mode trims each Foley cue to end before the next Foley cue begins; if two anchors resolve too close together, rendering fails rather than stacking action sounds. Ambience cues remain independent and may overlap Foley.
 
@@ -72,7 +72,7 @@ Use `render_audio_timeline` when you intentionally need separately generated voi
 
 ## Branches
 
-- `zeabur`: **active maintained branch** for development and current Zeabur deployment; currently v1.4.0-beta.45.
+- `zeabur`: **active maintained branch** for development and current Zeabur deployment; currently v1.4.0-beta.46.
 - `voice-v1.4-private-drama`: historical v1.4 beta.7 snapshot. It is not the active deployment branch; do not switch to it without comparing its history against `zeabur`.
 - `main`: repository default branch; it may not contain the latest maintained v1.4 work. Do not assume it is the deployment branch.
 
@@ -144,11 +144,13 @@ For the already-installed mobile `voice2-v1.3.1` app, soundscapes are backward-c
 - `[soundscape:intimate]` — legacy multi-cue sequence; retained for comparison, not recommended for new tests
 - `[soundscape:clothing]` — one fixed clothing-rub cue, longer excerpt
 - `[soundscape:lubricant]` — one fixed application/detail cue, longer excerpt
-- `[soundscape:rhythm]` — one fixed continuous-rhythm cue, up to 8 seconds
+- `[soundscape:rhythm]` — legacy original continuous-rhythm cue, up to 8 seconds
+- `[soundscape:rhythm-basic]`, `[soundscape:rhythm-crisp]`, `[soundscape:rhythm-intense]` — three distinct uploaded rhythm cues, each up to 8 seconds
 - `[soundscape:bed]` — one fixed bed/object cue, up to 8 seconds
-- `[soundscape:finish]` — one fixed ending-detail cue, up to 4 seconds
+- `[soundscape:finish]` — legacy ending-detail cue, up to 4 seconds
+- `[soundscape:cumshot]` — explicitly selected ending action cue, up to 4 seconds
 
-The new action markers each play exactly one Foley asset per call; they do not stack multiple action sounds. Add `:SECONDS` to any single-action marker for a per-call duration override, e.g. `[soundscape:clothing:10]` or `[soundscape:rhythm:12]` (0.1–60 seconds). The actual excerpt is capped by the source WAV length and generated voice length; it is never looped or time-stretched. Requested duration is capped by the available source audio and the generated voice length, so longer playback requires a sufficiently long uploaded WAV. For natural transitions, end one action before starting the next instead of layering them.
+The new action markers each play exactly one Foley asset per call; they do not stack multiple action sounds. Add `:SECONDS` to any single-action marker for a per-call duration override, e.g. `[soundscape:clothing:10]` or `[soundscape:rhythm-basic:12]` (0.1–60 seconds). The actual excerpt is capped by the source WAV length and generated voice length; it is never looped or time-stretched. Requested duration is capped by the available source audio and the generated voice length, so longer playback requires a sufficiently long uploaded WAV. For natural transitions, end one action before starting the next instead of layering them.
 
 The marker is stripped before the direction reaches ElevenLabs. Omit the marker for the original voice-only MP3 path. Soundscape playback uses a temporary WAV URL and requires the curated assets plus `MCP_PUBLIC_BASE_URL` or Zeabur's injected `ZEABUR_WEB_URL` fallback.
 
@@ -174,7 +176,7 @@ Both `speak` and `speak_with_soundscape` attach the same MCP App audio player. V
 
 ### Vocal performance presets (beta.40)
 
-The MCP tools `list_vocal_presets` and `plan_vocal_preset` provide reusable, deterministic vocal-performance arrangements. The initial registry includes close-soft, sustained heavy breathing, breathless dialogue, ragged exhale, breathing-to-dialogue, and Afterglow. Preset planning requires exact text anchors and makes zero ElevenLabs calls. Unverified mouth/contact prompts are excluded from automatic presets; Afterglow remains an arrangement pattern with an untagged closing line. To render planner output, pass `rendered_text` to `render_continuous_audio_timeline` with `raw_tags: true`; Foley cues are optional for voice-only rendering. The beta.45 Scene Director composes ordered vocal beats, exact aligned pauses, optional rain/desk ambience and explicit Foley actions into one render request. See the Scene Director guide in docs/SCENE_DIRECTOR.md. See [Vocal Performance Presets](./docs/VOCAL_PERFORMANCE_PRESETS.md).
+The MCP tools `list_vocal_presets` and `plan_vocal_preset` provide reusable, deterministic vocal-performance arrangements. The initial registry includes close-soft, sustained heavy breathing, breathless dialogue, ragged exhale, breathing-to-dialogue, and Afterglow. Preset planning requires exact text anchors and makes zero ElevenLabs calls. Unverified mouth/contact prompts are excluded from automatic presets; Afterglow remains an arrangement pattern with an untagged closing line. To render planner output, pass `rendered_text` to `render_continuous_audio_timeline` with `raw_tags: true`; Foley cues are optional for voice-only rendering. The beta.46 Scene Director composes ordered vocal beats, exact aligned pauses, optional rain/desk ambience and explicit Foley actions into one render request. See the Scene Director guide in docs/SCENE_DIRECTOR.md. See [Vocal Performance Presets](./docs/VOCAL_PERFORMANCE_PRESETS.md).
 
 ## Private sound library
 

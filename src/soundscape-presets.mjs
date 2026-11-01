@@ -183,6 +183,48 @@ const PRESETS = Object.freeze({
       durationSec: 8,
     },
   ],
+  "rhythm-basic": [
+    {
+      assetName: "抽插_基础节奏",
+      kind: "foley",
+      atSec: 0,
+      gain: soundscapeGain("contact"),
+      pan: 0,
+      distanceMeters: 1.1,
+      fadeInSec: 0.25,
+      fadeOutSec: 0.8,
+      durationSec: 8,
+      normalizationTargetRms: 0.14,
+    },
+  ],
+  "rhythm-crisp": [
+    {
+      assetName: "抽插_清脆弹响",
+      kind: "foley",
+      atSec: 0,
+      gain: soundscapeGain("contact"),
+      pan: 0,
+      distanceMeters: 1.1,
+      fadeInSec: 0.25,
+      fadeOutSec: 0.8,
+      durationSec: 8,
+      normalizationTargetRms: 0.14,
+    },
+  ],
+  "rhythm-intense": [
+    {
+      assetName: "抽插_高强度密集",
+      kind: "foley",
+      atSec: 0,
+      gain: soundscapeGain("contact"),
+      pan: 0,
+      distanceMeters: 1.1,
+      fadeInSec: 0.25,
+      fadeOutSec: 0.8,
+      durationSec: 8,
+      normalizationTargetRms: 0.14,
+    },
+  ],
   bed: [
     {
       assetName: "床铺物件声",
@@ -198,6 +240,20 @@ const PRESETS = Object.freeze({
     },
   ],
   finish: [
+    {
+      assetName: "收尾音效",
+      kind: "foley",
+      atSec: 0,
+      gain: soundscapeGain("detail"),
+      normalizationTargetRms: 0.14,
+      pan: 0,
+      distanceMeters: 1,
+      fadeInSec: 0.12,
+      fadeOutSec: 0.65,
+      durationSec: 4,
+    },
+  ],
+  cumshot: [
     {
       assetName: "收尾音效",
       kind: "foley",

@@ -9,6 +9,10 @@ import {
 
 const assets = [
   { id: "fx_clothing", name: "03_衣物摩擦_双耳.wav", kind: "foley", durationSec: 33.901 },
+  { id: "fx_penetration_basic", name: "抽插_基础节奏.wav", kind: "foley", durationSec: 37.709 },
+  { id: "fx_penetration_crisp", name: "抽插_清脆弹响.wav", kind: "foley", durationSec: 44.188 },
+  { id: "fx_penetration_intense", name: "抽插_高强度密集.wav", kind: "foley", durationSec: 32.496 },
+  { id: "fx_finish", name: "10_收尾音效_双耳.wav", kind: "foley", durationSec: 16.881 },
   { id: "fx_rain", name: "01_雨声_双耳.wav", kind: "ambience", durationSec: 85.667 },
 ];
 
@@ -68,6 +72,35 @@ test("combines a selected ambience bed and one explicit Foley action", () => {
   assert.equal(plan.cues[1].kind, "foley");
   assert.equal(plan.render_request.sequence_foley, true);
   assert.equal(plan.render_request.tail_duration_sec, 2);
+});
+
+test("passes each explicit rhythm variant and the selected ending action through Scene Director", () => {
+  const text = "基础节奏。清脆弹响。高强度密集。射精收尾。";
+  const plan = planSceneDirector({
+    text,
+    beats: [{ id: "actions", text }],
+    foleyActions: [
+      { action: "penetration_basic", after_text: "基础节奏" },
+      { action: "penetration_crisp", after_text: "清脆弹响" },
+      { action: "penetration_intense", after_text: "高强度密集" },
+      { action: "cumshot", after_text: "射精收尾" },
+    ],
+    assets,
+  });
+  assert.deepEqual(plan.cues.map((cue) => cue.asset_id), [
+    "fx_penetration_basic",
+    "fx_penetration_crisp",
+    "fx_penetration_intense",
+    "fx_finish",
+  ]);
+  assert.deepEqual(plan.foley_action_labels.map((item) => item.action), [
+    "penetration_basic",
+    "penetration_crisp",
+    "penetration_intense",
+    "cumshot",
+  ]);
+  assert.equal(plan.render_request.sequence_foley, true);
+  assert.equal(plan.estimated_tts_calls, 0);
 });
 
 test("keeps a natural untagged scene simple when no effects or presets are selected", () => {

@@ -1,4 +1,4 @@
-# Scene Director · beta.43
+# Scene Director · beta.46
 
 ## Purpose
 
@@ -96,6 +96,18 @@ Add the following fields to the same scene request when wanted:
     }
 
 The rain bed uses the uploaded rain asset. The clothing action uses the approved clothing-rustle asset and mix settings. A tail is useful when the final Foley cue should continue after speech; when a Foley tail is requested, the last Foley anchor must be at the end of the spoken text.
+
+## Explicit Foley rhythm choices
+
+The planner does not infer an action from scene text. Select one of these rhythm variants explicitly when appropriate:
+
+- `penetration_basic` — uploaded `抽插_基础节奏.wav`;
+- `penetration_crisp` — uploaded `抽插_清脆弹响.wav`;
+- `penetration_intense` — uploaded `抽插_高强度密集.wav`.
+
+Each maps to one asset and one non-looping cue. The initial gain, normalization target, duration and fades are intentionally identical so the first listening comparison isolates the source recording. These new settings remain provisional until individually auditioned. The legacy `continuous_rhythm` action remains mapped to the original `07_连续节奏` asset.
+
+The selected `cumshot` action maps to the existing `收尾音效` asset. The older `ending_detail` action remains available as a compatibility alias. The liquid-application action continues to use the existing `润滑液涂抹` asset.
 
 ## Render workflow
 

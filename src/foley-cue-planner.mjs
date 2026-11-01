@@ -6,9 +6,13 @@ export const FOLEY_ACTION_TYPES = Object.freeze([
   "box_open",
   "liquid_application",
   "continuous_rhythm",
+  "penetration_basic",
+  "penetration_crisp",
+  "penetration_intense",
   "bed_objects",
   "wet_detail",
   "ending_detail",
+  "cumshot",
 ]);
 
 const ACTIONS = Object.freeze({
@@ -69,6 +73,45 @@ const ACTIONS = Object.freeze({
     durationSec: 8,
     normalizationTargetRms: 0.14,
   }),
+  penetration_basic: Object.freeze({
+    labelZh: "抽插·基础节奏",
+    catalogAvailability: "awaiting_listening_confirmation",
+    catalogNote: "新上传素材；先独立试听，再冻结响度与节奏标准。",
+    assetName: "抽插_基础节奏",
+    gain: soundscapeGain("contact"),
+    pan: 0,
+    distanceMeters: 1.1,
+    fadeInSec: 0.25,
+    fadeOutSec: 0.8,
+    durationSec: 8,
+    normalizationTargetRms: 0.14,
+  }),
+  penetration_crisp: Object.freeze({
+    labelZh: "抽插·清脆弹响",
+    catalogAvailability: "awaiting_listening_confirmation",
+    catalogNote: "新上传素材；先独立试听，再冻结响度与节奏标准。",
+    assetName: "抽插_清脆弹响",
+    gain: soundscapeGain("contact"),
+    pan: 0,
+    distanceMeters: 1.1,
+    fadeInSec: 0.25,
+    fadeOutSec: 0.8,
+    durationSec: 8,
+    normalizationTargetRms: 0.14,
+  }),
+  penetration_intense: Object.freeze({
+    labelZh: "抽插·高强度密集",
+    catalogAvailability: "awaiting_listening_confirmation",
+    catalogNote: "新上传素材；先独立试听，再冻结响度与节奏标准。",
+    assetName: "抽插_高强度密集",
+    gain: soundscapeGain("contact"),
+    pan: 0,
+    distanceMeters: 1.1,
+    fadeInSec: 0.25,
+    fadeOutSec: 0.8,
+    durationSec: 8,
+    normalizationTargetRms: 0.14,
+  }),
   bed_objects: Object.freeze({
     labelZh: "床铺物件声（具体动作待确认）",
     catalogAvailability: "action_mapping_unconfirmed",
@@ -94,9 +137,20 @@ const ACTIONS = Object.freeze({
     sourceOffsetSec: 12,
   }),
   ending_detail: Object.freeze({
-    labelZh: "具体动作未确认",
-    catalogAvailability: "action_mapping_unconfirmed",
-    catalogNote: "“收尾音效”素材尚未确认具体动作，不映射为射精音效。",
+    labelZh: "收尾音效（旧版兼容）",
+    catalogAvailability: "legacy_compatibility",
+    catalogNote: "旧版通用收尾动作名保留；明确选择射精动作时请使用 cumshot。",
+    assetName: "收尾音效",
+    gain: soundscapeGain("detail"),
+    pan: 0,
+    distanceMeters: 1,
+    fadeInSec: 0.12,
+    fadeOutSec: 0.65,
+    durationSec: 4,
+    normalizationTargetRms: 0.14,
+  }),
+  cumshot: Object.freeze({
+    labelZh: "射精",
     assetName: "收尾音效",
     gain: soundscapeGain("detail"),
     pan: 0,
@@ -120,15 +174,7 @@ export function getFoleyActionCatalog() {
       selectable: true,
     });
   });
-  const pendingActions = [Object.freeze({
-    action: "cumshot",
-    label_zh: "射精",
-    asset_name: null,
-    availability: "no_matching_asset",
-    note: "目前没有确认的对应音效素材；不把“收尾音效”或“湿润细节”自动映射为射精。",
-    selectable: false,
-  })];
-  return Object.freeze([...configuredActions, ...pendingActions]);
+  return Object.freeze(configuredActions);
 }
 
 function findOccurrence(text, anchor, occurrence) {

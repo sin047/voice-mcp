@@ -42,7 +42,7 @@ const MODEL_ID = process.env.ELEVENLABS_MODEL_ID || "eleven_v4";
 const OUTPUT_FORMAT = process.env.ELEVENLABS_OUTPUT_FORMAT || "mp3_44100_128";
 const PLAYER_URI = "ui://voice-mcp/player.html";
 const PLAYER_MIME = "text/html;profile=mcp-app";
-const VERSION = "1.4.0-beta.45";
+const VERSION = "1.4.0-beta.46";
 const MAX_CONTEXT_CHARS = 4000;
 const MAX_SPEAK_CHARS = 4000;
 const MAX_SOUND_SCAPE_TEXT_CHARS = 1200;
@@ -426,13 +426,13 @@ function createServer() {
     "speak",
     {
       title: `${BOT_NAME}'s Voice`,
-      description: `Make ${BOT_NAME} speak with the configured ElevenLabs voice. Use natural for everyday speech; soft/close for quieter delivery; breathy/expressive only when explicitly requested. Natural is intentionally untagged. Use language=auto unless the language is ambiguous. For adjacent chunks of the SAME voice and model, pass the request_id returned by the immediately preceding call in previous_request_ids (max 3) to improve continuity; otherwise use previous_text / next_text. The tool returns a request_id for the next contiguous chunk. Optional emotion selects adaptive breathing: neutral/calm/curious/tired=B1, warm/tender=B2.1, and excited/nervous/intense=experimental inhale-only B3. Older MCP clients can use a [emotion:warm] marker at the start of the remaining direction text (after any soundscape marker). For gradual emotional shifts, change emotion across adjacent chunks and pass the immediately previous request_id for continuity. direction is an advanced override. To add a soundscape while keeping this same tool, prefix direction with one marker: [soundscape:rain], [soundscape:desk], [soundscape:package], [soundscape:close], or [soundscape:intimate]. For one-action Foley without overlapping effects, use [soundscape:clothing], [soundscape:lubricant], [soundscape:rhythm], [soundscape:bed], or [soundscape:finish]. Add a per-call duration in seconds, e.g. [soundscape:clothing:10] or [soundscape:rhythm:12] (0.1–60 seconds); the actual excerpt is capped by source WAV and voice length, with no looping or time-stretching. The older [soundscape:intimate] remains a legacy multi-cue sequence. The marker is removed before voice synthesis. Omit it for ordinary voice-only playback. Soundscape playback requires the matching private WAV assets to be uploaded on the server and MCP_PUBLIC_BASE_URL to be configured.`,
+      description: `Make ${BOT_NAME} speak with the configured ElevenLabs voice. Use natural for everyday speech; soft/close for quieter delivery; breathy/expressive only when explicitly requested. Natural is intentionally untagged. Use language=auto unless the language is ambiguous. For adjacent chunks of the SAME voice and model, pass the request_id returned by the immediately preceding call in previous_request_ids (max 3) to improve continuity; otherwise use previous_text / next_text. The tool returns a request_id for the next contiguous chunk. Optional emotion selects adaptive breathing: neutral/calm/curious/tired=B1, warm/tender=B2.1, and excited/nervous/intense=experimental inhale-only B3. Older MCP clients can use a [emotion:warm] marker at the start of the remaining direction text (after any soundscape marker). For gradual emotional shifts, change emotion across adjacent chunks and pass the immediately previous request_id for continuity. direction is an advanced override. To add a soundscape while keeping this same tool, prefix direction with one marker: [soundscape:rain], [soundscape:desk], [soundscape:package], [soundscape:close], or [soundscape:intimate]. For one-action Foley without overlapping effects, use [soundscape:clothing], [soundscape:lubricant], [soundscape:rhythm], [soundscape:rhythm-basic], [soundscape:rhythm-crisp], [soundscape:rhythm-intense], [soundscape:bed], [soundscape:finish], or [soundscape:cumshot]. Add a per-call duration in seconds, e.g. [soundscape:clothing:10] or [soundscape:rhythm:12] (0.1–60 seconds); the actual excerpt is capped by source WAV and voice length, with no looping or time-stretching. The older [soundscape:intimate] remains a legacy multi-cue sequence. The marker is removed before voice synthesis. Omit it for ordinary voice-only playback. Soundscape playback requires the matching private WAV assets to be uploaded on the server and MCP_PUBLIC_BASE_URL to be configured.`,
       inputSchema: z.object({
         text: z.string().min(1).max(MAX_SPEAK_CHARS).describe("Text to speak (maximum 4000 characters)"),
         performance: z.enum(["auto", "natural", "soft", "close", "breathy", "expressive"]).optional().describe("High-level delivery mode. Prefer natural for everyday speech. Use breathy/expressive only when context explicitly calls for stronger breath/performance. Defaults to auto/natural."),
         emotion: z.enum(["neutral", "calm", "warm", "tender", "curious", "excited", "nervous", "intense", "tired"]).optional().describe("Optional emotional direction with adaptive breathing: neutral/calm/curious/tired=B1 subtle; warm/tender=B2.1 natural inhale; excited/nervous/intense=experimental B3 stronger inhale-only. Omit to preserve existing performance behavior."),
         language: z.enum(["auto", "zh", "ja", "en", "ko"]).optional().describe("Language override. Auto-detects Japanese kana, Korean Hangul, Chinese Han characters and English; set explicitly for kanji-only Japanese or ambiguous mixed text."),
-        direction: z.string().max(180).optional().describe("Advanced voice direction. For optional ambience/effects, prefix with [soundscape:rain], [soundscape:desk], [soundscape:package], [soundscape:close], or [soundscape:intimate]. For a single action and one fixed Foley sound, use [soundscape:clothing], [soundscape:lubricant], [soundscape:rhythm], [soundscape:bed], or [soundscape:finish]. Add :SECONDS to override duration per call, e.g. [soundscape:rhythm:12] (0.1–60 seconds). These do not stack multiple Foley tracks; actual playback is capped by WAV and voice length. The marker is not spoken."),
+        direction: z.string().max(180).optional().describe("Advanced voice direction. For optional ambience/effects, prefix with [soundscape:rain], [soundscape:desk], [soundscape:package], [soundscape:close], or [soundscape:intimate]. For a single action and one fixed Foley sound, use [soundscape:clothing], [soundscape:lubricant], [soundscape:rhythm], [soundscape:rhythm-basic], [soundscape:rhythm-crisp], [soundscape:rhythm-intense], [soundscape:bed], [soundscape:finish], or [soundscape:cumshot]. Add :SECONDS to override duration per call, e.g. [soundscape:rhythm:12] (0.1–60 seconds). These do not stack multiple Foley tracks; actual playback is capped by WAV and voice length. The marker is not spoken."),
         previous_text: z.string().max(MAX_CONTEXT_CHARS).optional().describe("Plain text immediately before this chunk. Used only as prosody context and not spoken again."),
         next_text: z.string().max(MAX_CONTEXT_CHARS).optional().describe("Plain text immediately after this chunk. Used only as prosody context and not spoken in this chunk."),
         previous_request_ids: z.array(z.string().min(1).max(128)).max(3).optional().describe("Advanced continuity: request_id values returned by immediately preceding chunks generated with the same ElevenLabs model and voice. Do not reuse IDs from unrelated conversations or voices."),
@@ -837,7 +837,7 @@ function createServer() {
     "plan_scene_director",
     {
       title: "Plan a complete voice scene",
-      description: "Compose one continuous voice scene from exact ordered text beats, explicitly selected vocal presets, optional aligned pauses, an optional uploaded rain/desk ambience bed, and explicitly selected Foley actions. This deterministic planning tool does NOT call ElevenLabs or consume TTS credits. Beat text must concatenate exactly to the original text. Actions are never inferred from keywords. Review render_request, then pass it to render_continuous_audio_timeline; tagged text requires raw_tags=true. Aligned pauses are inserted as silence in the single rendered voice passage, and later text-anchored Foley cues move with them.",
+      description: "Compose one continuous voice scene from exact ordered text beats, explicitly selected vocal presets, optional aligned pauses, an optional uploaded rain/desk ambience bed, and explicitly selected Foley actions. For rhythm, choose one of penetration_basic, penetration_crisp, or penetration_intense; legacy continuous_rhythm remains supported. This deterministic planning tool does NOT call ElevenLabs or consume TTS credits. Beat text must concatenate exactly to the original text. Actions are never inferred from keywords. Review render_request, then pass it to render_continuous_audio_timeline; tagged text requires raw_tags=true. Aligned pauses are inserted as silence in the single rendered voice passage, and later text-anchored Foley cues move with them.",
       inputSchema: z.object({
         text: z.string().min(1).max(MAX_SOUND_SCAPE_TEXT_CHARS),
         beats: z.array(z.object({
@@ -867,9 +867,13 @@ function createServer() {
             "box_open",
             "liquid_application",
             "continuous_rhythm",
+            "penetration_basic",
+            "penetration_crisp",
+            "penetration_intense",
             "bed_objects",
             "wet_detail",
             "ending_detail",
+            "cumshot",
           ]),
           after_text: z.string().min(1).max(160),
           occurrence: z.number().int().min(1).max(10).optional(),
@@ -914,7 +918,7 @@ function createServer() {
     "plan_foley_cues",
     {
       title: "Plan Foley action cues",
-      description: "Plan a small sequence of approved Foley actions for render_continuous_audio_timeline. This is a deterministic planning-only tool: it does NOT call ElevenLabs, synthesize speech, or consume TTS credits. Choose only actions actually described or clearly implied by the spoken text, quote an exact after_text anchor from that text for each action, and supply actions in spoken-text order. trailing punctuation and adjacent whitespace immediately after an anchor, including tabs and line breaks, are included automatically so the Foley cue lands after the complete spoken phrase. Each action maps to exactly one uploaded Foley asset with the existing approved gain, pan, source offset, and fade defaults. The returned cues are ready to adapt for render_continuous_audio_timeline; pass sequence_foley=true and tail_duration_sec from the plan. If pure_audio_tail_sec is requested, the last action anchor must be at the end of the spoken text.",
+      description: "Plan a small sequence of approved Foley actions for render_continuous_audio_timeline. This is a deterministic planning-only tool: it does NOT call ElevenLabs, synthesize speech, or consume TTS credits. Choose only actions actually described or clearly implied by the spoken text, quote an exact after_text anchor from that text for each action, and supply actions in spoken-text order. For rhythm, explicitly choose one of penetration_basic, penetration_crisp, or penetration_intense; the legacy continuous_rhythm remains supported. trailing punctuation and adjacent whitespace immediately after an anchor, including tabs and line breaks, are included automatically so the Foley cue lands after the complete spoken phrase. Each action maps to exactly one uploaded Foley asset with the existing approved gain, pan, source offset, and fade defaults. The returned cues are ready to adapt for render_continuous_audio_timeline; pass sequence_foley=true and tail_duration_sec from the plan. If pure_audio_tail_sec is requested, the last action anchor must be at the end of the spoken text.",
       inputSchema: z.object({
         text: z.string().min(1).max(MAX_SOUND_SCAPE_TEXT_CHARS),
         actions: z.array(z.object({
@@ -924,9 +928,13 @@ function createServer() {
             "box_open",
             "liquid_application",
             "continuous_rhythm",
+            "penetration_basic",
+            "penetration_crisp",
+            "penetration_intense",
             "bed_objects",
             "wet_detail",
             "ending_detail",
+            "cumshot",
           ]),
           after_text: z.string().min(1).max(160),
           occurrence: z.number().int().min(1).max(10).optional(),

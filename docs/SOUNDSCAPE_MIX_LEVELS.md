@@ -98,3 +98,12 @@
 - 限制：总长最多 60 秒、最多 16 个片段、最多 12 条音效 cue。每个人声片段必须在分配时长内生成完成，不自动加速或截断人声。
 - 原 `speak`、`speak_with_soundscape` 及已验收的 Rhythm / Clothing / Lubricant 参数保持不变。
 - CI 通过前不部署；实际 MCP 工具清单和 schema 由 Runtime Smoke Test 验证。
+
+
+## beta.46 · Explicit rhythm variants and selected ending action
+
+- The three newly uploaded rhythm assets are separate Foley actions: `penetration_basic` → `抽插_基础节奏`, `penetration_crisp` → `抽插_清脆弹响`, and `penetration_intense` → `抽插_高强度密集`.
+- For a controlled first comparison, all three begin with the same cue gain (`contact = 0.54`), `normalizationTargetRms = 0.14`, 8-second excerpt, centered stereo presentation, and identical fades. These are **initial audition settings, not approved final levels**; keep each variant independent and tune only after listening.
+- The old `continuous_rhythm` action and `[soundscape:rhythm]` marker continue to map to the original `07_连续节奏` asset for backward compatibility.
+- The explicitly selected `cumshot` action and `[soundscape:cumshot]` marker map to the existing `收尾音效` asset. The old `ending_detail` action and `[soundscape:finish]` marker remain as compatibility aliases.
+- `liquid_application` remains mapped to the existing `润滑液涂抹` asset. No new TTS tags or extra synthesis calls are introduced by these mappings.

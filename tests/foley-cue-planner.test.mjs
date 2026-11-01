@@ -8,6 +8,9 @@ const assets = [
   { id: "fx_box", name: "05_盒子开封_双耳.wav", kind: "foley", durationSec: 10.478 },
   { id: "fx_liquid", name: "06_润滑液涂抹_双耳.wav", kind: "foley", durationSec: 24.706 },
   { id: "fx_rhythm", name: "07_连续节奏_双耳.wav", kind: "foley", durationSec: 51.421 },
+  { id: "fx_penetration_basic", name: "抽插_基础节奏.wav", kind: "foley", durationSec: 37.709 },
+  { id: "fx_penetration_crisp", name: "抽插_清脆弹响.wav", kind: "foley", durationSec: 44.188 },
+  { id: "fx_penetration_intense", name: "抽插_高强度密集.wav", kind: "foley", durationSec: 32.496 },
   { id: "fx_bed", name: "09_床铺物件声_单声道.wav", kind: "foley", durationSec: 101.1 },
   { id: "fx_wet", name: "11_湿润细节_单声道.wav", kind: "foley", durationSec: 31.974 },
   { id: "fx_finish", name: "10_收尾音效_双耳.wav", kind: "foley", durationSec: 16.881 },
@@ -49,6 +52,44 @@ test("preserves approved clothing source offset and gain preset", () => {
   assert.equal(plan.cues[0].source_offset_sec, 12);
   assert.equal(plan.cues[0].normalization_target_rms, 0.14);
   assert.equal(plan.cues[0].duration_sec, 6);
+});
+
+test("maps the three new rhythm variants to distinct assets and preserves legacy continuous_rhythm", () => {
+  const text = "基础节奏。清脆弹响。高强度密集。";
+  const plan = planFoleyCues({
+    text,
+    actions: [
+      { action: "penetration_basic", after_text: "基础节奏" },
+      { action: "penetration_crisp", after_text: "清脆弹响" },
+      { action: "penetration_intense", after_text: "高强度密集" },
+    ],
+    assets,
+  });
+  assert.deepEqual(plan.cues.map((cue) => cue.asset_id), [
+    "fx_penetration_basic",
+    "fx_penetration_crisp",
+    "fx_penetration_intense",
+  ]);
+  assert.deepEqual(plan.cues.map((cue) => cue.duration_sec), [8, 8, 8]);
+  assert.deepEqual(plan.cues.map((cue) => cue.gain), [0.54, 0.54, 0.54]);
+  assert.ok(plan.cues.every((cue) => cue.normalization_target_rms === 0.14 && cue.loop === false));
+
+  const legacy = planFoleyCues({
+    text: "旧版连续节奏。",
+    actions: [{ action: "continuous_rhythm", after_text: "旧版连续节奏" }],
+    assets,
+  });
+  assert.equal(legacy.cues[0].asset_id, "fx_rhythm");
+});
+
+test("maps the explicitly selected cumshot action to its selected ending asset", () => {
+  const plan = planFoleyCues({
+    text: "使用已经选定的 A 素材。",
+    actions: [{ action: "cumshot", after_text: "使用已经选定的 A 素材" }],
+    assets,
+  });
+  assert.equal(plan.cues[0].asset_id, "fx_finish");
+  assert.equal(plan.cues[0].duration_sec, 4);
 });
 
 test("uses exact occurrence and requires anchors in spoken-text order", () => {
@@ -260,22 +301,26 @@ test("includes actual tab, carriage return, and newline characters in trailing a
 
 test("exposes explicit Foley labels and marks unverified or unavailable actions", () => {
   const catalog = getFoleyActionCatalog();
-  assert.equal(catalog.length, 9);
+  assert.equal(catalog.length, 12);
   assert.equal(catalog.find((item) => item.action === "clothing_rustle").label_zh, "衣物摩擦");
   assert.equal(catalog.find((item) => item.action === "liquid_application").label_zh, "涂抹");
   assert.equal(catalog.find((item) => item.action === "continuous_rhythm").label_zh, "抽插（候选，待试听确认）");
   assert.equal(catalog.find((item) => item.action === "continuous_rhythm").availability, "candidate_mapping_pending_listening");
+  assert.equal(catalog.find((item) => item.action === "penetration_basic").availability, "awaiting_listening_confirmation");
+  assert.equal(catalog.find((item) => item.action === "penetration_crisp").selectable, true);
+  assert.equal(catalog.find((item) => item.action === "penetration_intense").selectable, true);
   assert.equal(catalog.find((item) => item.action === "cumshot").label_zh, "射精");
-  assert.equal(catalog.find((item) => item.action === "cumshot").selectable, false);
-  assert.equal(catalog.find((item) => item.action === "cumshot").availability, "no_matching_asset");
+  assert.equal(catalog.find((item) => item.action === "cumshot").selectable, true);
+  assert.equal(catalog.find((item) => item.action === "cumshot").asset_name, "收尾音效");
+  assert.equal(catalog.find((item) => item.action === "ending_detail").availability, "legacy_compatibility");
   assert.ok(catalog.every((item) => !Object.hasOwn(item, "gain")));
   assert.ok(catalog.every((item) => !Object.hasOwn(item, "pan")));
 });
 
-test("does not map an unavailable explicit action to a different Foley asset", () => {
+test("does not map the selected cumshot action when its matching private asset is absent", () => {
   assert.throws(() => planFoleyCues({
     text: "动作结束。",
     actions: [{ action: "cumshot", after_text: "动作结束" }],
-    assets,
-  }), /Unsupported Foley action/);
+    assets: assets.filter((asset) => asset.id !== "fx_finish"),
+  }), /Required Foley asset is not available/);
 });

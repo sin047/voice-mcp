@@ -4,7 +4,8 @@ import path from "node:path";
 import { decodePcmWav } from "./wav-audio.mjs";
 
 const SAFE_ID = /^fx_[0-9a-f-]{36}$/i;
-const EFFECT_KINDS = new Set(["ambience", "foley"]);
+const EFFECT_KINDS = new Set(["ambience", "foley", "breath"]);
+const BREATH_TYPES = new Set(["inhale", "exhale"]);
 
 function safeName(value) {
   const base = path.basename(String(value || "sound-effect.wav"))
@@ -53,11 +54,17 @@ export function createAudioAssetStore({
       .sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)));
   }
 
-  async function save({ buffer, name, kind = "foley" } = {}) {
+  async function save({ buffer, name, kind = "foley", breathType } = {}) {
     await ensureDirectory();
     if (!Buffer.isBuffer(buffer) || !buffer.length) throw new Error("Audio upload body is empty");
     if (buffer.length > maxAssetBytes) throw new Error("Audio asset exceeds the configured file size limit");
-    if (!EFFECT_KINDS.has(kind)) throw new Error("Audio asset kind must be ambience or foley");
+    if (!EFFECT_KINDS.has(kind)) throw new Error("Audio asset kind must be ambience, foley, or breath");
+    if (kind === "breath" && !BREATH_TYPES.has(breathType)) {
+      throw new Error("Breath assets must be classified as inhale or exhale");
+    }
+    if (kind !== "breath" && breathType != null) {
+      throw new Error("breathType is only valid for breath assets");
+    }
 
     const decoded = decodePcmWav(buffer);
     const existing = await list();
@@ -70,6 +77,7 @@ export function createAudioAssetStore({
       id,
       name: safeName(name),
       kind,
+      ...(kind === "breath" ? { breathType } : {}),
       mimeType: "audio/wav",
       bytes: buffer.length,
       sampleRate: decoded.sampleRate,

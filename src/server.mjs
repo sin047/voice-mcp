@@ -966,7 +966,7 @@ function createServer() {
     "list_vocal_cues",
     {
       title: "List vocal and sound cue catalogue",
-      description: "List five distinct categories: breathing, spoken delivery, mouth/contact TTS cues, separate physical-action Foley assets, and ending transitions. Includes per-cue listening status and intended use. This read-only catalogue tool does NOT call ElevenLabs or consume TTS credits. Afterglow is an arrangement pattern, not a TTS tag. Use plan_vocal_cues for explicit TTS tags and plan_foley_cues for uploaded action audio.",
+      description: "List five distinct categories: breathing, spoken delivery, mouth/contact TTS cues, separate physical-action Foley assets, and ending transitions. Physical actions use explicit Chinese labels and show whether a matching asset is available, awaiting listening confirmation, or not available. This read-only catalogue tool does NOT call ElevenLabs or consume TTS credits. Afterglow is an arrangement pattern, not a TTS tag. Use plan_vocal_cues for explicit TTS tags and plan_foley_cues for uploaded action audio.",
       inputSchema: z.object({}),
     },
     async () => {
@@ -975,8 +975,9 @@ function createServer() {
         const summary = catalog.categories.map((category) => {
           const entries = category.items.map((item) => {
             if (item.tag) return "- " + (item.id || item.action) + ": [" + item.tag + "] — " + item.validation_status;
-            if (item.asset_name) return "- " + item.action + ": " + item.asset_name + " — " + item.availability;
-            return "- " + item.id + ": " + item.label_zh + " — " + item.validation_status;
+            if (item.asset_name) return "- " + item.label_zh + ": " + item.asset_name + " — " + item.availability + (item.note ? " — " + item.note : "");
+            if (item.selectable === false) return "- " + item.label_zh + " — " + item.availability + (item.note ? " — " + item.note : "");
+            return "- " + (item.label_zh || item.id) + " — " + item.validation_status;
           }).join("\n");
           return category.label_zh + " (" + category.id + ")\n" + entries;
         }).join("\n\n");

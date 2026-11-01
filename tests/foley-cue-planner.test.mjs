@@ -30,6 +30,7 @@ test("plans one approved Foley asset for each exact action anchor without TTS", 
   assert.equal(plan.sequence_foley, true);
   assert.equal(plan.tail_duration_sec, 2.5);
   assert.equal(plan.action_count, 3);
+  assert.deepEqual(plan.action_labels.map((item) => item.label_zh), ["包装撕开", "盒子开封", "具体动作未确认"]);
   assert.deepEqual(plan.cues.map((cue) => cue.asset_id), ["fx_package", "fx_box", "fx_finish"]);
   assert.ok(plan.cues.every((cue) => cue.kind === "foley" && cue.loop === false));
   assert.equal(plan.cues[0].duration_sec, 1.8);
@@ -198,11 +199,24 @@ test("includes actual tab, carriage return, and newline characters in trailing a
 });
 
 
-test("exposes Foley action names without leaking approved mix parameters", () => {
+test("exposes explicit Foley labels and marks unverified or unavailable actions", () => {
   const catalog = getFoleyActionCatalog();
-  assert.equal(catalog.length, 8);
+  assert.equal(catalog.length, 9);
   assert.equal(catalog.find((item) => item.action === "clothing_rustle").label_zh, "衣物摩擦");
-  assert.ok(catalog.every((item) => item.availability === "requires_matching_uploaded_asset"));
+  assert.equal(catalog.find((item) => item.action === "liquid_application").label_zh, "涂抹");
+  assert.equal(catalog.find((item) => item.action === "continuous_rhythm").label_zh, "抽插（候选，待试听确认）");
+  assert.equal(catalog.find((item) => item.action === "continuous_rhythm").availability, "candidate_mapping_pending_listening");
+  assert.equal(catalog.find((item) => item.action === "cumshot").label_zh, "射精");
+  assert.equal(catalog.find((item) => item.action === "cumshot").selectable, false);
+  assert.equal(catalog.find((item) => item.action === "cumshot").availability, "no_matching_asset");
   assert.ok(catalog.every((item) => !Object.hasOwn(item, "gain")));
   assert.ok(catalog.every((item) => !Object.hasOwn(item, "pan")));
+});
+
+test("does not map an unavailable explicit action to a different Foley asset", () => {
+  assert.throws(() => planFoleyCues({
+    text: "动作结束。",
+    actions: [{ action: "cumshot", after_text: "动作结束" }],
+    assets,
+  }), /Unsupported Foley action/);
 });

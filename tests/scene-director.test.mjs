@@ -62,6 +62,7 @@ test("combines a selected ambience bed and one explicit Foley action", () => {
   assert.equal(plan.ambience_preset, "rain");
   assert.equal(plan.ambience_cue_count, 1);
   assert.equal(plan.foley_action_count, 1);
+  assert.equal(plan.foley_action_labels[0].label_zh, "衣物摩擦");
   assert.equal(plan.cues.length, 2);
   assert.equal(plan.cues[0].kind, "ambience");
   assert.equal(plan.cues[1].kind, "foley");

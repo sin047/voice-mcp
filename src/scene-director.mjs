@@ -224,6 +224,7 @@ export function planSceneDirector({
     pauses: Object.freeze(pauses),
     pause_total_ms: pauseTotalMs,
     foley_action_count: foleyCues.length,
+    foley_action_labels: Object.freeze(foleyPlan?.action_labels ?? []),
     ambience_preset: ambiencePreset ?? null,
     ambience_cue_count: ambienceCues.length,
     tail_duration_sec: tailDurationSec,

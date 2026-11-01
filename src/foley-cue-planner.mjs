@@ -13,6 +13,7 @@ export const FOLEY_ACTION_TYPES = Object.freeze([
 
 const ACTIONS = Object.freeze({
   clothing_rustle: Object.freeze({
+    labelZh: "衣物摩擦",
     assetName: "衣物摩擦",
     gain: soundscapeGain("contact", 2.25),
     pan: -0.38,
@@ -24,6 +25,7 @@ const ACTIONS = Object.freeze({
     normalizationTargetRms: 0.14,
   }),
   package_open: Object.freeze({
+    labelZh: "包装撕开",
     assetName: "包装撕开",
     gain: soundscapeGain("action"),
     pan: -0.22,
@@ -33,6 +35,7 @@ const ACTIONS = Object.freeze({
     durationSec: 1.8,
   }),
   box_open: Object.freeze({
+    labelZh: "盒子开封",
     assetName: "盒子开封",
     gain: soundscapeGain("action", 2),
     pan: 0.2,
@@ -43,6 +46,8 @@ const ACTIONS = Object.freeze({
     normalizationTargetRms: 0.14,
   }),
   liquid_application: Object.freeze({
+    labelZh: "涂抹",
+    catalogAvailability: "requires_matching_uploaded_asset",
     assetName: "润滑液涂抹",
     gain: soundscapeGain("detail", -4.5),
     pan: 0.16,
@@ -52,6 +57,9 @@ const ACTIONS = Object.freeze({
     durationSec: 6,
   }),
   continuous_rhythm: Object.freeze({
+    labelZh: "抽插（候选，待试听确认）",
+    catalogAvailability: "candidate_mapping_pending_listening",
+    catalogNote: "当前仅候选映射到“连续节奏”素材；试听确认前不视为已验收。",
     assetName: "连续节奏",
     gain: soundscapeGain("contact", 0.92),
     pan: -0.1,
@@ -62,6 +70,8 @@ const ACTIONS = Object.freeze({
     normalizationTargetRms: 0.14,
   }),
   bed_objects: Object.freeze({
+    labelZh: "床铺物件声（具体动作待确认）",
+    catalogAvailability: "action_mapping_unconfirmed",
     assetName: "床铺物件声",
     gain: soundscapeGain("contact", 0.92),
     pan: 0.12,
@@ -72,6 +82,8 @@ const ACTIONS = Object.freeze({
     normalizationTargetRms: 0.14,
   }),
   wet_detail: Object.freeze({
+    labelZh: "湿润细节（具体动作待确认）",
+    catalogAvailability: "action_mapping_unconfirmed",
     assetName: "湿润细节",
     gain: soundscapeGain("detail"),
     pan: 0.48,
@@ -82,6 +94,9 @@ const ACTIONS = Object.freeze({
     sourceOffsetSec: 12,
   }),
   ending_detail: Object.freeze({
+    labelZh: "具体动作未确认",
+    catalogAvailability: "action_mapping_unconfirmed",
+    catalogNote: "“收尾音效”素材尚未确认具体动作，不映射为射精音效。",
     assetName: "收尾音效",
     gain: soundscapeGain("detail"),
     pan: 0,
@@ -94,12 +109,26 @@ const ACTIONS = Object.freeze({
 });
 
 export function getFoleyActionCatalog() {
-  return Object.freeze(FOLEY_ACTION_TYPES.map((action) => Object.freeze({
-    action,
-    label_zh: ACTIONS[action].assetName,
-    asset_name: ACTIONS[action].assetName,
-    availability: "requires_matching_uploaded_asset",
-  })));
+  const configuredActions = FOLEY_ACTION_TYPES.map((action) => {
+    const definition = ACTIONS[action];
+    return Object.freeze({
+      action,
+      label_zh: definition.labelZh ?? definition.assetName,
+      asset_name: definition.assetName,
+      availability: definition.catalogAvailability ?? "requires_matching_uploaded_asset",
+      ...(definition.catalogNote ? { note: definition.catalogNote } : {}),
+      selectable: true,
+    });
+  });
+  const pendingActions = [Object.freeze({
+    action: "cumshot",
+    label_zh: "射精",
+    asset_name: null,
+    availability: "no_matching_asset",
+    note: "目前没有确认的对应音效素材；不把“收尾音效”或“湿润细节”自动映射为射精。",
+    selectable: false,
+  })];
+  return Object.freeze([...configuredActions, ...pendingActions]);
 }
 
 function findOccurrence(text, anchor, occurrence) {
@@ -159,6 +188,7 @@ export function planFoleyCues({
   let previousAnchorEnd = -1;
   const cues = [];
   const resolvedAnchors = [];
+  const actionLabels = [];
   const warnings = [];
 
   for (let index = 0; index < actions.length; index += 1) {
@@ -194,6 +224,15 @@ export function planFoleyCues({
       occurrence,
       start: anchorStart,
     }));
+    actionLabels.push(Object.freeze({
+      action: request.action,
+      label_zh: definition.labelZh ?? definition.assetName,
+      asset_name: definition.assetName,
+      after_text: resolvedAnchorText,
+      availability: definition.catalogAvailability ?? "requires_matching_uploaded_asset",
+      ...(definition.catalogNote ? { note: definition.catalogNote } : {}),
+    }));
+    if (definition.catalogNote) warnings.push(definition.catalogNote);
 
     const asset = assets.find((item) =>
       item && item.kind === "foley" &&
@@ -260,6 +299,7 @@ export function planFoleyCues({
     action_count: cues.length,
     cues: Object.freeze(cues.map((cue) => Object.freeze(cue))),
     action_order: Object.freeze(actions.map((request) => request.action)),
+    action_labels: Object.freeze(actionLabels),
     anchor_order: Object.freeze(resolvedAnchors),
     warnings: Object.freeze(warnings),
     notes: Object.freeze([

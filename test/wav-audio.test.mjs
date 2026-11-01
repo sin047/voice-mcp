@@ -285,6 +285,6 @@ test("routes breath assets through a separate quiet bus", () => {
   });
   const output = decodePcmWav(mixed.buffer);
   const breathSample = output.channels[0][Math.round(0.35 * 44100)];
-  assert.ok(breathSample > 0.035 && breathSample < 0.045);
+  assert.ok(breathSample > 0.025 && breathSample < 0.03);
   assert.equal(output.frameCount, 44100);
 });

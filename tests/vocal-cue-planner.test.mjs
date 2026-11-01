@@ -12,7 +12,7 @@ test("places a close whisper tag on its own line before an exact phrase", () => 
   assert.equal(plan.estimated_tts_calls, 0);
   assert.equal(plan.plan_only, true);
   assert.equal(plan.cues[0].label_zh, "贴近耳边低语");
-  assert.equal(plan.cues[0].validation_status, "reference_candidate_unverified");
+  assert.equal(plan.cues[0].validation_status, "positive_combined_audition");
 });
 
 test("keeps a tag and explicit vocalization inline on the same line", () => {

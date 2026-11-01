@@ -1,6 +1,6 @@
 const MAX_CUES = 12;
 const MAX_SECONDS = 180;
-const EFFECT_KINDS = new Set(["ambience", "foley"]);
+const EFFECT_KINDS = new Set(["ambience", "foley", "breath"]);
 const SPATIAL_MODES = new Set(["stereo", "hrtf"]);
 
 function boundedNumber(value, name, min, max) {
@@ -23,9 +23,11 @@ export function createDramaTimeline(input) {
   const voiceGain = boundedNumber(input.voiceGain ?? 0.9, "voiceGain", 0, 1);
   const ambienceBusGain = boundedNumber(input.ambienceBusGain ?? 0.82, "ambienceBusGain", 0, 1);
   const foleyBusGain = boundedNumber(input.foleyBusGain ?? 0.9, "foleyBusGain", 0, 1);
+  const breathBusGain = boundedNumber(input.breathBusGain ?? 0.58, "breathBusGain", 0, 1);
   const masterGain = boundedNumber(input.masterGain ?? 0.85, "masterGain", 0, 1);
   const duckingAmount = boundedNumber(input.duckingAmount ?? 0.75, "duckingAmount", 0, 1);
   const foleyDuckingDepth = boundedNumber(input.foleyDuckingDepth ?? 0.35, "foleyDuckingDepth", 0, 1);
+  const breathDuckingDepth = boundedNumber(input.breathDuckingDepth ?? 0.05, "breathDuckingDepth", 0, 1);
   const duckingEnabled = input.duckingEnabled !== false;
   const spatialMode = String(input.spatialMode ?? "stereo");
   if (!SPATIAL_MODES.has(spatialMode)) {
@@ -50,18 +52,21 @@ export function createDramaTimeline(input) {
     }
 
     const atSec = boundedNumber(cue.atSec ?? 0, "atSec", 0, duration);
-    const gain = boundedNumber(cue.gain ?? (kind === "ambience" ? 0.1 : 0.22), "gain", 0, 0.7);
+    const defaultGain = kind === "ambience" ? 0.1 : kind === "breath" ? 0.14 : 0.22;
+    const gain = boundedNumber(cue.gain ?? defaultGain, "gain", 0, 0.7);
     const pan = boundedNumber(cue.pan ?? 0, "pan", -1, 1);
     const distanceMeters = boundedNumber(cue.distanceMeters ?? 1.5, "distanceMeters", 0.5, 8);
     const sourceOffsetSec = boundedNumber(cue.sourceOffsetSec ?? 0, "sourceOffsetSec", 0, MAX_SECONDS);
     const normalizationTargetRms = boundedNumber(
-      cue.normalizationTargetRms ?? 0.1,
+      cue.normalizationTargetRms ?? (kind === "breath" ? 0.04 : 0.1),
       "normalizationTargetRms",
       0.05,
       0.2,
     );
-    const fadeInSec = boundedNumber(cue.fadeInSec ?? (kind === "ambience" ? 1 : 0.03), "fadeInSec", 0, 10);
-    const fadeOutSec = boundedNumber(cue.fadeOutSec ?? (kind === "ambience" ? 1 : 0.1), "fadeOutSec", 0, 10);
+    const defaultFadeIn = kind === "ambience" ? 1 : kind === "breath" ? 0.025 : 0.03;
+    const defaultFadeOut = kind === "ambience" ? 1 : kind === "breath" ? 0.045 : 0.1;
+    const fadeInSec = boundedNumber(cue.fadeInSec ?? defaultFadeIn, "fadeInSec", 0, 10);
+    const fadeOutSec = boundedNumber(cue.fadeOutSec ?? defaultFadeOut, "fadeOutSec", 0, 10);
 
     const loop = kind === "ambience" && cue.loop === true;
     const maxDuration = duration - atSec;
@@ -97,6 +102,7 @@ export function createDramaTimeline(input) {
     mix: Object.freeze({
       ambienceBusGain,
       foleyBusGain,
+      breathBusGain,
       masterGain,
       duckingEnabled,
       duckingAmount,
@@ -107,6 +113,7 @@ export function createDramaTimeline(input) {
         releaseSec: 0.26,
         ambienceDepth: 0.65,
         foleyDepth: foleyDuckingDepth,
+        breathDepth: breathDuckingDepth,
       }),
     }),
     cues: Object.freeze(normalized),

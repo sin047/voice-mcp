@@ -21,6 +21,7 @@ jobs:
       - name: Syntax check
         run: |
           node --check src/server.mjs
+          node --check src/breath-repair.mjs
           node --check src/audio-content.mjs
           node --check src/audio-range.mjs
           node --check src/performance.mjs
@@ -63,7 +64,7 @@ jobs:
             import assert from "node:assert/strict";
             const status = JSON.parse(fs.readFileSync("/tmp/voice-status.json", "utf8"));
             assert.equal(status.status, "ok");
-            assert.equal(status.version, "1.4.0-beta.47");
+            assert.equal(status.version, "1.4.0-beta.48");
             assert.equal(status.features.native_audio_content_blocks, true);
             assert.equal(status.features.inline_audio_content_max_bytes, 4 * 1024 * 1024);
             assert.equal(status.features.generated_audio_url_ttl_seconds, 86400);

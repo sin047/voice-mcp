@@ -51,7 +51,7 @@ The mode remains opt-in until a real listening test confirms that its placement 
 The continuous timeline also accepts breath_mode='enhanced'. It reuses the existing conservative breath analyzer, then applies pure-code post-processing to accepted inhale/exhale islands:
 
 - Reduce an existing breath only when it is less than 12 dB below its adjacent speech.
-- Soften an abrupt attack with a short raised-cosine fade-in and apply a short release fade.
+- For inhales, soften abrupt attacks and fade the tail; for exhales, fade the onset into the preceding phrase.
 - Reposition only qualifying opening inhales; internal breaths are not moved.
 - Preserve total duration and verify that speech samples remain unchanged.
 

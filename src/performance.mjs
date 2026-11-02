@@ -104,7 +104,7 @@ function normalizeExplicitDirection(value) {
   const direction = normalizeDirection(value);
   if (!direction) return undefined;
 
-  const containsCjk = /[\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af]/u.test(direction);
+  const containsNonAscii = /[^\x20-\x7e]/u.test(direction);
   const containsSentencePunctuation = /[.!?;:。！？；]/u.test(direction);
   const containsInstructionLanguage = /\b(?:please|use|speak|say|read|keep|avoid|do not|don't|make sure|ensure|try to|remember to)\b/i.test(direction);
 

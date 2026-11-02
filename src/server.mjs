@@ -5,12 +5,13 @@ import { createAudioAssetStore } from "./audio-assets.mjs";
 import { createRecordingStore } from "./recording-store.mjs";
 import { parseByteRange } from "./audio-range.mjs";
 import { createAudioContentBlock, MAX_INLINE_AUDIO_BYTES } from "./audio-content.mjs";
-import { decodeRawPcm16, encodePcm16Wav, mixSoundscape } from "./wav-audio.mjs";
+import { decodePcmWav, decodeRawPcm16, encodePcm16Wav, mixSoundscape } from "./wav-audio.mjs";
 import { joinPcm16Chunks } from "./voice-long-audio.mjs";
 import { resolveCueTimeAfterText } from "./alignment-cues.mjs";
 import { getFoleyActionCatalog, planFoleyCues, resolveFoleyTimelineDuration, resolveTerminalFoleyCueTimeline, sequenceFoleyCues } from "./foley-cue-planner.mjs";
 import { analyzeBreathSegments, repositionOpeningBreaths } from "./breath-engine.mjs";
 import { repairBreathSegments } from "./breath-repair.mjs";
+import { planBreathPool } from "./breath-pool.mjs";
 import { getVocalCueCatalog, planVocalCues } from "./vocal-cue-planner.mjs";
 import { listVocalPerformancePresets, planVocalPreset } from "./vocal-performance-presets.mjs";
 import { insertTimelinePauses, planSceneDirector, resolveScenePauses, shiftCueTimeForPauses } from "./scene-director.mjs";
@@ -44,7 +45,7 @@ const MODEL_ID = process.env.ELEVENLABS_MODEL_ID || "eleven_v4";
 const OUTPUT_FORMAT = process.env.ELEVENLABS_OUTPUT_FORMAT || "mp3_44100_128";
 const PLAYER_URI = "ui://voice-mcp/player.html";
 const PLAYER_MIME = "text/html;profile=mcp-app";
-const VERSION = "1.4.0-beta.49";
+const VERSION = "1.4.0-beta.50";
 const MAX_CONTEXT_CHARS = 4000;
 const MAX_SPEAK_CHARS = 4000;
 const MAX_SOUND_SCAPE_TEXT_CHARS = 1200;
@@ -101,7 +102,7 @@ const recentPerformancePatterns = [];
 const cors = (_req, res, next) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,PATCH,DELETE,OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, Accept, Mcp-Session-Id, Last-Event-ID, X-Asset-Name, X-Asset-Kind, X-Recording-Text, X-Recording-Performance, X-Recording-Language");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, Accept, Mcp-Session-Id, Last-Event-ID, X-Asset-Name, X-Asset-Kind, X-Breath-Type, X-Recording-Text, X-Recording-Performance, X-Recording-Language");
   if (_req.method === "OPTIONS") return res.status(204).end();
   next();
 };
@@ -139,8 +140,9 @@ app.post(
     let name = req.get("x-asset-name") || "sound-effect.wav";
     try { name = decodeURIComponent(name); } catch { /* Keep the original safe-name input. */ }
     const kind = req.get("x-asset-kind") || "foley";
+    const breathType = req.get("x-breath-type") || undefined;
     try {
-      const asset = await audioAssetStore.save({ buffer: req.body, name, kind });
+      const asset = await audioAssetStore.save({ buffer: req.body, name, kind, breathType });
       return res.status(201).json({ asset });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -832,16 +834,18 @@ function createServer() {
     },
     async () => {
       try {
-        const [assets, usage] = await Promise.all([
+        const [allAssets, usage] = await Promise.all([
           audioAssetStore.list(),
           audioAssetStore.getUsage(),
         ]);
+        const assets = allAssets.filter((asset) => asset.kind !== "breath");
+        const breathAssetCount = allAssets.filter((asset) => asset.kind === "breath").length;
         const summary = assets.length
           ? assets.map((asset) => `- ${asset.name} | asset_id=${asset.id} | ${asset.kind} | ${asset.durationSec}s | ${asset.channels}ch`).join("\\n")
           : "The sound-effect library is empty. Upload WAV files from the Private Drama preview first.";
         return {
           content: [{ type: "text", text: summary }],
-          structuredContent: { assets, usage },
+          structuredContent: { assets, usage, breathAssetCount },
         };
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
@@ -849,6 +853,232 @@ function createServer() {
       }
     },
   );
+
+  mcp.registerTool(
+    "list_recordings",
+    {
+      title: "Search private recording archive",
+      description: "Search saved private voice recordings by their spoken text, title, tags, source, or performance. Read-only and does not call ElevenLabs. Returns metadata previews only, never raw audio bytes.",
+      inputSchema: z.object({
+        query: z.string().max(160).optional(),
+        favorites_only: z.boolean().optional(),
+        limit: z.number().int().min(1).max(50).optional(),
+      }),
+    },
+    async (args) => {
+      try {
+        const all = await recordingStore.list();
+        const query = args.query?.trim().toLocaleLowerCase() || "";
+        const matching = all.filter((item) => {
+          if (args.favorites_only && item.favorite !== true) return false;
+          if (!query) return true;
+          const searchable = [
+            item.title || "",
+            item.text || "",
+            ...(Array.isArray(item.tags) ? item.tags : []),
+            item.source || "",
+            item.performance || "",
+          ].join(" ").toLocaleLowerCase();
+          return searchable.includes(query);
+        });
+        const limit = args.limit ?? 20;
+        const recordings = matching.slice(0, limit).map((item) => ({
+          id: item.id,
+          title: item.title || "",
+          text_preview: String(item.text || "").slice(0, 160),
+          tags: Array.isArray(item.tags) ? item.tags : [],
+          favorite: item.favorite === true,
+          duration_sec: item.durationSec,
+          sample_rate: item.sampleRate,
+          created_at: item.createdAt,
+          source: item.source,
+          performance: item.performance,
+          breath_asset_count: Array.isArray(item.breathAssets) ? item.breathAssets.length : 0,
+        }));
+        return {
+          content: [{
+            type: "text",
+            text: "Found " + matching.length + " matching recording(s); returning " + recordings.length + ". No audio was generated.",
+          }],
+          structuredContent: {
+            archive_count: all.length,
+            matching_count: matching.length,
+            recordings,
+          },
+        };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        return { content: [{ type: "text", text: "Could not search recordings: " + message }], isError: true };
+      }
+    },
+  );
+
+  mcp.registerTool(
+    "extract_breath_asset",
+    {
+      title: "Extract a breath clip from a saved recording",
+      description: "Crop a 0.22–1.1 second inhale or exhale from an existing private recording and save it as a separate Breath Asset. The original recording is never modified. New clips are always pending review and cannot enter the automatic pool until explicitly approved. This tool uses local WAV processing only and does NOT call ElevenLabs.",
+      inputSchema: z.object({
+        recording_id: z.string().regex(/^rec_[0-9a-f-]{36}$/i),
+        start_sec: z.number().min(0).max(180),
+        end_sec: z.number().min(0).max(180),
+        breath_type: z.enum(["inhale", "exhale"]),
+        name: z.string().max(80).optional(),
+      }),
+    },
+    async (args) => {
+      try {
+        if (args.end_sec <= args.start_sec ||
+            args.end_sec - args.start_sec < 0.22 ||
+            args.end_sec - args.start_sec > 1.1) {
+          throw new Error("Select a clip between 0.22 and 1.1 seconds");
+        }
+        const recording = await recordingStore.get(args.recording_id);
+        if (!recording) throw new Error("Recording not found: " + args.recording_id);
+        const decoded = decodePcmWav(recording.buffer);
+        const startFrame = Math.round(args.start_sec * decoded.sampleRate);
+        const endFrame = Math.round(args.end_sec * decoded.sampleRate);
+        if (endFrame > decoded.frameCount || endFrame <= startFrame) {
+          throw new Error("The selected clip range exceeds the source recording");
+        }
+        const channels = decoded.channels.map((channel) => channel.slice(startFrame, endFrame));
+        let peak = 0;
+        let sumSquares = 0;
+        let sampleCount = 0;
+        for (const channel of channels) {
+          for (let i = 0; i < channel.length; i += 1) {
+            const value = channel[i];
+            peak = Math.max(peak, Math.abs(value));
+            sumSquares += value * value;
+            sampleCount += 1;
+          }
+        }
+        if (peak < 0.0005) throw new Error("The selected range is effectively silent");
+        const rms = Math.sqrt(sumSquares / Math.max(1, sampleCount));
+        const buffer = encodePcm16Wav(channels, decoded.sampleRate);
+        const sourceTitle = recording.metadata.title || recording.metadata.id;
+        const name = args.name || sourceTitle + "_" + args.breath_type + "_" + args.start_sec.toFixed(2) + "s";
+        const asset = await audioAssetStore.save({
+          buffer,
+          name,
+          kind: "breath",
+          breathType: args.breath_type,
+          sourceRecordingId: args.recording_id,
+          sourceStartSec: args.start_sec,
+          sourceEndSec: args.end_sec,
+          rms,
+          peak,
+        });
+        const audioContent = createAudioContentBlock(buffer, "audio/wav");
+        return {
+          content: [
+            { type: "text", text: "Extracted " + args.breath_type + " clip (" + asset.durationSec + "s). Saved as pending review; original recording was not changed." },
+            ...(audioContent ? [audioContent] : []),
+          ],
+          structuredContent: {
+            asset,
+            preview_included: Boolean(audioContent),
+            peak_dbfs: Number((20 * Math.log10(peak)).toFixed(2)),
+            rms_dbfs: Number((20 * Math.log10(rms)).toFixed(2)),
+            estimated_tts_calls: 0,
+          },
+        };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        return {
+          content: [{ type: "text", text: "Breath extraction failed: " + message }],
+          structuredContent: { error: message, estimated_tts_calls: 0 },
+          isError: true,
+        };
+      }
+    },
+  );
+
+  mcp.registerTool(
+    "list_breath_assets",
+    {
+      title: "List private Breath Assets",
+      description: "List separately classified inhale/exhale WAV clips and their review status. Only explicitly approved clips can be used by the automatic Breath Pool. Read-only; no ElevenLabs calls.",
+      inputSchema: z.object({
+        status: z.enum(["pending", "approved", "rejected"]).optional(),
+      }),
+    },
+    async (args) => {
+      try {
+        const all = await audioAssetStore.list();
+        const breathAssets = all.filter((asset) =>
+          asset.kind === "breath" && (!args.status || asset.status === args.status)
+        );
+        const summary = breathAssets.length
+          ? breathAssets.map((asset) =>
+            "- " + asset.name + " | asset_id=" + asset.id + " | " + asset.breathType +
+            " | " + asset.status + " | " + asset.durationSec + "s"
+          ).join("\n")
+          : "No Breath Assets match this filter. Extract clips from the private recording archive first.";
+        return {
+          content: [{ type: "text", text: summary }],
+          structuredContent: { assets: breathAssets, count: breathAssets.length },
+        };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        return { content: [{ type: "text", text: "Could not list Breath Assets: " + message }], isError: true };
+      }
+    },
+  );
+
+  mcp.registerTool(
+    "preview_breath_asset",
+    {
+      title: "Preview a Breath Asset",
+      description: "Return the exact saved Breath Asset as playable WAV audio for manual listening and approval. Does not generate or modify audio.",
+      inputSchema: z.object({
+        asset_id: z.string().regex(/^fx_[0-9a-f-]{36}$/i),
+      }),
+    },
+    async (args) => {
+      try {
+        const stored = await audioAssetStore.get(args.asset_id);
+        if (!stored || stored.metadata.kind !== "breath") throw new Error("Breath Asset not found");
+        const audioContent = createAudioContentBlock(stored.buffer, "audio/wav");
+        return {
+          content: [
+            { type: "text", text: stored.metadata.name + " · " + stored.metadata.breathType + " · " + stored.metadata.status },
+            ...(audioContent ? [audioContent] : []),
+          ],
+          structuredContent: { asset: stored.metadata, preview_included: Boolean(audioContent) },
+        };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        return { content: [{ type: "text", text: "Breath preview failed: " + message }], isError: true };
+      }
+    },
+  );
+
+  mcp.registerTool(
+    "set_breath_asset_status",
+    {
+      title: "Approve or reject a Breath Asset",
+      description: "Change the review status of a saved Breath Asset. Set status=approved only after listening confirms the clip is a clean nonverbal inhale or exhale. Only approved clips enter the automatic Breath Pool. No TTS calls.",
+      inputSchema: z.object({
+        asset_id: z.string().regex(/^fx_[0-9a-f-]{36}$/i),
+        status: z.enum(["pending", "approved", "rejected"]),
+      }),
+    },
+    async (args) => {
+      try {
+        const metadata = await audioAssetStore.update(args.asset_id, { status: args.status });
+        if (!metadata) throw new Error("Breath Asset not found");
+        return {
+          content: [{ type: "text", text: metadata.name + " review status: " + metadata.status }],
+          structuredContent: { asset: metadata, approved_for_pool: metadata.status === "approved" },
+        };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        return { content: [{ type: "text", text: "Breath Asset review update failed: " + message }], isError: true };
+      }
+    },
+  );
+
 
   mcp.registerTool(
     "plan_scene_director",
@@ -1310,7 +1540,7 @@ function createServer() {
 
   mcp.registerTool("render_continuous_audio_timeline", {
     title: `${BOT_NAME}'s Continuous Voice Timeline`,
-    description: `Synthesize one continuous voice passage exactly once, then overlay independently timed Foley and ambience. Use after_text on a cue to place it immediately after an exact phrase in the spoken text using ElevenLabs character timestamps; use at_sec for absolute timing. Optional tail_duration_sec adds a pure-Foley/ambience tail after the generated voice without needing to know the voice duration in advance; timeline_duration_sec remains available as an absolute override. Set sequence_foley=true to trim each Foley cue at the next Foley cue start, preventing action sounds from overlapping. Effects may occupy silent intervals or continue after the voice; no additional TTS calls are made. Optional breath_mode='natural' runs the original pure-code pass after the single synthesis and repositions only high-confidence opening inhales by moving silence. Optional breath_mode='enhanced' applies conservative post-synthesis repair to existing high-confidence breath islands: it attenuates breaths that are too loud relative to adjacent speech, softens abrupt attacks, adds a short release fade, and repositions only opening inhales. Enhanced mode does not synthesize, insert, or loop new breath clips, does not change speech samples, and makes no additional TTS requests. Optional pauses insert actual silent PCM frames after exact aligned phrases, preserving speech samples and shifting later text-anchored Foley cues. Default 'off' preserves current behavior. When passing tagged text from plan_vocal_preset, set raw_tags=true to preserve those inline TTS tags; the default false keeps ordinary untrusted inline tags stripped. This avoids extra TTS chunk boundaries. If adding Foley or ambience, call list_sound_assets first; omit cues or pass an empty array for voice-only rendering. Outputs at most ${MAX_INLINE_AUDIO_BYTES} bytes also include a standard MCP AudioContent block for native clients; larger outputs use the MCP App HTTPS player URL fallback. Playback URLs expire after 24 hours. Text and finished audio are limited to ${MAX_SOUND_SCAPE_TEXT_CHARS} characters and ${MAX_SOUND_SCAPE_SECONDS} seconds.`,
+    description: `Synthesize one continuous voice passage exactly once, then overlay independently timed Foley and ambience. Use after_text on a cue to place it immediately after an exact phrase in the spoken text using ElevenLabs character timestamps; use at_sec for absolute timing. Optional tail_duration_sec adds a pure-Foley/ambience tail after the generated voice without needing to know the voice duration in advance; timeline_duration_sec remains available as an absolute override. Set sequence_foley=true to trim each Foley cue at the next Foley cue start, preventing action sounds from overlapping. Effects may occupy silent intervals or continue after the voice; no additional TTS calls are made. Optional breath_mode='natural' runs the original pure-code pass after the single synthesis and repositions only high-confidence opening inhales by moving silence. Optional breath_mode='enhanced' applies conservative post-synthesis repair to existing high-confidence breath islands. A separate breath_pool_mode='conservative' may insert explicitly approved inhale/exhale clips into otherwise empty inter-phrase gaps of at least 0.75 seconds. The pool never reuses pending/rejected clips, never overlaps detected breath islands or speech, never loops or time-stretches, and is capped at two clips per passage. Breath clips are mixed on their own bus and the original speech samples and total duration are preserved. Both options are pure post-processing and make no additional TTS requests. Optional pauses insert actual silent PCM frames after exact aligned phrases, preserving speech samples and shifting later text-anchored Foley cues. Default 'off' preserves current behavior. When passing tagged text from plan_vocal_preset, set raw_tags=true to preserve those inline TTS tags; the default false keeps ordinary untrusted inline tags stripped. This avoids extra TTS chunk boundaries. If adding Foley or ambience, call list_sound_assets first; omit cues or pass an empty array for voice-only rendering. Outputs at most ${MAX_INLINE_AUDIO_BYTES} bytes also include a standard MCP AudioContent block for native clients; larger outputs use the MCP App HTTPS player URL fallback. Playback URLs expire after 24 hours. Text and finished audio are limited to ${MAX_SOUND_SCAPE_TEXT_CHARS} characters and ${MAX_SOUND_SCAPE_SECONDS} seconds.`,
     inputSchema: z.object({
       text: z.string().min(1).max(MAX_SOUND_SCAPE_TEXT_CHARS),
       raw_tags: z.boolean().optional(),
@@ -1324,6 +1554,8 @@ function createServer() {
       tail_duration_sec: z.number().min(0).max(15).optional(),
       sequence_foley: z.boolean().optional(),
       breath_mode: z.enum(["off", "natural", "enhanced"]).optional(),
+      breath_pool_mode: z.enum(["off", "conservative"]).optional(),
+      breath_bus_gain: z.number().min(0).max(1).optional(),
       pauses: z.array(z.object({
         after_text: z.string().min(1).max(160),
         occurrence: z.number().int().min(1).max(10).optional(),
@@ -1451,6 +1683,64 @@ function createServer() {
       });
       voiceForMix = pauseInsertion.voicePcm;
       const appliedPauses = pauseInsertion.pauses;
+
+      const breathPoolMode = args.breath_pool_mode ?? "off";
+      let breathPoolSegments = [];
+      let breathPoolPlan = {
+        insertions: [],
+        approvedAssetCount: 0,
+        existingBreathCount: 0,
+        durationPreserved: true,
+        speechSamplesPreserved: true,
+        skippedReason: breathPoolMode === "off" ? "disabled" : "not_planned",
+      };
+      if (breathPoolMode === "conservative") {
+        const breathAssets = (await audioAssetStore.list()).filter((asset) =>
+          asset.kind === "breath" && asset.status === "approved"
+        );
+        const poolAnalysis = analyzeBreathSegments({
+          samples: voiceForMix.channels[0],
+          sampleRate: voiceForMix.sampleRate,
+        });
+        breathPoolPlan = planBreathPool({
+          samples: voiceForMix.channels[0],
+          sampleRate: voiceForMix.sampleRate,
+          analysis: poolAnalysis,
+          assets: breathAssets,
+          performance: args.performance || "natural",
+        });
+        for (const insertion of breathPoolPlan.insertions) {
+          const stored = await audioAssetStore.get(insertion.assetId);
+          if (!stored || stored.metadata.kind !== "breath" || stored.metadata.status !== "approved") continue;
+          breathPoolSegments.push({
+            assetId: insertion.assetId,
+            breathType: insertion.breathType,
+            atSec: insertion.atSec,
+            gain: insertion.gain,
+            fadeInSec: insertion.fadeInSec,
+            fadeOutSec: insertion.fadeOutSec,
+            pcm: decodePcmWav(stored.buffer),
+          });
+        }
+      }
+      breathProcessing = {
+        ...breathProcessing,
+        applied: breathProcessing.applied || breathPoolSegments.length > 0,
+        pool_mode: breathPoolMode,
+        pool_approved_asset_count: breathPoolPlan.approvedAssetCount,
+        pool_existing_breath_count: breathPoolPlan.existingBreathCount,
+        pool_inserted_count: breathPoolSegments.length,
+        pool_skipped_reason: breathPoolPlan.skippedReason,
+        pool_insertions: breathPoolSegments.map((segment) => ({
+          asset_id: segment.assetId,
+          breath_type: segment.breathType,
+          at_sec: segment.atSec,
+          duration_sec: segment.pcm.durationSec,
+          gain: segment.gain,
+        })),
+        pool_duration_preserved: breathPoolPlan.durationPreserved,
+        pool_speech_samples_preserved: breathPoolPlan.speechSamplesPreserved,
+      };
       const timelinePlan = resolveFoleyTimelineDuration({
         voiceDurationSec: voiceForMix.durationSec,
         timelineDurationSec: args.timeline_duration_sec,
@@ -1523,6 +1813,8 @@ function createServer() {
         totalDurationSec: timelineDurationSec,
         assets: loadedAssets,
         cues: resolvedCues,
+        breathSegments: breathPoolSegments,
+        breathBusGain: args.breath_bus_gain,
         voiceGain: args.voice_gain,
         ambienceBusGain: args.ambience_bus_gain,
         foleyBusGain: args.foley_bus_gain,
@@ -1570,6 +1862,13 @@ function createServer() {
           kind: cue.kind,
           at_sec: cue.atSec,
           duration_sec: cue.durationSec,
+        })),
+        breathAssets: breathPoolSegments.map((segment) => ({
+          asset_id: segment.assetId,
+          breath_type: segment.breathType,
+          at_sec: segment.atSec,
+          duration_sec: segment.pcm.durationSec,
+          gain: segment.gain,
         })),
       }) : null;
 
@@ -1946,6 +2245,8 @@ app.get("/status", (_req, res) => {
       local_drama_preview: true,
       private_audio_asset_library: true,
       persistent_recording_archive: true,
+      breath_asset_pool: SOUNDSCAPE_MCP_ENABLED,
+      breath_pool_composer: SOUNDSCAPE_MCP_ENABLED,
       mcp_apps_audio_player: true,
       native_audio_content_blocks: true,
       inline_audio_content_max_bytes: MAX_INLINE_AUDIO_BYTES,

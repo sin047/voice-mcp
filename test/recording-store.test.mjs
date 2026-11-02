@@ -87,3 +87,34 @@ test("recording metadata supports persistent titles, tags and favorites with val
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+
+test("recording archive persists breath-pool insertion provenance", async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), "voice-mcp-recordings-breath-"));
+  const store = createRecordingStore({ directory });
+  try {
+    const saved = await store.save({
+      buffer: fixtureWav(),
+      text: "A voice passage",
+      breathAssets: [{
+        asset_id: "fx_00000000-0000-0000-0000-000000000001",
+        breath_type: "exhale",
+        at_sec: 0.85,
+        duration_sec: 0.3,
+        gain: 0.9,
+      }],
+    });
+    const restarted = createRecordingStore({ directory });
+    const listed = await restarted.list();
+    assert.deepEqual(listed[0].breathAssets, [{
+      asset_id: "fx_00000000-0000-0000-0000-000000000001",
+      breath_type: "exhale",
+      at_sec: 0.85,
+      duration_sec: 0.3,
+      gain: 0.9,
+    }]);
+    await restarted.remove(saved.id);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});

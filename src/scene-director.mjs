@@ -54,6 +54,7 @@ export function planSceneDirector({
   ambiencePreset,
   assets = [],
   tailDurationSec = 0,
+  breathMode = "hybrid",
 } = {}) {
   if (typeof text !== "string" || !text.trim() || text.length > MAX_SCENE_CHARS) {
     throw new Error("text must contain 1–1200 characters");
@@ -69,6 +70,9 @@ export function planSceneDirector({
   }
   if (!Number.isFinite(tailDurationSec) || tailDurationSec < 0 || tailDurationSec > 15) {
     throw new Error("tailDurationSec must be between 0 and 15 seconds");
+  }
+  if (!["off", "natural", "enhanced", "hybrid"].includes(breathMode)) {
+    throw new Error("breathMode must be off, natural, enhanced, or hybrid");
   }
   if (ambiencePreset != null && !AMBIENCE_PRESETS.has(ambiencePreset)) {
     throw new Error("Unsupported ambience preset: " + String(ambiencePreset) + ". Supported presets: rain, desk");
@@ -209,6 +213,7 @@ export function planSceneDirector({
     cues: Object.freeze(cues),
     sequence_foley: foleyCues.length > 0,
     tail_duration_sec: tailDurationSec,
+    breath_mode: breathMode,
     save_recording: false,
   });
 
@@ -228,6 +233,7 @@ export function planSceneDirector({
     ambience_preset: ambiencePreset ?? null,
     ambience_cue_count: ambienceCues.length,
     tail_duration_sec: tailDurationSec,
+    breath_mode: breathMode,
     cues: Object.freeze(cues),
     sequence_foley: foleyCues.length > 0,
     warnings: Object.freeze(warnings),
@@ -240,6 +246,7 @@ export function planSceneDirector({
       "Physical actions are never inferred from keywords; each selected Foley action maps to one uploaded asset.",
       "Ambience is optional and uses only the selected uploaded rain or desk asset.",
       "Afterglow remains an arrangement preset with an untagged closing beat, not a standalone TTS tag.",
+      "Hybrid breath mode repairs TTS-generated breaths first, then fills only genuinely empty eligible gaps with approved Breath Pool clips; it makes no extra TTS calls.",
     ]),
   });
 }

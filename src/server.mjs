@@ -45,7 +45,7 @@ const MODEL_ID = process.env.ELEVENLABS_MODEL_ID || "eleven_v4";
 const OUTPUT_FORMAT = process.env.ELEVENLABS_OUTPUT_FORMAT || "mp3_44100_128";
 const PLAYER_URI = "ui://voice-mcp/player.html";
 const PLAYER_MIME = "text/html;profile=mcp-app";
-const VERSION = "1.4.0-beta.50";
+const VERSION = "1.4.0-beta.51";
 const MAX_CONTEXT_CHARS = 4000;
 const MAX_SPEAK_CHARS = 4000;
 const MAX_SOUND_SCAPE_TEXT_CHARS = 1200;
@@ -1084,7 +1084,7 @@ function createServer() {
     "plan_scene_director",
     {
       title: "Plan a complete voice scene",
-      description: "Compose one continuous voice scene from exact ordered text beats, explicitly selected vocal presets, optional aligned pauses, an optional uploaded rain/desk ambience bed, and explicitly selected Foley actions. For rhythm, choose one of penetration_basic, penetration_crisp, or penetration_intense; legacy continuous_rhythm remains supported. This deterministic planning tool does NOT call ElevenLabs or consume TTS credits. Beat text must concatenate exactly to the original text. Actions are never inferred from keywords. Review render_request, then pass it to render_continuous_audio_timeline; tagged text requires raw_tags=true. Aligned pauses are inserted as silence in the single rendered voice passage, and later text-anchored Foley cues move with them.",
+      description: "Compose one continuous voice scene from exact ordered text beats, explicitly selected vocal presets, optional aligned pauses, an optional uploaded rain/desk ambience bed, and explicitly selected Foley actions. Hybrid breath mode is the default: repair TTS-generated breaths first, then supplement only genuinely empty eligible gaps with approved Breath Pool clips. Set breath_mode to off, natural, enhanced, or hybrid to override. For rhythm, choose one of penetration_basic, penetration_crisp, or penetration_intense; legacy continuous_rhythm remains supported. This deterministic planning tool does NOT call ElevenLabs or consume TTS credits. Beat text must concatenate exactly to the original text. Actions are never inferred from keywords. Review render_request, then pass it to render_continuous_audio_timeline; tagged text requires raw_tags=true. Aligned pauses are inserted as silence in the single rendered voice passage, and later text-anchored Foley cues move with them.",
       inputSchema: z.object({
         text: z.string().min(1).max(MAX_SOUND_SCAPE_TEXT_CHARS),
         beats: z.array(z.object({
@@ -1128,6 +1128,7 @@ function createServer() {
         })).max(8).default([]),
         ambience_preset: z.enum(["rain", "desk"]).optional(),
         tail_duration_sec: z.number().min(0).max(15).optional(),
+        breath_mode: z.enum(["off", "natural", "enhanced", "hybrid"]).optional(),
       }),
     },
     async (args) => {
@@ -1141,6 +1142,7 @@ function createServer() {
           ambiencePreset: args.ambience_preset,
           assets,
           tailDurationSec: args.tail_duration_sec ?? 0,
+          breathMode: args.breath_mode ?? "hybrid",
         });
         return {
           content: [{
@@ -1540,7 +1542,7 @@ function createServer() {
 
   mcp.registerTool("render_continuous_audio_timeline", {
     title: `${BOT_NAME}'s Continuous Voice Timeline`,
-    description: `Synthesize one continuous voice passage exactly once, then overlay independently timed Foley and ambience. Use after_text on a cue to place it immediately after an exact phrase in the spoken text using ElevenLabs character timestamps; use at_sec for absolute timing. Optional tail_duration_sec adds a pure-Foley/ambience tail after the generated voice without needing to know the voice duration in advance; timeline_duration_sec remains available as an absolute override. Set sequence_foley=true to trim each Foley cue at the next Foley cue start, preventing action sounds from overlapping. Effects may occupy silent intervals or continue after the voice; no additional TTS calls are made. Optional breath_mode='natural' runs the original pure-code pass after the single synthesis and repositions only high-confidence opening inhales by moving silence. Optional breath_mode='enhanced' applies conservative post-synthesis repair to existing high-confidence breath islands. A separate breath_pool_mode='conservative' may insert explicitly approved inhale/exhale clips into otherwise empty inter-phrase gaps of at least 0.75 seconds. The pool never reuses pending/rejected clips, never overlaps detected breath islands or speech, never loops or time-stretches, and is capped at two clips per passage. Breath clips are mixed on their own bus and the original speech samples and total duration are preserved. Both options are pure post-processing and make no additional TTS requests. Optional pauses insert actual silent PCM frames after exact aligned phrases, preserving speech samples and shifting later text-anchored Foley cues. Default 'off' preserves current behavior. When passing tagged text from plan_vocal_preset, set raw_tags=true to preserve those inline TTS tags; the default false keeps ordinary untrusted inline tags stripped. This avoids extra TTS chunk boundaries. If adding Foley or ambience, call list_sound_assets first; omit cues or pass an empty array for voice-only rendering. Outputs at most ${MAX_INLINE_AUDIO_BYTES} bytes also include a standard MCP AudioContent block for native clients; larger outputs use the MCP App HTTPS player URL fallback. Playback URLs expire after 24 hours. Text and finished audio are limited to ${MAX_SOUND_SCAPE_TEXT_CHARS} characters and ${MAX_SOUND_SCAPE_SECONDS} seconds.`,
+    description: `Synthesize one continuous voice passage exactly once, then overlay independently timed Foley and ambience. Use after_text on a cue to place it immediately after an exact phrase in the spoken text using ElevenLabs character timestamps; use at_sec for absolute timing. Optional tail_duration_sec adds a pure-Foley/ambience tail after the generated voice without needing to know the voice duration in advance; timeline_duration_sec remains available as an absolute override. Set sequence_foley=true to trim each Foley cue at the next Foley cue start, preventing action sounds from overlapping. Effects may occupy silent intervals or continue after the voice; no additional TTS calls are made. Optional breath_mode='natural' repositions only high-confidence opening inhales by moving silence. Optional breath_mode='enhanced' repairs existing high-confidence breath islands. Select breath_mode=hybrid for the combined TTS-first behavior. breath_mode='hybrid' combines enhanced repair with the approved Breath Pool: TTS-generated breaths are kept first, and only genuinely empty inter-phrase gaps are eligible for supplementary approved inhale/exhale clips. Pool clips are selected with a per-render seeded rotation to avoid always choosing the oldest asset. The pool never reuses pending/rejected clips, never overlaps detected non-speech islands or speech, never loops or time-stretches, and is capped at two clips per passage. Breath clips are mixed on their own bus and original speech samples and total duration are preserved. Hybrid and pool processing are pure post-processing and make no additional TTS requests. Set breath_pool_mode='off' to disable pool supplementation while retaining hybrid repair. Optional pauses insert actual silent PCM frames after exact aligned phrases, preserving speech samples and shifting later text-anchored Foley cues. Default 'off' preserves current behavior. When passing tagged text from plan_vocal_preset, set raw_tags=true to preserve those inline TTS tags; the default false keeps ordinary untrusted inline tags stripped. This avoids extra TTS chunk boundaries. If adding Foley or ambience, call list_sound_assets first; omit cues or pass an empty array for voice-only rendering. Outputs at most ${MAX_INLINE_AUDIO_BYTES} bytes also include a standard MCP AudioContent block for native clients; larger outputs use the MCP App HTTPS player URL fallback. Playback URLs expire after 24 hours. Text and finished audio are limited to ${MAX_SOUND_SCAPE_TEXT_CHARS} characters and ${MAX_SOUND_SCAPE_SECONDS} seconds.`,
     inputSchema: z.object({
       text: z.string().min(1).max(MAX_SOUND_SCAPE_TEXT_CHARS),
       raw_tags: z.boolean().optional(),
@@ -1553,7 +1555,8 @@ function createServer() {
       timeline_duration_sec: z.number().min(0.1).max(MAX_SOUND_SCAPE_SECONDS).optional(),
       tail_duration_sec: z.number().min(0).max(15).optional(),
       sequence_foley: z.boolean().optional(),
-      breath_mode: z.enum(["off", "natural", "enhanced"]).optional(),
+      breath_mode: z.enum(["off", "natural", "enhanced", "hybrid"]).optional(),
+      breath_pool_mode: z.enum(["off", "conservative"]).optional().describe("Override the pool behavior. When omitted, hybrid mode enables conservative pool supplementation; other breath modes keep it off."),
       breath_pool_mode: z.enum(["off", "conservative"]).optional(),
       breath_bus_gain: z.number().min(0).max(1).optional(),
       pauses: z.array(z.object({
@@ -1630,12 +1633,12 @@ function createServer() {
         exhale_count: 0,
         repositioned_count: 0,
       };
-      if (breathMode === "natural" || breathMode === "enhanced") {
+      if (breathMode === "natural" || breathMode === "enhanced" || breathMode === "hybrid") {
         const breathAnalysis = analyzeBreathSegments({
           samples: voicePcm.channels[0],
           sampleRate: voicePcm.sampleRate,
         });
-        const breathRepair = breathMode === "enhanced"
+        const breathRepair = breathMode === "enhanced" || breathMode === "hybrid"
           ? repairBreathSegments({
             samples: voicePcm.channels[0],
             sampleRate: voicePcm.sampleRate,
@@ -1648,12 +1651,13 @@ function createServer() {
           });
         voiceForMix = { ...voicePcm, channels: [breathRepair.samples] };
         const acceptedBreaths = breathAnalysis.breaths.filter((breath) => breath.accepted);
-        const repositionedCount = breathMode === "enhanced"
+        const usesEnhancedRepair = breathMode === "enhanced" || breathMode === "hybrid";
+        const repositionedCount = usesEnhancedRepair
           ? breathRepair.repositionedCount
           : breathRepair.adjustments.length;
-        const attenuatedCount = breathMode === "enhanced" ? breathRepair.attenuatedCount : 0;
-        const smoothedCount = breathMode === "enhanced" ? breathRepair.smoothedCount : 0;
-        const fadeOutCount = breathMode === "enhanced" ? breathRepair.fadeOutCount : 0;
+        const attenuatedCount = usesEnhancedRepair ? breathRepair.attenuatedCount : 0;
+        const smoothedCount = usesEnhancedRepair ? breathRepair.smoothedCount : 0;
+        const fadeOutCount = usesEnhancedRepair ? breathRepair.fadeOutCount : 0;
         breathProcessing = {
           mode: breathMode,
           applied: repositionedCount + attenuatedCount + smoothedCount + fadeOutCount > 0,
@@ -1684,7 +1688,7 @@ function createServer() {
       voiceForMix = pauseInsertion.voicePcm;
       const appliedPauses = pauseInsertion.pauses;
 
-      const breathPoolMode = args.breath_pool_mode ?? "off";
+      const breathPoolMode = args.breath_pool_mode ?? (breathMode === "hybrid" ? "conservative" : "off");
       let breathPoolSegments = [];
       let breathPoolPlan = {
         insertions: [],
@@ -1708,6 +1712,7 @@ function createServer() {
           analysis: poolAnalysis,
           assets: breathAssets,
           performance: args.performance || "natural",
+          selectionSeed: crypto.randomUUID(),
         });
         for (const insertion of breathPoolPlan.insertions) {
           const stored = await audioAssetStore.get(insertion.assetId);
@@ -1728,6 +1733,10 @@ function createServer() {
         applied: breathProcessing.applied || breathPoolSegments.length > 0,
         pool_mode: breathPoolMode,
         pool_approved_asset_count: breathPoolPlan.approvedAssetCount,
+        pool_asset_counts: breathPoolPlan.assetCounts,
+        pool_variation_ready: breathPoolPlan.variationReady,
+        pool_selection_strategy: breathPoolPlan.selectionStrategy,
+        pool_tts_first: true,
         pool_existing_breath_count: breathPoolPlan.existingBreathCount,
         pool_inserted_count: breathPoolSegments.length,
         pool_skipped_reason: breathPoolPlan.skippedReason,
@@ -2247,6 +2256,7 @@ app.get("/status", (_req, res) => {
       persistent_recording_archive: true,
       breath_asset_pool: SOUNDSCAPE_MCP_ENABLED,
       breath_pool_composer: SOUNDSCAPE_MCP_ENABLED,
+      hybrid_breath_engine: SOUNDSCAPE_MCP_ENABLED,
       mcp_apps_audio_player: true,
       native_audio_content_blocks: true,
       inline_audio_content_max_bytes: MAX_INLINE_AUDIO_BYTES,

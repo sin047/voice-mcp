@@ -300,3 +300,12 @@ New read-only/archive tools:
 - `preview_breath_asset`, `list_breath_assets`, and `set_breath_asset_status` support listening and explicit approval.
 
 The continuous timeline accepts `breath_pool_mode="conservative"` separately from `breath_mode`. It inserts only approved clips into silent inter-phrase gaps of at least 0.75 seconds, uses phrase-relative loudness, applies short type-specific fades, and inserts at most two clips per passage. It never loops or time-stretches clips and preserves speech samples and total duration. The pool is opt-in and disabled by default.
+
+
+### Hybrid Breath Engine (beta.51)
+
+The scene director now defaults to `breath_mode="hybrid"` (override with `off`, `natural`, or `enhanced`). Hybrid mode repairs high-confidence TTS-generated breath islands first, then uses the approved Breath Asset Pool only in genuinely empty inter-phrase gaps. An explicit `breath_pool_mode="off"` disables supplementation without disabling the existing-breath repair.
+
+Approved breath assets are selected using a per-render seeded rotation rather than always choosing the oldest asset. The planner reports inhale/exhale inventory counts and whether the library has enough clips for meaningful variation (at least two approved clips of each type). With a smaller library it can still use available clips, but reports limited variation.
+
+This remains post-processing: one TTS synthesis, no extra TTS requests for repair or pool mixing, no speech-sample edits, no time stretching, and no total-duration change.

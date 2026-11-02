@@ -145,6 +145,34 @@ test("emotion direction is combined with an explicit voice direction", () => {
   assert.match(plan.direction, /close-mic, youthful voice/);
 });
 
+test("Chinese natural-language direction is rejected before it can be sent as spoken TTS text", () => {
+  const text = "先慢慢吸一口气……嗯，别着急。让我靠近一点，听我把这句话说完。";
+  assert.throws(
+    () => createPerformancePlan(text, {
+      performance: "close",
+      emotion: "warm",
+      direction: "用自然的中文男性声音说话，句间留出真实呼吸空间；不要刻意夸张喘息，不要播音腔，保持轻柔、稳定。",
+    }),
+    /short English Audio Tag cue, not a natural-language prompt/,
+  );
+});
+
+test("English instruction sentences are rejected but short tag cues remain supported", () => {
+  const text = "今天慢慢说，不着急。";
+  assert.throws(
+    () => createPerformancePlan(text, {
+      performance: "close",
+      direction: "Please speak softly and slowly.",
+    }),
+    /short English Audio Tag cue, not a natural-language prompt/,
+  );
+  const plan = createPerformancePlan(text, {
+    performance: "natural",
+    direction: "close-mic, youthful voice",
+  });
+  assert.equal(plan.direction, "close-mic, youthful voice");
+});
+
 test("emotion markers remain usable by MCP clients with an older tool schema", () => {
   assert.deepEqual(parseEmotionDirective("[emotion:warm] close-mic, youthful voice"), {
     emotion: "warm",

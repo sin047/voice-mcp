@@ -108,7 +108,7 @@ function normalizeExplicitDirection(value) {
   const containsSentencePunctuation = /[.!?;:。！？；]/u.test(direction);
   const containsInstructionLanguage = /\b(?:please|use|speak|say|read|keep|avoid|do not|don't|make sure|ensure|try to|remember to)\b/i.test(direction);
 
-  if (containsCjk || containsSentencePunctuation || containsInstructionLanguage) {
+  if (containsNonAscii || containsSentencePunctuation || containsInstructionLanguage) {
     throw new Error(
       "direction must be a short English Audio Tag cue, not a natural-language prompt; use performance and emotion for delivery instructions",
     );

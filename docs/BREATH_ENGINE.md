@@ -12,8 +12,8 @@ This phase adds an opt-in post-synthesis repair path to the existing continuous 
 
 1. Reuse the existing analyzer and its conservative confidence threshold.
 2. Reduce an accepted breath only when it is less than 12 dB below its adjacent speech, with a maximum 12 dB cut.
-3. Measure the first 10–90% amplitude rise over 5 ms windows. If the attack is shorter than 90 ms, apply a 60–150 ms raised-cosine fade-in.
-4. Apply a 30 ms release fade to avoid an abrupt cut.
+3. Measure the first 10–90% amplitude rise over 5 ms windows. For inhales with attacks shorter than 90 ms, apply a 60–150 ms raised-cosine fade-in.
+4. Use type-specific transitions: a 35 ms release fade for inhales, or a 30 ms onset fade for exhales.
 5. Reposition only qualifying opening inhales. Internal breaths are not moved.
 6. Verify that the total duration and all speech-island samples remain unchanged.
 

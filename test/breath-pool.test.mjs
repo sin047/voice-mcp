@@ -92,3 +92,65 @@ test("breath pool skips gaps occupied by an existing non-speech island", () => {
   assert.equal(plan.insertions.length, 0);
   assert.equal(plan.skippedReason, "no_eligible_silent_gap");
 });
+
+
+test("breath pool rotates approved clips by per-render seed and reports library diversity", () => {
+  const samples = voiceWithGap(1.8);
+  const analysis = analyzeBreathSegments({ samples, sampleRate });
+  const variedAssets = [
+    ...Array.from({ length: 4 }, (_, i) => ({
+      id: "fx_exhale_" + i,
+      kind: "breath",
+      breathType: "exhale",
+      status: "approved",
+      durationSec: 0.3,
+      rms: 0.04,
+      createdAt: "2026-11-01T00:00:0" + i + "Z",
+    })),
+    ...Array.from({ length: 4 }, (_, i) => ({
+      id: "fx_inhale_" + i,
+      kind: "breath",
+      breathType: "inhale",
+      status: "approved",
+      durationSec: 0.3,
+      rms: 0.04,
+      createdAt: "2026-11-01T00:00:1" + i + "Z",
+    })),
+  ];
+  const render = (selectionSeed) => planBreathPool({
+    samples,
+    sampleRate,
+    analysis,
+    assets: variedAssets,
+    performance: "close",
+    selectionSeed,
+  });
+  const first = render("scene-alpha");
+  const repeat = render("scene-alpha");
+  assert.deepEqual(first.insertions.map((item) => item.assetId), repeat.insertions.map((item) => item.assetId));
+  assert.equal(first.variationReady, true);
+  assert.deepEqual(first.assetCounts, { inhale: 4, exhale: 4 });
+  assert.equal(first.selectionStrategy, "seeded_per_render");
+
+  const signatures = new Set(
+    ["scene-alpha", "scene-beta", "scene-gamma", "scene-delta", "scene-epsilon"]
+      .map((seed) => render(seed).insertions.map((item) => item.assetId).join("|"))
+  );
+  assert.ok(signatures.size > 1, "different render seeds should rotate the selected breath clips");
+});
+
+test("breath pool reports limited variation when only one clip exists for each breath type", () => {
+  const samples = voiceWithGap(1.8);
+  const analysis = analyzeBreathSegments({ samples, sampleRate });
+  const plan = planBreathPool({
+    samples,
+    sampleRate,
+    analysis,
+    assets: assets(),
+    performance: "close",
+    selectionSeed: "single-pair",
+  });
+  assert.equal(plan.variationReady, false);
+  assert.deepEqual(plan.assetCounts, { inhale: 1, exhale: 1 });
+  assert.equal(plan.insertions.length, 2);
+});

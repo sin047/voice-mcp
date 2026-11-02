@@ -261,3 +261,45 @@ test("rejects a soundscape longer than the supported duration", () => {
   const voice = rawPcm(tone(44100 * 181, 0.01));
   assert.throws(() => mixSoundscape({ voicePcm: voice, assets: new Map() }), /180 second/);
 });
+
+
+test("mixSoundscape overlays approved breath segments on a separate bus without altering speech", () => {
+  const sampleRate = 44100;
+  const voice = new Float32Array(sampleRate);
+  for (let i = 0; i < voice.length; i += 1) {
+    if (i < sampleRate * 0.3 || i > sampleRate * 0.7) {
+      voice[i] = 0.1 * Math.sin(2 * Math.PI * 120 * i / sampleRate);
+    }
+  }
+  const breath = new Float32Array(Math.round(0.2 * sampleRate));
+  for (let i = 0; i < breath.length; i += 1) {
+    breath[i] = 0.04 * Math.sin(2 * Math.PI * 700 * i / sampleRate);
+  }
+  const result = mixSoundscape({
+    voicePcm: { channels: [voice], sampleRate, durationSec: 1 },
+    totalDurationSec: 1,
+    assets: new Map(),
+    cues: [],
+    breathSegments: [{
+      atSec: 0.4,
+      pcm: { channels: [breath], sampleRate, durationSec: 0.2 },
+      gain: 1,
+      fadeInSec: 0.03,
+      fadeOutSec: 0.035,
+      breathType: "exhale",
+      assetId: "fx_breath",
+    }],
+    breathBusGain: 1,
+    voiceGain: 1,
+    masterGain: 1,
+    duckingEnabled: false,
+  });
+  const decoded = decodePcmWav(result.buffer);
+  const speechSampleIndex = Math.round(0.1 * sampleRate);
+  const gapSampleIndex = Math.round(0.5 * sampleRate);
+  assert.ok(Math.abs(decoded.channels[0][speechSampleIndex] - voice[speechSampleIndex]) < 0.0001);
+  assert.ok(Math.abs(decoded.channels[0][gapSampleIndex]) > 0.005);
+  assert.equal(result.durationSec, 1);
+  assert.equal(result.breathSegments.length, 1);
+  assert.equal(result.breathSegments[0].breathType, "exhale");
+});

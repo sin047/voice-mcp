@@ -10,6 +10,7 @@ import { joinPcm16Chunks } from "./voice-long-audio.mjs";
 import { resolveCueTimeAfterText } from "./alignment-cues.mjs";
 import { getFoleyActionCatalog, planFoleyCues, resolveFoleyTimelineDuration, resolveTerminalFoleyCueTimeline, sequenceFoleyCues } from "./foley-cue-planner.mjs";
 import { analyzeBreathSegments, repositionOpeningBreaths } from "./breath-engine.mjs";
+import { repairBreathSegments } from "./breath-repair.mjs";
 import { getVocalCueCatalog, planVocalCues } from "./vocal-cue-planner.mjs";
 import { listVocalPerformancePresets, planVocalPreset } from "./vocal-performance-presets.mjs";
 import { insertTimelinePauses, planSceneDirector, resolveScenePauses, shiftCueTimeForPauses } from "./scene-director.mjs";
@@ -43,7 +44,7 @@ const MODEL_ID = process.env.ELEVENLABS_MODEL_ID || "eleven_v4";
 const OUTPUT_FORMAT = process.env.ELEVENLABS_OUTPUT_FORMAT || "mp3_44100_128";
 const PLAYER_URI = "ui://voice-mcp/player.html";
 const PLAYER_MIME = "text/html;profile=mcp-app";
-const VERSION = "1.4.0-beta.47";
+const VERSION = "1.4.0-beta.48";
 const MAX_CONTEXT_CHARS = 4000;
 const MAX_SPEAK_CHARS = 4000;
 const MAX_SOUND_SCAPE_TEXT_CHARS = 1200;
@@ -1309,7 +1310,7 @@ function createServer() {
 
   mcp.registerTool("render_continuous_audio_timeline", {
     title: `${BOT_NAME}'s Continuous Voice Timeline`,
-    description: `Synthesize one continuous voice passage exactly once, then overlay independently timed Foley and ambience. Use after_text on a cue to place it immediately after an exact phrase in the spoken text using ElevenLabs character timestamps; use at_sec for absolute timing. Optional tail_duration_sec adds a pure-Foley/ambience tail after the generated voice without needing to know the voice duration in advance; timeline_duration_sec remains available as an absolute override. Set sequence_foley=true to trim each Foley cue at the next Foley cue start, preventing action sounds from overlapping. Effects may occupy silent intervals or continue after the voice; no additional TTS calls are made. Optional breath_mode='natural' runs a pure-code pass after the single synthesis and repositions only high-confidence opening inhales by moving silence; it does not add clips or change speech samples. Optional pauses insert actual silent PCM frames after exact aligned phrases, preserving speech samples and shifting later text-anchored Foley cues. Default 'off' preserves current behavior. When passing tagged text from plan_vocal_preset, set raw_tags=true to preserve those inline TTS tags; the default false keeps ordinary untrusted inline tags stripped. This avoids extra TTS chunk boundaries. If adding Foley or ambience, call list_sound_assets first; omit cues or pass an empty array for voice-only rendering. Outputs at most ${MAX_INLINE_AUDIO_BYTES} bytes also include a standard MCP AudioContent block for native clients; larger outputs use the MCP App HTTPS player URL fallback. Playback URLs expire after 24 hours. Text and finished audio are limited to ${MAX_SOUND_SCAPE_TEXT_CHARS} characters and ${MAX_SOUND_SCAPE_SECONDS} seconds.`,
+    description: `Synthesize one continuous voice passage exactly once, then overlay independently timed Foley and ambience. Use after_text on a cue to place it immediately after an exact phrase in the spoken text using ElevenLabs character timestamps; use at_sec for absolute timing. Optional tail_duration_sec adds a pure-Foley/ambience tail after the generated voice without needing to know the voice duration in advance; timeline_duration_sec remains available as an absolute override. Set sequence_foley=true to trim each Foley cue at the next Foley cue start, preventing action sounds from overlapping. Effects may occupy silent intervals or continue after the voice; no additional TTS calls are made. Optional breath_mode='natural' runs the original pure-code pass after the single synthesis and repositions only high-confidence opening inhales by moving silence. Optional breath_mode='enhanced' applies conservative post-synthesis repair to existing high-confidence breath islands: it attenuates breaths that are too loud relative to adjacent speech, softens abrupt attacks, adds a short release fade, and repositions only opening inhales. Enhanced mode does not synthesize, insert, or loop new breath clips, does not change speech samples, and makes no additional TTS requests. Optional pauses insert actual silent PCM frames after exact aligned phrases, preserving speech samples and shifting later text-anchored Foley cues. Default 'off' preserves current behavior. When passing tagged text from plan_vocal_preset, set raw_tags=true to preserve those inline TTS tags; the default false keeps ordinary untrusted inline tags stripped. This avoids extra TTS chunk boundaries. If adding Foley or ambience, call list_sound_assets first; omit cues or pass an empty array for voice-only rendering. Outputs at most ${MAX_INLINE_AUDIO_BYTES} bytes also include a standard MCP AudioContent block for native clients; larger outputs use the MCP App HTTPS player URL fallback. Playback URLs expire after 24 hours. Text and finished audio are limited to ${MAX_SOUND_SCAPE_TEXT_CHARS} characters and ${MAX_SOUND_SCAPE_SECONDS} seconds.`,
     inputSchema: z.object({
       text: z.string().min(1).max(MAX_SOUND_SCAPE_TEXT_CHARS),
       raw_tags: z.boolean().optional(),
@@ -1322,7 +1323,7 @@ function createServer() {
       timeline_duration_sec: z.number().min(0.1).max(MAX_SOUND_SCAPE_SECONDS).optional(),
       tail_duration_sec: z.number().min(0).max(15).optional(),
       sequence_foley: z.boolean().optional(),
-      breath_mode: z.enum(["off", "natural"]).optional(),
+      breath_mode: z.enum(["off", "natural", "enhanced"]).optional(),
       pauses: z.array(z.object({
         after_text: z.string().min(1).max(160),
         occurrence: z.number().int().min(1).max(10).optional(),
@@ -1397,25 +1398,40 @@ function createServer() {
         exhale_count: 0,
         repositioned_count: 0,
       };
-      if (breathMode === "natural") {
+      if (breathMode === "natural" || breathMode === "enhanced") {
         const breathAnalysis = analyzeBreathSegments({
           samples: voicePcm.channels[0],
           sampleRate: voicePcm.sampleRate,
         });
-        const breathRepair = repositionOpeningBreaths({
-          samples: voicePcm.channels[0],
-          sampleRate: voicePcm.sampleRate,
-          analysis: breathAnalysis,
-        });
+        const breathRepair = breathMode === "enhanced"
+          ? repairBreathSegments({
+            samples: voicePcm.channels[0],
+            sampleRate: voicePcm.sampleRate,
+            analysis: breathAnalysis,
+          })
+          : repositionOpeningBreaths({
+            samples: voicePcm.channels[0],
+            sampleRate: voicePcm.sampleRate,
+            analysis: breathAnalysis,
+          });
         voiceForMix = { ...voicePcm, channels: [breathRepair.samples] };
         const acceptedBreaths = breathAnalysis.breaths.filter((breath) => breath.accepted);
+        const repositionedCount = breathMode === "enhanced"
+          ? breathRepair.repositionedCount
+          : breathRepair.adjustments.length;
+        const attenuatedCount = breathMode === "enhanced" ? breathRepair.attenuatedCount : 0;
+        const smoothedCount = breathMode === "enhanced" ? breathRepair.smoothedCount : 0;
+        const fadeOutCount = breathMode === "enhanced" ? breathRepair.fadeOutCount : 0;
         breathProcessing = {
           mode: breathMode,
-          applied: breathRepair.adjustments.length > 0,
+          applied: repositionedCount + attenuatedCount + smoothedCount + fadeOutCount > 0,
           candidate_count: acceptedBreaths.length,
           inhale_count: acceptedBreaths.filter((breath) => breath.breathType === "inhale").length,
           exhale_count: acceptedBreaths.filter((breath) => breath.breathType === "exhale").length,
-          repositioned_count: breathRepair.adjustments.length,
+          repositioned_count: repositionedCount,
+          attenuated_count: attenuatedCount,
+          smoothed_count: smoothedCount,
+          fade_out_count: fadeOutCount,
           duration_preserved: breathRepair.durationPreserved,
           speech_samples_preserved: breathRepair.speechSamplesPreserved,
         };

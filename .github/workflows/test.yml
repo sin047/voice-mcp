@@ -65,7 +65,7 @@ jobs:
             import assert from "node:assert/strict";
             const status = JSON.parse(fs.readFileSync("/tmp/voice-status.json", "utf8"));
             assert.equal(status.status, "ok");
-            assert.equal(status.version, "1.4.0-beta.50");
+            assert.equal(status.version, "1.4.0-beta.51");
             assert.equal(status.features.native_audio_content_blocks, true);
             assert.equal(status.features.inline_audio_content_max_bytes, 4 * 1024 * 1024);
             assert.equal(status.features.generated_audio_url_ttl_seconds, 86400);
@@ -76,6 +76,7 @@ jobs:
             assert.equal(status.features.persistent_recording_archive, true);
             assert.equal(status.features.breath_asset_pool, true);
             assert.equal(status.features.breath_pool_composer, true);
+            assert.equal(status.features.hybrid_breath_engine, true);
             assert.equal(status.features.continuous_voice_timeline, true);
             assert.equal(status.features.continuous_timeline_effect_tail, true);
             assert.equal(status.features.foley_cue_planner, true);
@@ -248,10 +249,12 @@ jobs:
             assert.ok(continuous.inputSchema.properties.timeline_duration_sec);
             assert.ok(continuous.inputSchema.properties.tail_duration_sec);
             assert.ok(continuous.inputSchema.properties.sequence_foley);
-            assert.deepEqual(continuous.inputSchema.properties.breath_mode.enum, ["off", "natural", "enhanced"]);
+            assert.deepEqual(continuous.inputSchema.properties.breath_mode.enum, ["off", "natural", "enhanced", "hybrid"]);
             assert.deepEqual(continuous.inputSchema.properties.breath_pool_mode.enum, ["off", "conservative"]);
             assert.ok(continuous.inputSchema.properties.breath_bus_gain);
             assert.ok(continuous.description.includes("approved inhale/exhale clips"));
+            assert.ok(continuous.description.includes("breath_mode='hybrid'"));
+            assert.ok(continuous.description.includes("per-render seeded rotation"));
             assert.ok(continuous.description.includes("two clips per passage"));
             assert.ok(continuous.description.includes("high-confidence opening inhales"));
             assert.ok(continuous.description.includes("raw_tags=true"));
@@ -266,6 +269,8 @@ jobs:
             assert.ok(sceneDirector.description.includes("exact ordered text beats"));
             assert.ok(sceneDirector.inputSchema.properties.beats);
             assert.ok(sceneDirector.inputSchema.properties.foley_actions);
+            assert.deepEqual(sceneDirector.inputSchema.properties.breath_mode.enum, ["off", "natural", "enhanced", "hybrid"]);
+            assert.ok(sceneDirector.description.includes("Hybrid breath mode is the default"));
             const sceneActions = sceneDirector.inputSchema.properties.foley_actions.items.properties.action.enum;
             for (const action of ["penetration_basic", "penetration_crisp", "penetration_intense", "cumshot"]) {
               assert.ok(sceneActions.includes(action), "Scene Director must expose " + action);

@@ -22,14 +22,29 @@ function phraseReferenceRms(samples, sampleRate, island, breathType) {
   return rms(samples, start, end);
 }
 
-function chooseAsset(assets, breathType, usedIds) {
-  return assets.find((asset) =>
-    asset.breathType === breathType &&
-    !usedIds.has(asset.id) &&
-    Number.isFinite(asset.durationSec) &&
-    asset.durationSec >= 0.22 &&
-    asset.durationSec <= 1.1
-  ) || null;
+function seededAssetRank(seed, assetId) {
+  const input = String(seed) + ":" + assetId;
+  let hash = 2166136261;
+  for (let i = 0; i < input.length; i += 1) {
+    hash ^= input.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+}
+
+function chooseAsset(assets, breathType, usedIds, selectionSeed) {
+  return assets
+    .filter((asset) =>
+      asset.breathType === breathType &&
+      !usedIds.has(asset.id) &&
+      Number.isFinite(asset.durationSec) &&
+      asset.durationSec >= 0.22 &&
+      asset.durationSec <= 1.1
+    )
+    .sort((a, b) =>
+      seededAssetRank(selectionSeed, a.id) - seededAssetRank(selectionSeed, b.id) ||
+      a.id.localeCompare(b.id)
+    )[0] || null;
 }
 
 /**
@@ -49,6 +64,7 @@ export function planBreathPool({
   maxClipGain = 2,
   minimumClipGain = 0.25,
   minClipSpacingSec = 0.1,
+  selectionSeed = "voice-mcp-breath-pool-v1",
 } = {}) {
   if (!(samples instanceof Float32Array) || !samples.length) {
     throw new Error("samples must be a non-empty Float32Array");
@@ -62,6 +78,9 @@ export function planBreathPool({
     throw new Error("analysis must be produced from the same samples and sample rate");
   }
   if (!Array.isArray(assets)) throw new Error("assets must be an array");
+  if (typeof selectionSeed !== "string" || selectionSeed.length > 128) {
+    throw new Error("selectionSeed must be a string no longer than 128 characters");
+  }
   for (const [name, value, min, max] of [
     ["minGapSec", minGapSec, 0.5, 3],
     ["maxInsertions", maxInsertions, 1, 8],
@@ -81,6 +100,9 @@ export function planBreathPool({
     insertions: [],
     existingBreathCount: acceptedBreaths.length,
     approvedAssetCount: 0,
+    assetCounts: Object.freeze({ inhale: 0, exhale: 0 }),
+    variationReady: false,
+    selectionStrategy: "seeded_per_render",
     durationPreserved: true,
     speechSamplesPreserved: true,
     skippedReason: null,
@@ -109,6 +131,10 @@ export function planBreathPool({
       a.id.localeCompare(b.id)
     );
   base.approvedAssetCount = approved.length;
+  const inhaleAssetCount = approved.filter((asset) => asset.breathType === "inhale").length;
+  const exhaleAssetCount = approved.filter((asset) => asset.breathType === "exhale").length;
+  base.assetCounts = Object.freeze({ inhale: inhaleAssetCount, exhale: exhaleAssetCount });
+  base.variationReady = inhaleAssetCount >= 2 && exhaleAssetCount >= 2;
   if (!approved.length) {
     return Object.freeze({ ...base, skippedReason: "no_approved_breath_assets" });
   }
@@ -139,8 +165,8 @@ export function planBreathPool({
     );
     if (occupiedIsland) continue;
 
-    const exhale = chooseAsset(approved, "exhale", usedIds);
-    const inhale = chooseAsset(approved, "inhale", usedIds);
+    const exhale = chooseAsset(approved, "exhale", usedIds, selectionSeed);
+    const inhale = chooseAsset(approved, "inhale", usedIds, selectionSeed);
     const gapInsertions = [];
 
     const makeInsertion = (asset, breathType, atSec, speechIsland) => {

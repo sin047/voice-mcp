@@ -2,7 +2,7 @@
 
 A platform-neutral Node.js MCP server for ElevenLabs voice generation, expressive delivery and mixed voice + sound-effect playback.
 
-The actively maintained development and deployment branch is `zeabur`, currently at **v1.4.0-beta.48**. It runs as a Node.js 22+ / Express 5 service with Streamable HTTP MCP and is deployed on Zeabur. The same runtime can also run on a VPS or Docker host.
+The actively maintained development and deployment branch is `zeabur`, currently at **v1.4.0-beta.49**. It runs as a Node.js 22+ / Express 5 service with Streamable HTTP MCP and is deployed on Zeabur. The same runtime can also run on a VPS or Docker host.
 
 
 
@@ -45,6 +45,10 @@ The continuous timeline accepts optional `breath_mode`:
 - The response includes `breath_processing` diagnostics (candidate, inhale, exhale and repositioned counts).
 
 The mode remains opt-in until a real listening test confirms that its placement is natural. Breath-pool harvesting and enhanced gap insertion are later phases.
+
+### Voice direction safety (beta.49)
+
+The `direction` field is an optional short English Audio Tag cue, not a hidden/system prompt. It is inserted into the ElevenLabs text inside brackets. Chinese sentences, full natural-language instructions, and instruction-like English sentences are rejected before the ElevenLabs request, so they cannot be accidentally spoken or consume TTS quota. Use `performance` and `emotion` for normal delivery control.
 
 ### Enhanced breath repair (beta.48)
 

@@ -44,7 +44,7 @@ const MODEL_ID = process.env.ELEVENLABS_MODEL_ID || "eleven_v4";
 const OUTPUT_FORMAT = process.env.ELEVENLABS_OUTPUT_FORMAT || "mp3_44100_128";
 const PLAYER_URI = "ui://voice-mcp/player.html";
 const PLAYER_MIME = "text/html;profile=mcp-app";
-const VERSION = "1.4.0-beta.48";
+const VERSION = "1.4.0-beta.49";
 const MAX_CONTEXT_CHARS = 4000;
 const MAX_SPEAK_CHARS = 4000;
 const MAX_SOUND_SCAPE_TEXT_CHARS = 1200;
@@ -428,7 +428,7 @@ function createServer() {
     "speak",
     {
       title: `${BOT_NAME}'s Voice`,
-      description: `Make ${BOT_NAME} speak with the configured ElevenLabs voice. Use natural for everyday speech; soft/close for quieter delivery; breathy/expressive only when explicitly requested. Natural is intentionally untagged. Use language=auto unless the language is ambiguous. For adjacent chunks of the SAME voice and model, pass the request_id returned by the immediately preceding call in previous_request_ids (max 3) to improve continuity; otherwise use previous_text / next_text. The tool returns a request_id for the next contiguous chunk. Optional emotion selects adaptive breathing: neutral/calm/curious/tired=B1, warm/tender=B2.1, and excited/nervous/intense=experimental inhale-only B3. Older MCP clients can use a [emotion:warm] marker at the start of the remaining direction text (after any soundscape marker). For gradual emotional shifts, change emotion across adjacent chunks and pass the immediately previous request_id for continuity. direction is an advanced override. To add a soundscape while keeping this same tool, prefix direction with one marker: [soundscape:rain], [soundscape:desk], [soundscape:package], [soundscape:close], or [soundscape:intimate]. For one-action Foley without overlapping effects, use [soundscape:clothing], [soundscape:lubricant], [soundscape:rhythm], [soundscape:rhythm-basic], [soundscape:rhythm-crisp], [soundscape:rhythm-intense], [soundscape:bed], [soundscape:finish], or [soundscape:cumshot]. Add a per-call duration in seconds, e.g. [soundscape:clothing:10] or [soundscape:rhythm:12] (0.1–60 seconds); the actual excerpt is capped by source WAV and voice length, with no looping or time-stretching. The older [soundscape:intimate] remains a legacy multi-cue sequence. The marker is removed before voice synthesis. Omit it for ordinary voice-only playback. Soundscape playback requires the matching private WAV assets to be uploaded on the server and MCP_PUBLIC_BASE_URL to be configured.`,
+      description: `Make ${BOT_NAME} speak with the configured ElevenLabs voice. Use natural for everyday speech; soft/close for quieter delivery; breathy/expressive only when explicitly requested. Natural is intentionally untagged. Use language=auto unless the language is ambiguous. For adjacent chunks of the SAME voice and model, pass the request_id returned by the immediately preceding call in previous_request_ids (max 3) to improve continuity; otherwise use previous_text / next_text. The tool returns a request_id for the next contiguous chunk. Optional emotion selects adaptive breathing: neutral/calm/curious/tired=B1, warm/tender=B2.1, and excited/nervous/intense=experimental inhale-only B3. Older MCP clients can use a [emotion:warm] marker at the start of the remaining direction text (after any soundscape marker). For gradual emotional shifts, change emotion across adjacent chunks and pass the immediately previous request_id for continuity. direction is an advanced override for a short English Audio Tag cue only. After any soundscape marker, it is wrapped in brackets and inserted into ElevenLabs text, not sent as a hidden/system prompt. Do not pass Chinese sentences or natural-language instructions; use performance and emotion instead. To add a soundscape while keeping this same tool, prefix direction with one marker: [soundscape:rain], [soundscape:desk], [soundscape:package], [soundscape:close], or [soundscape:intimate]. For one-action Foley without overlapping effects, use [soundscape:clothing], [soundscape:lubricant], [soundscape:rhythm], [soundscape:rhythm-basic], [soundscape:rhythm-crisp], [soundscape:rhythm-intense], [soundscape:bed], [soundscape:finish], or [soundscape:cumshot]. Add a per-call duration in seconds, e.g. [soundscape:clothing:10] or [soundscape:rhythm:12] (0.1–60 seconds); the actual excerpt is capped by source WAV and voice length, with no looping or time-stretching. The older [soundscape:intimate] remains a legacy multi-cue sequence. The marker is removed before voice synthesis. Omit it for ordinary voice-only playback. Soundscape playback requires the matching private WAV assets to be uploaded on the server and MCP_PUBLIC_BASE_URL to be configured.`,
       inputSchema: z.object({
         text: z.string().min(1).max(MAX_SPEAK_CHARS).describe("Text to speak (maximum 4000 characters)"),
         performance: z.enum(["auto", "natural", "soft", "close", "breathy", "expressive"]).optional().describe("High-level delivery mode. Prefer natural for everyday speech. Use breathy/expressive only when context explicitly calls for stronger breath/performance. Defaults to auto/natural."),
@@ -641,7 +641,7 @@ function createServer() {
       performance: z.enum(["auto", "natural", "soft", "close", "breathy", "expressive"]).optional(),
       emotion: z.enum(["neutral", "calm", "warm", "tender", "curious", "excited", "nervous", "intense", "tired"]).optional(),
       language: z.enum(["auto", "zh", "ja", "en", "ko"]).optional(),
-      direction: z.string().max(180).optional(),
+      direction: z.string().max(180).optional().describe("Short English Audio Tag cue only (for example, close-mic, youthful voice). This value is inserted into the ElevenLabs text inside brackets; it is not a hidden/system prompt. Do not put Chinese sentences or natural-language instructions here. Use performance and emotion for delivery instructions."),
       previous_text: z.string().max(MAX_CONTEXT_CHARS).optional(),
       next_text: z.string().max(MAX_CONTEXT_CHARS).optional(),
       style: z.string().optional(),
@@ -1159,7 +1159,7 @@ function createServer() {
         performance: z.enum(["auto", "natural", "soft", "close", "breathy", "expressive"]).optional(),
         emotion: z.enum(["neutral", "calm", "warm", "tender", "curious", "excited", "nervous", "intense", "tired"]).optional(),
         language: z.enum(["auto", "zh", "ja", "en", "ko"]).optional(),
-        direction: z.string().max(180).optional(),
+        direction: z.string().max(180).optional().describe("Short English Audio Tag cue only (for example, close-mic, youthful voice). This value is inserted into the ElevenLabs text inside brackets; it is not a hidden/system prompt. Do not put Chinese sentences or natural-language instructions here. Use performance and emotion for delivery instructions."),
         cues: z.array(z.object({
           asset_id: z.string().min(1).max(64).describe("asset_id returned by list_sound_assets"),
           kind: z.enum(["ambience", "foley"]),
@@ -1317,7 +1317,7 @@ function createServer() {
       performance: z.enum(["auto", "natural", "soft", "close", "breathy", "expressive"]).optional(),
       emotion: z.enum(["neutral", "calm", "warm", "tender", "curious", "excited", "nervous", "intense", "tired"]).optional(),
       language: z.enum(["auto", "zh", "ja", "en", "ko"]).optional(),
-      direction: z.string().max(180).optional(),
+      direction: z.string().max(180).optional().describe("Short English Audio Tag cue only (for example, close-mic, youthful voice). This value is inserted into the ElevenLabs text inside brackets; it is not a hidden/system prompt. Do not put Chinese sentences or natural-language instructions here. Use performance and emotion for delivery instructions."),
       previous_text: z.string().max(MAX_CONTEXT_CHARS).optional(),
       next_text: z.string().max(MAX_CONTEXT_CHARS).optional(),
       timeline_duration_sec: z.number().min(0.1).max(MAX_SOUND_SCAPE_SECONDS).optional(),
@@ -1656,7 +1656,7 @@ function createServer() {
         performance: z.enum(["auto", "natural", "soft", "close", "breathy", "expressive"]).optional(),
         emotion: z.enum(["neutral", "calm", "warm", "tender", "curious", "excited", "nervous", "intense", "tired"]).optional(),
         language: z.enum(["auto", "zh", "ja", "en", "ko"]).optional(),
-        direction: z.string().max(180).optional(),
+        direction: z.string().max(180).optional().describe("Short English Audio Tag cue only (for example, close-mic, youthful voice). This value is inserted into the ElevenLabs text inside brackets; it is not a hidden/system prompt. Do not put Chinese sentences or natural-language instructions here. Use performance and emotion for delivery instructions."),
       })).min(1).max(16),
       voice_gain: z.number().min(0).max(1).optional(),
       ambience_bus_gain: z.number().min(0).max(1).optional(),

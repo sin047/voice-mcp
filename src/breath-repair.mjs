@@ -58,7 +58,8 @@ export function repairBreathSegments({
   onsetThresholdMs = 90,
   fadeInMinMs = 60,
   fadeInMaxMs = 150,
-  fadeOutMs = 30,
+  inhaleFadeOutMs = 35,
+  exhaleFadeInMs = 30,
   targetLeadSec = 0.08,
   minPreviousSilenceSec = 0.3,
   maxNextSpeechGapSec = 1.5,
@@ -72,7 +73,8 @@ export function repairBreathSegments({
     ["onsetThresholdMs", onsetThresholdMs, 0, 1000],
     ["fadeInMinMs", fadeInMinMs, 0, 500],
     ["fadeInMaxMs", fadeInMaxMs, fadeInMinMs, 1000],
-    ["fadeOutMs", fadeOutMs, 0, 500],
+    ["inhaleFadeOutMs", inhaleFadeOutMs, 0, 500],
+    ["exhaleFadeInMs", exhaleFadeInMs, 0, 500],
     ["targetLeadSec", targetLeadSec, 0, 2],
     ["minPreviousSilenceSec", minPreviousSilenceSec, 0, 2],
     ["maxNextSpeechGapSec", maxNextSpeechGapSec, 0, 2],
@@ -112,18 +114,21 @@ export function repairBreathSegments({
 
     const durationMs = length / sampleRate * 1000;
     const riseTimeMs = measureRiseTimeMs(output, start, end, sampleRate);
-    let fadeInSamples = 0;
-    if (riseTimeMs != null && riseTimeMs < onsetThresholdMs) {
-      const fadeInMs = clamp(durationMs * 0.25, fadeInMinMs, fadeInMaxMs);
-      fadeInSamples = Math.min(
-        Math.round(sampleRate * fadeInMs / 1000),
-        Math.floor(length / 2)
-      );
-      if (fadeInSamples > 0) smoothedCount += 1;
+    let fadeInMs = 0;
+    if (breath.breathType === "exhale") {
+      fadeInMs = exhaleFadeInMs;
+    } else if (riseTimeMs != null && riseTimeMs < onsetThresholdMs) {
+      fadeInMs = clamp(durationMs * 0.25, fadeInMinMs, fadeInMaxMs);
     }
+    let fadeInSamples = Math.min(
+      Math.round(sampleRate * fadeInMs / 1000),
+      Math.floor(length / 2)
+    );
+    if (fadeInSamples > 0) smoothedCount += 1;
 
+    const fadeOutMsForBreath = breath.breathType === "inhale" ? inhaleFadeOutMs : 0;
     const fadeOutSamples = Math.min(
-      Math.round(sampleRate * fadeOutMs / 1000),
+      Math.round(sampleRate * fadeOutMsForBreath / 1000),
       Math.floor(length / 2)
     );
     if (fadeOutSamples > 0) fadeOutCount += 1;

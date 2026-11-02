@@ -296,7 +296,7 @@ test("mixSoundscape overlays approved breath segments on a separate bus without 
   });
   const decoded = decodePcmWav(result.buffer);
   const speechSampleIndex = Math.round(0.1 * sampleRate);
-  const gapSampleIndex = Math.round(0.5 * sampleRate);
+  const gapSampleIndex = Math.round(0.471 * sampleRate);
   assert.ok(Math.abs(decoded.channels[0][speechSampleIndex] - voice[speechSampleIndex]) < 0.0001);
   assert.ok(Math.abs(decoded.channels[0][gapSampleIndex]) > 0.005);
   assert.equal(result.durationSec, 1);

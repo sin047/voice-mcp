@@ -24,7 +24,7 @@ function addNoiseBreath(samples, startSec, durationSec, direction, amplitude = 0
     let envelope;
     if (shape === "fast") {
       envelope = direction === "in"
-        ? 0.2 + 0.8 * Math.min(1, progress * 6)
+        ? 0.05 + 0.95 * Math.min(1, progress * 4)
         : 1 - 0.8 * progress;
     } else {
       envelope = direction === "in" ? 0.2 + 0.8 * progress : 1 - 0.8 * progress;
@@ -33,7 +33,7 @@ function addNoiseBreath(samples, startSec, durationSec, direction, amplitude = 0
   }
 }
 
-function fixture(direction, shape = "ramped", amplitude = 0.05) {
+function fixture(direction, shape = "ramped", amplitude = 0.08) {
   const samples = new Float32Array(sampleRate * 3);
   addSine(samples, 0.1, 0.6);
   addNoiseBreath(samples, 1.0, 0.3, direction, amplitude, shape);
@@ -57,7 +57,8 @@ test("enhanced repair attenuates an over-loud exhale and preserves speech sample
   const result = repairBreathSegments({ samples, sampleRate, analysis });
   assert.equal(result.candidateCount, 1);
   assert.equal(result.attenuatedCount, 1);
-  assert.equal(result.fadeOutCount, 1);
+  assert.equal(result.smoothedCount, 1);
+  assert.equal(result.fadeOutCount, 0);
   assert.equal(result.repositionedCount, 0);
   assert.equal(result.durationPreserved, true);
   assert.equal(result.speechSamplesPreserved, true);
@@ -80,6 +81,7 @@ test("enhanced repair smooths and repositions a high-confidence opening inhale",
 
   const result = repairBreathSegments({ samples, sampleRate, analysis });
   assert.equal(result.smoothedCount, 1);
+  assert.equal(result.fadeOutCount, 1);
   assert.equal(result.repositionedCount, 1);
   assert.equal(result.durationPreserved, true);
   assert.equal(result.speechSamplesPreserved, true);

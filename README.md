@@ -170,9 +170,9 @@ Generate speech and mix it with up to 12 uploaded ambience/Foley assets. The too
 - Output is a stereo WAV, limited to 60 seconds.
 - The server-side mix uses stereo panning, not browser HRTF.
 
-The generated playback URL expires after 10 minutes and is held in process memory; a server restart invalidates it. The URL is an unguessable, temporary bearer link.
+Generated playback URLs expire after 24 hours and are held in process memory; a server restart or cache eviction can still invalidate a URL. The URL is an unguessable, temporary bearer link.
 
-Both `speak` and `speak_with_soundscape` attach the same MCP App audio player. Voice-only output is passed as an audio data URL; mixed soundscape output is loaded from its short-lived HTTPS playback URL. The player uses the current MCP Apps `ui/initialize` handshake (`2026-01-26`) and native browser audio controls. Hosts without MCP Apps still receive the normal text/structured tool result. After changing MCP tool UI metadata, refresh the custom MCP app in ChatGPT so the host re-reads the tool definitions.
+Audio-producing tools also return a standard MCP `AudioContent` block for outputs up to 4 MiB, so clients that support native MCP audio playback can render audio without depending on an embedded app or an expiring URL. Larger outputs retain the HTTPS URL fallback. The MCP App player remains available on hosts that support MCP Apps and uses native browser audio controls. ChatGPT's custom MCP App interactive UI is currently web-only; the standard audio content block is the mobile/client fallback where supported. No additional environment variable is required for this delivery change.
 
 ### Vocal performance presets (beta.40)
 

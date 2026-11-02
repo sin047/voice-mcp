@@ -4,6 +4,7 @@ import { createFixedWindowRateLimiter, createVoiceUsageGuard } from "./usage-gua
 import { createAudioAssetStore } from "./audio-assets.mjs";
 import { createRecordingStore } from "./recording-store.mjs";
 import { parseByteRange } from "./audio-range.mjs";
+import { createAudioContentBlock, MAX_INLINE_AUDIO_BYTES } from "./audio-content.mjs";
 import { decodeRawPcm16, encodePcm16Wav, mixSoundscape } from "./wav-audio.mjs";
 import { joinPcm16Chunks } from "./voice-long-audio.mjs";
 import { resolveCueTimeAfterText } from "./alignment-cues.mjs";
@@ -42,7 +43,7 @@ const MODEL_ID = process.env.ELEVENLABS_MODEL_ID || "eleven_v4";
 const OUTPUT_FORMAT = process.env.ELEVENLABS_OUTPUT_FORMAT || "mp3_44100_128";
 const PLAYER_URI = "ui://voice-mcp/player.html";
 const PLAYER_MIME = "text/html;profile=mcp-app";
-const VERSION = "1.4.0-beta.46";
+const VERSION = "1.4.0-beta.47";
 const MAX_CONTEXT_CHARS = 4000;
 const MAX_SPEAK_CHARS = 4000;
 const MAX_SOUND_SCAPE_TEXT_CHARS = 1200;
@@ -62,7 +63,7 @@ const recordingStore = createRecordingStore({
   maxRecordingCount: Number(process.env.RECORDING_MAX_COUNT || 500),
   maxTotalBytes: Number(process.env.RECORDING_MAX_TOTAL_BYTES || 2 * 1024 * 1024 * 1024),
 });
-const GENERATED_AUDIO_TTL_MS = 10 * 60 * 1000;
+const GENERATED_AUDIO_TTL_MS = 24 * 60 * 60 * 1000;
 const GENERATED_AUDIO_MAX_ITEMS = 4;
 const GENERATED_AUDIO_MAX_BYTES = 40 * 1024 * 1024;
 const mcpRequestLimiter = createFixedWindowRateLimiter({
@@ -536,10 +537,15 @@ function createServer() {
           });
           const audioUrl = new URL(`/audio/${audioId}`, baseUrl.origin).toString();
 
+          const audioContent = createAudioContentBlock(mix.buffer, "audio/wav");
           return {
-            content: [{ type: "text", text: `🎙️ ${BOT_NAME}: "${text}" · ${directive.preset} soundscape ready` }],
+            content: [
+              { type: "text", text: `🎙️ ${BOT_NAME}: "${text}" · ${directive.preset} soundscape ready` },
+              ...(audioContent ? [audioContent] : []),
+            ],
             structuredContent: {
               text,
+              audio_delivery: audioContent ? "mcp_audio_content" : "temporary_audio_url",
               audio_url: audioUrl,
               audio_mime_type: "audio/wav",
               duration_sec: mix.durationSec,
@@ -588,10 +594,15 @@ function createServer() {
           rawTags: raw_tags,
         });
 
+        const audioContent = createAudioContentBlock(Buffer.from(result.audio_base64, "base64"), "audio/mpeg");
         return {
-          content: [{ type: "text", text: `🎙️ ${BOT_NAME}: "${text}"` }],
+          content: [
+            { type: "text", text: `🎙️ ${BOT_NAME}: "${text}"` },
+            ...(audioContent ? [audioContent] : []),
+          ],
           structuredContent: {
             text,
+            audio_delivery: audioContent ? "mcp_audio_content" : "structured_audio_base64",
             audio_base64: result.audio_base64,
             audio_mime_type: "audio/mpeg",
             performance: result.performance,
@@ -735,13 +746,18 @@ function createServer() {
       });
       const audioUrl = new URL("/audio/" + audioId, baseUrl.origin).toString();
 
+      const audioContent = createAudioContentBlock(wavBuffer, "audio/wav");
       return {
-        content: [{
-          type: "text",
-          text: BOT_NAME + ": one long voice recording ready (" + plan.chunk_count + " chunks, " + joined.durationSec.toFixed(2) + "s)",
-        }],
+        content: [
+          {
+            type: "text",
+            text: BOT_NAME + ": one long voice recording ready (" + plan.chunk_count + " chunks, " + joined.durationSec.toFixed(2) + "s)",
+          },
+          ...(audioContent ? [audioContent] : []),
+        ],
         structuredContent: {
           text: args.text,
+          audio_delivery: audioContent ? "mcp_audio_content" : "temporary_audio_url",
           audio_url: audioUrl,
           audio_mime_type: "audio/wav",
           duration_sec: joined.durationSec,
@@ -1256,10 +1272,15 @@ function createServer() {
         });
         const audioUrl = new URL(`/audio/${audioId}`, baseUrl.origin).toString();
 
+        const audioContent = createAudioContentBlock(mix.buffer, "audio/wav");
         return {
-          content: [{ type: "text", text: `🎙️ ${BOT_NAME}: "${text}" · mixed soundscape ready` }],
+          content: [
+            { type: "text", text: `🎙️ ${BOT_NAME}: "${text}" · mixed soundscape ready` },
+            ...(audioContent ? [audioContent] : []),
+          ],
           structuredContent: {
             text,
+            audio_delivery: audioContent ? "mcp_audio_content" : "temporary_audio_url",
             audio_url: audioUrl,
             audio_mime_type: "audio/wav",
             duration_sec: mix.durationSec,
@@ -1288,7 +1309,7 @@ function createServer() {
 
   mcp.registerTool("render_continuous_audio_timeline", {
     title: `${BOT_NAME}'s Continuous Voice Timeline`,
-    description: `Synthesize one continuous voice passage exactly once, then overlay independently timed Foley and ambience. Use after_text on a cue to place it immediately after an exact phrase in the spoken text using ElevenLabs character timestamps; use at_sec for absolute timing. Optional tail_duration_sec adds a pure-Foley/ambience tail after the generated voice without needing to know the voice duration in advance; timeline_duration_sec remains available as an absolute override. Set sequence_foley=true to trim each Foley cue at the next Foley cue start, preventing action sounds from overlapping. Effects may occupy silent intervals or continue after the voice; no additional TTS calls are made. Optional breath_mode='natural' runs a pure-code pass after the single synthesis and repositions only high-confidence opening inhales by moving silence; it does not add clips or change speech samples. Optional pauses insert actual silent PCM frames after exact aligned phrases, preserving speech samples and shifting later text-anchored Foley cues. Default 'off' preserves current behavior. When passing tagged text from plan_vocal_preset, set raw_tags=true to preserve those inline TTS tags; the default false keeps ordinary untrusted inline tags stripped. This avoids extra TTS chunk boundaries. If adding Foley or ambience, call list_sound_assets first; omit cues or pass an empty array for voice-only rendering. Text and finished audio are limited to ${MAX_SOUND_SCAPE_TEXT_CHARS} characters and ${MAX_SOUND_SCAPE_SECONDS} seconds.`,
+    description: `Synthesize one continuous voice passage exactly once, then overlay independently timed Foley and ambience. Use after_text on a cue to place it immediately after an exact phrase in the spoken text using ElevenLabs character timestamps; use at_sec for absolute timing. Optional tail_duration_sec adds a pure-Foley/ambience tail after the generated voice without needing to know the voice duration in advance; timeline_duration_sec remains available as an absolute override. Set sequence_foley=true to trim each Foley cue at the next Foley cue start, preventing action sounds from overlapping. Effects may occupy silent intervals or continue after the voice; no additional TTS calls are made. Optional breath_mode='natural' runs a pure-code pass after the single synthesis and repositions only high-confidence opening inhales by moving silence; it does not add clips or change speech samples. Optional pauses insert actual silent PCM frames after exact aligned phrases, preserving speech samples and shifting later text-anchored Foley cues. Default 'off' preserves current behavior. When passing tagged text from plan_vocal_preset, set raw_tags=true to preserve those inline TTS tags; the default false keeps ordinary untrusted inline tags stripped. This avoids extra TTS chunk boundaries. If adding Foley or ambience, call list_sound_assets first; omit cues or pass an empty array for voice-only rendering. Outputs at most ${MAX_INLINE_AUDIO_BYTES} bytes also include a standard MCP AudioContent block for native clients; larger outputs use the MCP App HTTPS player URL fallback. Playback URLs expire after 24 hours. Text and finished audio are limited to ${MAX_SOUND_SCAPE_TEXT_CHARS} characters and ${MAX_SOUND_SCAPE_SECONDS} seconds.`,
     inputSchema: z.object({
       text: z.string().min(1).max(MAX_SOUND_SCAPE_TEXT_CHARS),
       raw_tags: z.boolean().optional(),
@@ -1536,10 +1557,15 @@ function createServer() {
         })),
       }) : null;
 
+      const audioContent = createAudioContentBlock(mix.buffer, "audio/wav");
       return {
-        content: [{ type: "text", text: BOT_NAME + ": continuous voice timeline ready (" + mix.durationSec.toFixed(2) + "s)" }],
+        content: [
+          { type: "text", text: BOT_NAME + ": continuous voice timeline ready (" + mix.durationSec.toFixed(2) + "s)" },
+          ...(audioContent ? [audioContent] : []),
+        ],
         structuredContent: {
           text: args.text,
+          audio_delivery: audioContent ? "mcp_audio_content" : "temporary_audio_url",
           audio_url: new URL("/audio/" + audioId, baseUrl.origin).toString(),
           audio_mime_type: "audio/wav",
           duration_sec: mix.durationSec,
@@ -1596,7 +1622,7 @@ function createServer() {
 
   mcp.registerTool("render_audio_timeline", {
     title: `${BOT_NAME}'s Audio Timeline`,
-    description: `Render a private multitrack timeline with independently timed voice, Foley, ambience, and gap segments. Voice segments are synthesized separately. Effects can continue when no voice is present. Use only asset_id values returned by list_sound_assets. Maximum timeline length: ${MAX_SOUND_SCAPE_SECONDS} seconds.`,
+    description: `Render a private multitrack timeline with independently timed voice, Foley, ambience, and gap segments. Voice segments are synthesized separately. Effects can continue when no voice is present. Outputs at most ${MAX_INLINE_AUDIO_BYTES} bytes also include a standard MCP AudioContent block for native audio clients; larger outputs use the MCP App HTTPS player URL fallback. Playback URLs expire after 24 hours. Use only asset_id values returned by list_sound_assets. Maximum timeline length: ${MAX_SOUND_SCAPE_SECONDS} seconds.`,
     inputSchema: z.object({
       duration_sec: z.number().min(0.1).max(MAX_SOUND_SCAPE_SECONDS),
       segments: z.array(z.object({
@@ -1695,9 +1721,14 @@ function createServer() {
         performance: "timeline", language: "auto", source: "render_audio_timeline",
         cues: mix.timeline.cues.map(cue => ({ asset_id: cue.fileId, kind: cue.kind, at_sec: cue.atSec, duration_sec: cue.durationSec })),
       }) : null;
+      const audioContent = createAudioContentBlock(mix.buffer, "audio/wav");
       return {
-        content: [{ type: "text", text: `${BOT_NAME}: timeline render ready (${duration_sec}s)` }],
+        content: [
+          { type: "text", text: `${BOT_NAME}: timeline render ready (${duration_sec}s)` },
+          ...(audioContent ? [audioContent] : []),
+        ],
         structuredContent: {
+          audio_delivery: audioContent ? "mcp_audio_content" : "temporary_audio_url",
           audio_url: new URL(`/audio/${audioId}`, baseUrl.origin).toString(),
           audio_mime_type: "audio/wav", duration_sec: mix.durationSec,
           sample_rate: mix.sampleRate, channels: mix.channels,
@@ -1900,6 +1931,9 @@ app.get("/status", (_req, res) => {
       private_audio_asset_library: true,
       persistent_recording_archive: true,
       mcp_apps_audio_player: true,
+      native_audio_content_blocks: true,
+      inline_audio_content_max_bytes: MAX_INLINE_AUDIO_BYTES,
+      generated_audio_url_ttl_seconds: GENERATED_AUDIO_TTL_MS / 1000,
       soundscape_mcp_enabled: SOUNDSCAPE_MCP_ENABLED,
       speak_with_soundscape: SOUNDSCAPE_MCP_ENABLED,
       soundscape_max_seconds: MAX_SOUND_SCAPE_SECONDS,

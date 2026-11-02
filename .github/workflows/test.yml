@@ -235,7 +235,7 @@ jobs:
             assert.ok(continuous.inputSchema.properties.timeline_duration_sec);
             assert.ok(continuous.inputSchema.properties.tail_duration_sec);
             assert.ok(continuous.inputSchema.properties.sequence_foley);
-            assert.deepEqual(continuous.inputSchema.properties.breath_mode.enum, ["off", "natural"]);
+            assert.deepEqual(continuous.inputSchema.properties.breath_mode.enum, ["off", "natural", "enhanced"]);
             assert.ok(continuous.description.includes("high-confidence opening inhales"));
             assert.ok(continuous.description.includes("raw_tags=true"));
             assert.equal(continuous.inputSchema.properties.raw_tags.type, "boolean");

@@ -158,7 +158,7 @@ test("Chinese natural-language direction is rejected before it can be sent as sp
 });
 
 test("English instruction sentences are rejected but short tag cues remain supported", () => {
-  const text = "今天慢慢说，不着急。";
+  const text = "今天我们可以慢慢说，不着急，我会一直在这里听你把想说的话说完。";
   assert.throws(
     () => createPerformancePlan(text, {
       performance: "close",

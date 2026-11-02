@@ -67,8 +67,60 @@ test("audio asset store rejects unsupported effect categories", async () => {
   try {
     await assert.rejects(
       () => store.save({ buffer: fixtureWav(), kind: "remote" }),
-      /kind must be ambience or foley/,
+      /kind must be ambience, foley, or breath/,
     );
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+
+test("audio asset store keeps breath clips pending until explicitly approved", async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), "voice-mcp-breath-assets-"));
+  const store = createAudioAssetStore({ directory });
+  try {
+    const samples = new Float32Array(Math.round(0.3 * 44100));
+    for (let i = 0; i < samples.length; i += 1) samples[i] = 0.04 * Math.sin(2 * Math.PI * 800 * i / 44100);
+    const saved = await store.save({
+      buffer: encodePcm16Wav([samples], 44100),
+      name: "favorite-inhale.wav",
+      kind: "breath",
+      breathType: "inhale",
+      sourceRecordingId: "rec_00000000-0000-0000-0000-000000000001",
+      sourceStartSec: 1.2,
+      sourceEndSec: 1.5,
+      rms: 0.028,
+      peak: 0.04,
+    });
+    assert.equal(saved.kind, "breath");
+    assert.equal(saved.breathType, "inhale");
+    assert.equal(saved.status, "pending");
+    assert.equal(saved.sourceRecordingId, "rec_00000000-0000-0000-0000-000000000001");
+    assert.equal((await store.list()).length, 1);
+
+    const approved = await store.update(saved.id, { status: "approved" });
+    assert.equal(approved.status, "approved");
+    const loaded = await store.get(saved.id);
+    assert.equal(loaded.metadata.status, "approved");
+
+    await assert.rejects(() => store.update(saved.id, { kind: "foley" }), /Unsupported/);
+    await assert.rejects(() => store.update(saved.id, { status: "ready" }), /status must be/);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("audio asset store validates breath type and the reference clip duration window", async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), "voice-mcp-breath-assets-"));
+  const store = createAudioAssetStore({ directory });
+  try {
+    const short = encodePcm16Wav([new Float32Array(Math.round(0.15 * 44100)).fill(0.02)], 44100);
+    const valid = encodePcm16Wav([new Float32Array(Math.round(0.3 * 44100)).fill(0.02)], 44100);
+    await assert.rejects(() => store.save({ buffer: valid, kind: "breath" }), /breathType inhale or exhale/);
+    await assert.rejects(() => store.save({ buffer: short, kind: "breath", breathType: "inhale" }), /0.22 and 1.1 seconds/);
+    await assert.rejects(() => store.save({
+      buffer: valid, kind: "breath", breathType: "sigh",
+    }), /breathType inhale or exhale/);
   } finally {
     await rm(directory, { recursive: true, force: true });
   }

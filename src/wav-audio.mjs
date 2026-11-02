@@ -249,6 +249,8 @@ export function mixSoundscape({
   totalDurationSec,
   assets,
   cues = [],
+  breathSegments = [],
+  breathBusGain = 0.82,
   voiceGain = 0.9,
   ambienceBusGain = 0.82,
   foleyBusGain = 0.9,
@@ -277,6 +279,34 @@ export function mixSoundscape({
     atSec: segment.atSec,
     channels: resampleChannels(segment.pcm.channels, segment.pcm.sampleRate, TARGET_SAMPLE_RATE),
   }));
+  const preparedBreathSegments = breathSegments.map((segment) => {
+    if (!segment || !segment.pcm?.channels) {
+      throw new Error("Each breath segment must include decoded PCM channels");
+    }
+    if (!Number.isFinite(segment.atSec) || segment.atSec < 0) {
+      throw new Error("Breath segment atSec must be a non-negative finite number");
+    }
+    const gain = segment.gain ?? 1;
+    const fadeInSec = segment.fadeInSec ?? 0;
+    const fadeOutSec = segment.fadeOutSec ?? 0;
+    if (!Number.isFinite(gain) || gain < 0 || gain > 8 ||
+        !Number.isFinite(fadeInSec) || fadeInSec < 0 || fadeInSec > 1 ||
+        !Number.isFinite(fadeOutSec) || fadeOutSec < 0 || fadeOutSec > 1) {
+      throw new Error("Breath segment gain and fades are outside supported bounds");
+    }
+    return {
+      atSec: segment.atSec,
+      gain,
+      fadeInSec,
+      fadeOutSec,
+      assetId: segment.assetId ?? null,
+      breathType: segment.breathType ?? null,
+      channels: resampleChannels(segment.pcm.channels, segment.pcm.sampleRate, TARGET_SAMPLE_RATE),
+    };
+  });
+  if (!Number.isFinite(breathBusGain) || breathBusGain < 0 || breathBusGain > 1) {
+    throw new Error("breathBusGain must be between 0 and 1");
+  }
   const inferredDuration = preparedVoiceSegments.reduce((max, segment) =>
     Math.max(max, segment.atSec + segment.channels[0].length / TARGET_SAMPLE_RATE), 0);
   const durationSec = totalDurationSec ?? inferredDuration;
@@ -288,6 +318,12 @@ export function mixSoundscape({
     if (!Number.isFinite(segment.atSec) || segment.atSec < 0 ||
         Math.round(segment.atSec * TARGET_SAMPLE_RATE) + segment.channels[0].length > voiceFrames) {
       throw new Error("Voice segment must fit within the total timeline duration");
+    }
+  }
+
+  for (const segment of preparedBreathSegments) {
+    if (Math.round(segment.atSec * TARGET_SAMPLE_RATE) + segment.channels[0].length > voiceFrames) {
+      throw new Error("Breath segment must fit within the total timeline duration");
     }
   }
 
@@ -330,6 +366,29 @@ export function mixSoundscape({
       left[startFrame + i] += l * timeline.voice.gain;
       right[startFrame + i] += r * timeline.voice.gain;
       duckingReference[startFrame + i] += (l + r) * 0.5;
+    }
+  }
+
+  for (const segment of preparedBreathSegments) {
+    const startFrame = Math.round(segment.atSec * TARGET_SAMPLE_RATE);
+    const segmentFrames = segment.channels[0].length;
+    const fadeInFrames = Math.min(Math.round(segment.fadeInSec * TARGET_SAMPLE_RATE), Math.floor(segmentFrames / 2));
+    const fadeOutFrames = Math.min(Math.round(segment.fadeOutSec * TARGET_SAMPLE_RATE), Math.floor(segmentFrames / 2));
+    for (let frame = 0; frame < segmentFrames; frame += 1) {
+      let envelope = 1;
+      if (fadeInFrames > 0 && frame < fadeInFrames) {
+        const progress = (frame + 1) / fadeInFrames;
+        envelope *= 0.5 - 0.5 * Math.cos(Math.PI * progress);
+      }
+      if (fadeOutFrames > 0 && frame >= segmentFrames - fadeOutFrames) {
+        const progress = (segmentFrames - frame) / fadeOutFrames;
+        envelope *= 0.5 - 0.5 * Math.cos(Math.PI * progress);
+      }
+      const gain = segment.gain * breathBusGain * envelope;
+      const sourceLeft = segment.channels[0][frame];
+      const sourceRight = segment.channels.length > 1 ? segment.channels[1][frame] : sourceLeft;
+      left[startFrame + frame] += sourceLeft * gain;
+      right[startFrame + frame] += sourceRight * gain;
     }
   }
 
@@ -452,6 +511,13 @@ export function mixSoundscape({
     peakBeforeLimiter: peak,
     limiterGain,
     timeline,
+    breathSegments: Object.freeze(preparedBreathSegments.map((segment) => Object.freeze({
+      assetId: segment.assetId,
+      breathType: segment.breathType,
+      atSec: segment.atSec,
+      durationSec: segment.channels[0].length / TARGET_SAMPLE_RATE,
+      gain: segment.gain,
+    }))),
   });
 }
 

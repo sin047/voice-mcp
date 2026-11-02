@@ -41,7 +41,7 @@ export function createRecordingStore({
     return readRecords(root);
   }
 
-  async function save({ buffer, text = "", performance = "natural", language = "auto", cues = [], source = "speak_with_soundscape" } = {}) {
+  async function save({ buffer, text = "", performance = "natural", language = "auto", cues = [], breathAssets = [], source = "speak_with_soundscape" } = {}) {
     await ensureDirectory();
     if (!Buffer.isBuffer(buffer) || !buffer.length) throw new Error("Recording WAV body is empty");
     if (buffer.length > maxRecordingBytes) throw new Error("Recording exceeds the configured file size limit");
@@ -69,6 +69,13 @@ export function createRecordingStore({
         kind: safeText(cue.kind, 16),
         at_sec: Number.isFinite(cue.at_sec) ? cue.at_sec : 0,
         duration_sec: Number.isFinite(cue.duration_sec) ? cue.duration_sec : null,
+      })) : [],
+      breathAssets: Array.isArray(breathAssets) ? breathAssets.slice(0, 8).map((item) => ({
+        asset_id: safeText(item.asset_id, 64),
+        breath_type: safeText(item.breath_type, 12),
+        at_sec: Number.isFinite(item.at_sec) ? item.at_sec : 0,
+        duration_sec: Number.isFinite(item.duration_sec) ? item.duration_sec : null,
+        gain: Number.isFinite(item.gain) ? item.gain : 1,
       })) : [],
       createdAt: new Date().toISOString(),
     });

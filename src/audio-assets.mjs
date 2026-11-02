@@ -1,10 +1,13 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile, readdir, unlink, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, rename, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { decodePcmWav } from "./wav-audio.mjs";
 
 const SAFE_ID = /^fx_[0-9a-f-]{36}$/i;
-const EFFECT_KINDS = new Set(["ambience", "foley"]);
+const ASSET_KINDS = new Set(["ambience", "foley", "breath"]);
+const BREATH_TYPES = new Set(["inhale", "exhale"]);
+const BREATH_STATUSES = new Set(["pending", "approved", "rejected"]);
+const SAFE_RECORDING_ID = /^rec_[0-9a-f-]{36}$/i;
 
 function safeName(value) {
   const base = path.basename(String(value || "sound-effect.wav"))
@@ -53,13 +56,36 @@ export function createAudioAssetStore({
       .sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)));
   }
 
-  async function save({ buffer, name, kind = "foley" } = {}) {
+  async function save({ buffer, name, kind = "foley", breathType, sourceRecordingId, sourceStartSec, sourceEndSec, rms, peak } = {}) {
     await ensureDirectory();
     if (!Buffer.isBuffer(buffer) || !buffer.length) throw new Error("Audio upload body is empty");
     if (buffer.length > maxAssetBytes) throw new Error("Audio asset exceeds the configured file size limit");
-    if (!EFFECT_KINDS.has(kind)) throw new Error("Audio asset kind must be ambience or foley");
+    if (!ASSET_KINDS.has(kind)) throw new Error("Audio asset kind must be ambience, foley, or breath");
 
     const decoded = decodePcmWav(buffer);
+    if (kind === "breath") {
+      if (!BREATH_TYPES.has(breathType)) throw new Error("Breath assets require breathType inhale or exhale");
+      if (decoded.durationSec < 0.22 || decoded.durationSec > 1.1) {
+        throw new Error("Breath assets must be between 0.22 and 1.1 seconds");
+      }
+      if (sourceRecordingId != null && !SAFE_RECORDING_ID.test(sourceRecordingId)) {
+        throw new Error("sourceRecordingId must be a valid recording ID");
+      }
+      if (sourceStartSec != null && (!Number.isFinite(sourceStartSec) || sourceStartSec < 0)) {
+        throw new Error("sourceStartSec must be a non-negative number");
+      }
+      if (sourceEndSec != null && (!Number.isFinite(sourceEndSec) || sourceEndSec <= (sourceStartSec ?? 0))) {
+        throw new Error("sourceEndSec must be greater than sourceStartSec");
+      }
+      if (rms != null && (!Number.isFinite(rms) || rms <= 0 || rms > 1)) {
+        throw new Error("Breath RMS metadata must be between 0 and 1");
+      }
+      if (peak != null && (!Number.isFinite(peak) || peak <= 0 || peak > 1)) {
+        throw new Error("Breath peak metadata must be between 0 and 1");
+      }
+    } else if (breathType != null || sourceRecordingId != null || sourceStartSec != null || sourceEndSec != null) {
+      throw new Error("Breath metadata can only be attached to kind=breath");
+    }
     const existing = await list();
     if (existing.length >= maxAssetCount) throw new Error("Audio asset library is full");
     const usedBytes = existing.reduce((sum, item) => sum + (Number(item.bytes) || 0), 0);
@@ -76,6 +102,15 @@ export function createAudioAssetStore({
       channels: decoded.channelCount,
       durationSec: Number(decoded.durationSec.toFixed(3)),
       createdAt: new Date().toISOString(),
+      ...(kind === "breath" ? {
+        breathType,
+        status: "pending",
+        ...(sourceRecordingId ? { sourceRecordingId } : {}),
+        ...(sourceStartSec != null ? { sourceStartSec: Number(sourceStartSec.toFixed(3)) } : {}),
+        ...(sourceEndSec != null ? { sourceEndSec: Number(sourceEndSec.toFixed(3)) } : {}),
+        ...(rms != null ? { rms } : {}),
+        ...(peak != null ? { peak } : {}),
+      } : {}),
     });
 
     const audioPath = path.join(root, id + ".wav");
@@ -115,6 +150,33 @@ export function createAudioAssetStore({
     return true;
   }
 
+  async function update(id, patch = {}) {
+    if (typeof id !== "string" || !SAFE_ID.test(id)) return null;
+    const existing = await get(id);
+    if (!existing) return null;
+    if (existing.metadata.kind !== "breath") throw new Error("Only breath assets have review status");
+    if (!patch || typeof patch !== "object" || Array.isArray(patch)) {
+      throw new Error("Breath asset update must be an object");
+    }
+    for (const key of Object.keys(patch)) {
+      if (key !== "status") throw new Error("Unsupported breath asset metadata field: " + key);
+    }
+    if (!BREATH_STATUSES.has(patch.status)) {
+      throw new Error("Breath asset status must be pending, approved, or rejected");
+    }
+    const metadata = { ...existing.metadata, status: patch.status, updatedAt: new Date().toISOString() };
+    const metadataPath = path.join(root, id + ".json");
+    const tempPath = path.join(root, id + "." + randomUUID() + ".tmp");
+    try {
+      await writeFile(tempPath, JSON.stringify(metadata, null, 2), { flag: "wx", mode: 0o600 });
+      await rename(tempPath, metadataPath);
+    } catch (error) {
+      await unlink(tempPath).catch(() => {});
+      throw error;
+    }
+    return metadata;
+  }
+
   async function getUsage() {
     const items = await list();
     const totalBytes = items.reduce((sum, item) => sum + (Number(item.bytes) || 0), 0);
@@ -127,5 +189,5 @@ export function createAudioAssetStore({
     });
   }
 
-  return Object.freeze({ list, save, get, remove, getUsage, directory: root });
+  return Object.freeze({ list, save, get, update, remove, getUsage, directory: root });
 }

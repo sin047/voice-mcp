@@ -2,7 +2,7 @@
 
 A platform-neutral Node.js MCP server for ElevenLabs voice generation, expressive delivery and mixed voice + sound-effect playback.
 
-The actively maintained development and deployment branch is `zeabur`, currently at **v1.4.0-beta.49**. It runs as a Node.js 22+ / Express 5 service with Streamable HTTP MCP and is deployed on Zeabur. The same runtime can also run on a VPS or Docker host.
+The actively maintained development and deployment branch is `zeabur`, currently at **v1.4.0-beta.50**. It runs as a Node.js 22+ / Express 5 service with Streamable HTTP MCP and is deployed on Zeabur. The same runtime can also run on a VPS or Docker host.
 
 
 
@@ -287,3 +287,16 @@ The optional `speak_with_soundscape` parameter `save_recording: true` saves the 
 
 
 The `breathy` performance direction now explicitly requests a quiet inward nasal inhale and rejects an outward huff. The approved B2.1 breath level and voice settings are unchanged; validate the new direction with one controlled listening sample before further tuning.
+
+
+### Breath Asset Pool (beta.50)
+
+The private audio library now has a distinct `breath` asset kind, separate from Foley and ambience. Clips are 0.22–1.1 seconds and explicitly classified as inhale or exhale. Extracted clips are always saved as `pending`; they must be previewed and manually approved before the composer can use them.
+
+New read-only/archive tools:
+
+- `list_recordings` searches saved recordings by title, spoken text, tags, and favorite state.
+- `extract_breath_asset` crops a selected range from a saved recording without changing the original.
+- `preview_breath_asset`, `list_breath_assets`, and `set_breath_asset_status` support listening and explicit approval.
+
+The continuous timeline accepts `breath_pool_mode="conservative"` separately from `breath_mode`. It inserts only approved clips into silent inter-phrase gaps of at least 0.75 seconds, uses phrase-relative loudness, applies short type-specific fades, and inserts at most two clips per passage. It never loops or time-stretches clips and preserves speech samples and total duration. The pool is opt-in and disabled by default.

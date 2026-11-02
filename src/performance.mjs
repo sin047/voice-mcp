@@ -100,6 +100,23 @@ export function normalizeDirection(value) {
   return direction;
 }
 
+function normalizeExplicitDirection(value) {
+  const direction = normalizeDirection(value);
+  if (!direction) return undefined;
+
+  const containsCjk = /[\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af]/u.test(direction);
+  const containsSentencePunctuation = /[.!?;:。！？；]/u.test(direction);
+  const containsInstructionLanguage = /\b(?:please|use|speak|say|read|keep|avoid|do not|don't|make sure|ensure|try to|remember to)\b/i.test(direction);
+
+  if (containsCjk || containsSentencePunctuation || containsInstructionLanguage) {
+    throw new Error(
+      "direction must be a short English Audio Tag cue, not a natural-language prompt; use performance and emotion for delivery instructions",
+    );
+  }
+
+  return direction;
+}
+
 export function normalizePerformance(value) {
   const mode = String(value ?? "auto").trim().toLowerCase() || "auto";
   if (!PERFORMANCE_MODES.has(mode)) {
@@ -275,7 +292,7 @@ export function createPerformancePlan(text, options = {}) {
   const preserveInlineTags = rawTags === true;
   const baseText = preserveInlineTags ? String(text ?? "").trim() : stripAudioTags(text);
 
-  const explicitDirection = normalizeDirection(direction);
+  const explicitDirection = normalizeExplicitDirection(direction);
   const legacyTag = !explicitDirection && !emotionProfile && (!performance || requestedMode === "auto") && style
     ? LEGACY_STYLE_TAGS[String(style).trim().toLowerCase()]
     : undefined;

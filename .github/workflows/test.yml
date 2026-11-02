@@ -22,6 +22,7 @@ jobs:
         run: |
           node --check src/server.mjs
           node --check src/breath-repair.mjs
+          node --check src/breath-pool.mjs
           node --check src/audio-content.mjs
           node --check src/audio-range.mjs
           node --check src/performance.mjs
@@ -64,7 +65,7 @@ jobs:
             import assert from "node:assert/strict";
             const status = JSON.parse(fs.readFileSync("/tmp/voice-status.json", "utf8"));
             assert.equal(status.status, "ok");
-            assert.equal(status.version, "1.4.0-beta.49");
+            assert.equal(status.version, "1.4.0-beta.50");
             assert.equal(status.features.native_audio_content_blocks, true);
             assert.equal(status.features.inline_audio_content_max_bytes, 4 * 1024 * 1024);
             assert.equal(status.features.generated_audio_url_ttl_seconds, 86400);
@@ -73,6 +74,8 @@ jobs:
             assert.equal(status.features.local_drama_preview, true);
             assert.equal(status.features.private_audio_asset_library, true);
             assert.equal(status.features.persistent_recording_archive, true);
+            assert.equal(status.features.breath_asset_pool, true);
+            assert.equal(status.features.breath_pool_composer, true);
             assert.equal(status.features.continuous_voice_timeline, true);
             assert.equal(status.features.continuous_timeline_effect_tail, true);
             assert.equal(status.features.foley_cue_planner, true);
@@ -101,6 +104,11 @@ jobs:
             -H "Accept: application/json, text/event-stream" \
             -d '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}' \
             > /tmp/mcp-tools.json
+          grep -q "list_recordings" /tmp/mcp-tools.json
+          grep -q "extract_breath_asset" /tmp/mcp-tools.json
+          grep -q "list_breath_assets" /tmp/mcp-tools.json
+          grep -q "preview_breath_asset" /tmp/mcp-tools.json
+          grep -q "set_breath_asset_status" /tmp/mcp-tools.json
           grep -q "list_vocal_cues" /tmp/mcp-tools.json
           grep -q "list_vocal_presets" /tmp/mcp-tools.json
           grep -q "plan_vocal_preset" /tmp/mcp-tools.json
@@ -212,6 +220,11 @@ jobs:
             const names = tools.map((tool) => tool.name);
             assert.ok(names.includes("speak"));
             assert.ok(names.includes("list_sound_assets"));
+            assert.ok(names.includes("list_recordings"));
+            assert.ok(names.includes("extract_breath_asset"));
+            assert.ok(names.includes("list_breath_assets"));
+            assert.ok(names.includes("preview_breath_asset"));
+            assert.ok(names.includes("set_breath_asset_status"));
             assert.ok(names.includes("speak_with_soundscape"));
             assert.ok(names.includes("render_audio_timeline"));
             assert.ok(names.includes("render_continuous_audio_timeline"));
@@ -236,6 +249,10 @@ jobs:
             assert.ok(continuous.inputSchema.properties.tail_duration_sec);
             assert.ok(continuous.inputSchema.properties.sequence_foley);
             assert.deepEqual(continuous.inputSchema.properties.breath_mode.enum, ["off", "natural", "enhanced"]);
+            assert.deepEqual(continuous.inputSchema.properties.breath_pool_mode.enum, ["off", "conservative"]);
+            assert.ok(continuous.inputSchema.properties.breath_bus_gain);
+            assert.ok(continuous.description.includes("approved inhale/exhale clips"));
+            assert.ok(continuous.description.includes("two clips per passage"));
             assert.ok(continuous.description.includes("high-confidence opening inhales"));
             assert.ok(continuous.description.includes("raw_tags=true"));
             assert.equal(continuous.inputSchema.properties.raw_tags.type, "boolean");
